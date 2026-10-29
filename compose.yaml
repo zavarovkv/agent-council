@@ -5,7 +5,7 @@ services:
     image: ${COUNCIL_HERMES_IMAGE:-agent-council-hermes:local}
     build:
       context: .
-    command: [dashboard, --host, 0.0.0.0, --port, "9119", --no-open]
+    command: [gateway, run]
     restart: unless-stopped
     stop_grace_period: 30s
     env_file:
@@ -17,6 +17,9 @@ services:
       HERMES_PUBLIC_URL: ${HERMES_PUBLIC_URL:?Set the HTTPS public URL in compose.env}
       HERMES_HOME: /opt/data
       HERMES_WRITE_SAFE_ROOT: /opt/data
+      HERMES_DASHBOARD: "1"
+      HERMES_DASHBOARD_HOST: 0.0.0.0
+      HERMES_DASHBOARD_PORT: "9119"
       PYTHONUNBUFFERED: "1"
     ports:
       - "127.0.0.1:${HERMES_HTTP_PORT:-9119}:9119"
@@ -45,11 +48,12 @@ services:
         - python3
         - -c
         - >-
-          import json,os,urllib.request,urllib.parse;
+          import json,os,subprocess,urllib.request,urllib.parse;
           host=urllib.parse.urlsplit(os.environ['HERMES_PUBLIC_URL']).netloc;
           req=urllib.request.Request('http://127.0.0.1:9119/api/status',headers={'Host':host});
           data=json.load(urllib.request.urlopen(req,timeout=4));
-          assert data.get('auth_required') is True and data.get('auth_providers')==['telegram-owner']
+          assert data.get('auth_required') is True and data.get('auth_providers')==['telegram-owner'];
+          assert subprocess.check_output(['/command/s6-svstat','-o','up','/run/service/gateway-default'],timeout=2).strip()==b'true'
       start_period: 60s
       interval: 15s
       timeout: 8s
