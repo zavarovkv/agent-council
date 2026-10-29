@@ -164,9 +164,10 @@ After configuring the coordinator's Codex account, stop its gateway, provision
 the profile as the runtime user, then start the gateway again:
 
 ```bash
-bash scripts/compose-server.sh exec hermes s6-svc -d /run/service/gateway-default
+bash scripts/compose-server.sh exec hermes /command/s6-svc -d /run/service/gateway-default
+bash scripts/compose-server.sh exec hermes /command/s6-svwait -d -t 30000 /run/service/gateway-default
 bash scripts/compose-server.sh exec --user hermes hermes python3 /opt/agent-council/provision-researcher.py
-bash scripts/compose-server.sh exec hermes s6-svc -u /run/service/gateway-default
+bash scripts/compose-server.sh exec hermes /command/s6-svc -u /run/service/gateway-default
 bash scripts/compose-server.sh exec --user hermes hermes hermes gateway ensure
 ```
 
