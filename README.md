@@ -143,7 +143,7 @@ verified after this user-controlled login.
 ## Login appearance
 
 The landing page uses [Beauty.css](https://github.com/zavarovkv/beauty-css) as an
-exact npm dependency, currently **0.3.0**. `package-lock.json` records registry
+exact npm dependency, currently **0.4.0**. `package-lock.json` records registry
 integrity. A digest-pinned Node 24 build stage runs `npm ci --ignore-scripts`;
 only the CSS, package metadata and MIT license enter the final Hermes image.
 The build stage adds no Node runtime to the final image; Hermes retains the
@@ -160,6 +160,8 @@ The header uses the **official Telegram Login JavaScript SDK and its default
 blue web button**, loaded from `https://oauth.telegram.org/js/telegram-login.js?6`.
 The SDK supplies the button styles and icon; Council does not override them.
 Beauty's documented `not-beauty` class excludes this button from its styling.
+The header groups both sign-in methods in Beauty's `beauty-nav-end` helper to align
+them to the right, including when navigation wraps. No project CSS is needed.
 It opens Telegram's popup. The local initializer in `assets/login/telegram-widget.js`
 posts the resulting ID token to the server; it does not trust decoded browser
 claims or persist tokens in browser storage. A server-side OIDC/PKCE link stays
