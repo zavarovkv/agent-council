@@ -1,0 +1,17 @@
+name: Feature request
+description: Propose a useful change to Agent Council.
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem or use case
+      description: Describe the user need before proposing an implementation.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed behavior and alternatives
+      description: Include security and deployment implications if applicable.
+    validations:
+      required: true

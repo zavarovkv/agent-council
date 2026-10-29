@@ -25,7 +25,8 @@ docker run --rm --network none --memory 512m --cpus 1 --user 995:982 \
   --entrypoint /opt/hermes/.venv/bin/python \
   -v "$profile:/opt/data" \
   -v "$repository/scripts/prepare-docker-profile.py:/tmp/prepare-profile.py:ro" \
-  "$image" /tmp/prepare-profile.py /opt/data/config.yaml https://hermes.2.29.13.129.sslip.io
+  "$image" /tmp/prepare-profile.py /opt/data/config.yaml \
+  "$(sed -n 's/^HERMES_PUBLIC_URL=//p' /etc/agent-council/compose.env)"
 bash "$repository/scripts/compose-server.sh" config --quiet
 bash "$repository/scripts/compose-server.sh" up -d --wait --wait-timeout 150
 sha256sum -c /opt/hermes-deploy/baseline.sha256

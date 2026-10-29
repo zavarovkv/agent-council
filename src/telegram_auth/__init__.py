@@ -15,12 +15,11 @@ def register(ctx):
 
     class TelegramOwnerProvider(SelfHostedOIDCProvider):
         name = "telegram-owner"
-        display_name = "Telegram · @zavarov"
+        display_name = "Telegram"
 
         def __init__(self):
             client_id = os.environ.get("HERMES_TELEGRAM_CLIENT_ID", "").strip()
             secret = os.environ.get("HERMES_TELEGRAM_CLIENT_SECRET", "").strip()
-            self.ready = bool(client_id and secret)
             super().__init__(
                 issuer="https://oauth.telegram.org",
                 client_id=client_id or "not-configured",
@@ -28,12 +27,20 @@ def register(ctx):
                 scopes="openid profile",
                 id_token_leeway=30,
             )
-            home = Path(os.environ["HERMES_HOME"])
-            self.owner_policy = OwnerPolicy(
-                home / "telegram-owner.json",
-                os.environ.get("HERMES_TELEGRAM_OWNER_USERNAME", "zavarov"),
-                os.environ.get("HERMES_TELEGRAM_ALLOWED_ID", ""),
-            )
+            owner_username = os.environ.get("HERMES_TELEGRAM_OWNER_USERNAME", "").strip()
+            owner_id = os.environ.get("HERMES_TELEGRAM_ALLOWED_ID", "").strip()
+            home = os.environ.get("HERMES_HOME", "").strip()
+            self.owner_policy = None
+            if home and (owner_username or owner_id):
+                try:
+                    self.owner_policy = OwnerPolicy(
+                        Path(home) / "telegram-owner.json", owner_username, owner_id
+                    )
+                except OwnerDenied:
+                    # A malformed setting must not prevent provider registration:
+                    # the dashboard must retain its authentication gate.
+                    pass
+            self.ready = bool(client_id and secret and self.owner_policy is not None)
 
         def start_login(self, *, redirect_uri):
             if not self.ready:
@@ -41,6 +48,8 @@ def register(ctx):
             return super().start_login(redirect_uri=redirect_uri)
 
         def _verify_id_token(self, id_token):
+            if self.owner_policy is None:
+                raise ProviderError("No Telegram owner is configured.")
             # JWT signature, issuer, audience and expiry are verified FIRST.
             claims = super()._verify_id_token(id_token)
             try:

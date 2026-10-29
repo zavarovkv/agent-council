@@ -26,6 +26,7 @@ curl -fsSL --retry 2 --max-time 60 https://download.docker.com/linux/ubuntu/gpg 
   -o /etc/apt/keyrings/agent-council-docker.asc
 chmod 0644 /etc/apt/keyrings/agent-council-docker.asc
 # OS-provided values, not user-controlled shell input.
+# shellcheck source=/dev/null
 . /etc/os-release
 [[ "$ID" == ubuntu ]]
 docker_codename="${UBUNTU_CODENAME:-$VERSION_CODENAME}"

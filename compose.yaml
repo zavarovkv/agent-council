@@ -9,11 +9,12 @@ services:
     restart: unless-stopped
     stop_grace_period: 30s
     env_file:
-      - ${HERMES_AUTH_ENV_FILE:-/etc/hermes/telegram.env}
+      - path: ${HERMES_AUTH_ENV_FILE:-/etc/hermes/telegram.env}
+        format: raw
     environment:
       HERMES_UID: ${HERMES_UID:-10000}
       HERMES_GID: ${HERMES_GID:-10000}
-      HERMES_PUBLIC_URL: ${HERMES_PUBLIC_URL:-https://hermes.2.29.13.129.sslip.io}
+      HERMES_PUBLIC_URL: ${HERMES_PUBLIC_URL:?Set the HTTPS public URL in compose.env}
       HERMES_HOME: /opt/data
       HERMES_WRITE_SAFE_ROOT: /opt/data
       PYTHONUNBUFFERED: "1"
@@ -53,6 +54,21 @@ services:
       interval: 15s
       timeout: 8s
       retries: 4
+
+  certbot:
+    image: certbot/certbot:v5.8.0@sha256:f70ad0adbb7e117f0fe42a63c553f28ea451edabc0148757b6efcd9735acaa20
+    profiles: [maintenance]
+    command: [--help]
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    tmpfs:
+      - /tmp:rw,nosuid,nodev,size=32m
+    volumes:
+      - /etc/hermes/letsencrypt:/etc/hermes/letsencrypt
+      - /var/lib/hermes-acme:/var/lib/hermes-acme
+      - /var/log/hermes-acme:/var/log/hermes-acme
+      - /var/www/hermes-acme:/var/www/hermes-acme
 
 networks:
   hermes:

@@ -9,6 +9,8 @@ enabled=/etc/nginx/sites-enabled/hermes
 domain=hermes.2.29.13.129.sslip.io
 
 [[ $(id -u) == 0 ]]
+: "${COUNCIL_CERTBOT_BIN:?Set the path to a dedicated Certbot installation for this legacy script}"
+[[ -x "$COUNCIL_CERTBOT_BIN" ]]
 [[ ! -e "$enabled" ]]
 if [[ -e "$site" ]] && ! cmp -s "$site" "$assets/config/nginx-hermes-http.conf"; then
   printf 'Refusing to overwrite an existing non-staging Hermes vhost.\n' >&2
@@ -43,7 +45,7 @@ unlink "$challenge"
 
 # Certbot applies its own restrictive modes to account and private-key files.
 umask 022
-/opt/tl-dashboard/certbot/bin/certbot certonly --non-interactive --agree-tos \
+"$COUNCIL_CERTBOT_BIN" certonly --non-interactive --agree-tos \
   --register-unsafely-without-email --webroot --webroot-path /var/www/hermes-acme \
   --config-dir /etc/hermes/letsencrypt --work-dir /var/lib/hermes-acme \
   --logs-dir /var/log/hermes-acme --cert-name "$domain" -d "$domain"
