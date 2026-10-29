@@ -1,7 +1,7 @@
 # Contributing
 
 Agent Council is an early-stage project. Its current implementation is a
-single-owner Hermes deployment; it is not yet a multi-tenant agent platform.
+shared Hermes deployment for trusted operators; it is not yet a multi-tenant agent platform.
 
 For a substantial feature, open an issue describing the problem and proposed
 behavior before implementing it. Keep changes focused and use descriptive,

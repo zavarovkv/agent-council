@@ -25,13 +25,16 @@ No existing application directory or Docker socket is mounted into Hermes.
 
 ## Validation
 
-- Local suite: 18 unit tests pass; 5 live tests are opt-in and skipped locally.
-- Origin suite: all 23 tests pass with the public hostname and origin routing;
+- Local suite: 28 unit tests pass; 5 live tests are opt-in and skipped locally.
+- Origin checks use the public hostname and origin routing;
   checks include private APIs, forged credentials, WebSocket access and setup-page
   HTML encoding.
-- All 9 pinned-image tests pass, using generated RSA keys to verify owner enrollment,
+- All 12 pinned-image tests pass, using generated RSA keys to verify owner enrollment,
   wrong signature/issuer/audience, expiry, unauthorized identities, per-request
   owner checks, missing/malformed settings and numeric-ID-only configuration.
+  They also verify invitation grant and rejection of a removed account's
+  previously valid token. Unit tests cover configuration preservation and
+  restoration after a failed restart.
 - A real Compose container receives fake secrets containing dollar signs,
   quotes, backslashes and hash characters unchanged.
 - Certbot's test renewal succeeds for both the custom and legacy hostname using
@@ -52,7 +55,8 @@ authorization. Neither has been completed as part of these automated tests.
    license yet. The owner must choose before calling it an open-source release
    or accepting external code under a defined license. Third-party components
    retain their own license requirements.
-2. **Keep the single-owner scope explicit.** The agent and dashboard share a
+2. **Keep the shared-runtime scope explicit.** The owner and invited collaborators
+   have equal rights. The agent and dashboard share a
    trust boundary. A malicious plugin or an operator using agent terminal tools
    can modify the profile. Before supporting untrusted users/agents, introduce
    an independent auth/control plane, per-agent credentials/storage and execution

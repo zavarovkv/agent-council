@@ -1,4 +1,4 @@
-"""Owner-only Telegram OIDC provider for the separate Hermes deployment."""
+"""Telegram OIDC restricted to the configured owner and invited accounts."""
 
 from __future__ import annotations
 
@@ -29,12 +29,13 @@ def register(ctx):
             )
             owner_username = os.environ.get("HERMES_TELEGRAM_OWNER_USERNAME", "").strip()
             owner_id = os.environ.get("HERMES_TELEGRAM_ALLOWED_ID", "").strip()
+            additional_ids = os.environ.get("HERMES_TELEGRAM_ALLOWED_IDS", "")
             home = os.environ.get("HERMES_HOME", "").strip()
             self.owner_policy = None
             if home and (owner_username or owner_id):
                 try:
                     self.owner_policy = OwnerPolicy(
-                        Path(home) / "telegram-owner.json", owner_username, owner_id
+                        Path(home) / "telegram-owner.json", owner_username, owner_id, additional_ids
                     )
                 except OwnerDenied:
                     # A malformed setting must not prevent provider registration:
@@ -55,9 +56,7 @@ def register(ctx):
             try:
                 self.owner_policy.authorize(claims)
             except OwnerDenied as exc:
-                raise ProviderError(
-                    "Access is restricted to the owner's Telegram account."
-                ) from exc
+                raise ProviderError("This Telegram account has not been granted access.") from exc
             return claims
 
         # The upstream class aliases this method for per-request verification.

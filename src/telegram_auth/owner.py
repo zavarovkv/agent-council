@@ -1,4 +1,4 @@
-"""Restrict already-verified Telegram claims to one persistent account ID."""
+"""Authorize a persistent owner and explicitly invited Telegram account IDs."""
 
 from __future__ import annotations
 
@@ -28,6 +28,15 @@ def telegram_id(value: Any) -> int:
     return result
 
 
+def parse_telegram_ids(value: str) -> frozenset[int]:
+    """Parse an optional comma-separated allowlist; reject malformed entries."""
+    if not isinstance(value, str):
+        raise OwnerDenied("The Telegram access list must be comma-separated IDs.")
+    if not value.strip():
+        return frozenset()
+    return frozenset(telegram_id(part.strip()) for part in value.split(","))
+
+
 class OwnerPolicy:
     """Pin the first verified owner login; later logins use its immutable ID.
 
@@ -35,15 +44,21 @@ class OwnerPolicy:
     audience and expiry. Username bootstrapping is disabled once a pin exists.
     """
 
-    def __init__(self, pin_path: Path, username: str, account_id: str = ""):
+    def __init__(
+        self, pin_path: Path, username: str, account_id: str = "", additional_ids: str = ""
+    ):
         self.pin_path = pin_path
         self.username = username.removeprefix("@").lower()
         self.account_id = telegram_id(account_id) if account_id else None
+        self.additional_ids = parse_telegram_ids(additional_ids)
         if self.account_id is None and not re.fullmatch(r"[a-z][a-z0-9_]{4,31}", self.username):
             raise OwnerDenied("Configure a Telegram account ID or valid owner username.")
 
     def authorize(self, claims: Mapping[str, Any]) -> int:
         account_id = telegram_id(claims.get("id"))
+        if account_id in self.additional_ids:
+            # Invited users never bootstrap or replace the owner's pinned ID.
+            return account_id
         if self.account_id is not None:
             if account_id != self.account_id:
                 raise OwnerDenied("This Telegram account is not allowed.")

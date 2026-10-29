@@ -14,13 +14,15 @@ support. Review container and dependency updates before applying them.
 
 ## Supported threat model
 
-This is currently a **single trusted owner** deployment. Agent terminal tools
+This is currently a **trusted owner and explicitly invited operators** deployment.
+All allowed accounts share one Hermes runtime, history, tools and permissions.
+There are no per-user roles or private user workspaces. Agent terminal tools
 can execute code, and user-installed plugins are executable code. Treat model
 access, skills, plugins and the writable agent profile as trusted operator
 capabilities. The dashboard and agent execute in the same container/process
 trust boundary; this is not a hardened boundary against a malicious plugin.
 
-Do not expose it to untrusted users or use one shared profile for mutually
+Do not invite untrusted users or use one shared profile for mutually
 untrusted agents. A future multi-user platform needs a separate authentication
 gateway/control plane and per-agent credentials, storage and execution sandboxes.
 Protecting the dashboard from hostile code already running inside its own
@@ -33,6 +35,10 @@ runtime is outside the current supported threat model.
   explicit numeric Telegram ID in the root-owned authentication environment.
   Username-based enrollment is a bootstrap convenience; later ID pinning is
   stored in the trusted owner profile.
+- Add collaborators only by numeric Telegram ID in the root-owned allowlist.
+  Removing an invitation and recreating Hermes rejects the removed account's
+  existing tokens and disconnects open sessions. The separate owner setting
+  must be changed separately to replace/revoke the owner.
 - Keep credentials in a root-only file outside Git. Compose uses raw env-file
   parsing so interpolation cannot silently alter a secret.
 - Never mount the host Docker socket, root SSH keys or unrelated applications

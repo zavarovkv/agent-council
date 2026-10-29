@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Add invited Telegram IDs and simple list/add/remove commands with restart rollback.
 - Add explicit Telegram owner configuration without a repository-owner fallback.
 - Keep the authentication provider registered and closed for malformed settings.
 - Preserve literal credentials and owner restrictions when updating setup.

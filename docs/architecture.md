@@ -23,11 +23,12 @@ unprivileged user; the image's s6 supervisor has the limited bootstrap rights
 documented in Compose. The host Docker socket is never mounted into the agent.
 
 Telegram's OIDC protocol implementation comes from the pinned Hermes release.
-The project adds owner authorization after token verification. Prefer a numeric
+The project adds owner authorization and an explicit invitation list after token verification. Prefer a numeric
 owner ID in root-owned settings. A username may bootstrap enrollment, after
 which the profile stores the immutable ID. Profile/plugin execution belongs to
 the same trusted-owner boundary; see SECURITY.md before expanding the system
-to untrusted agents or multiple users.
+to untrusted agents or mutually untrusted users. Invited operators share one
+runtime and have the same rights; they are not separate tenants.
 
 Model credentials and user state belong to the private data volume. They do
 not belong in an image, a source checkout or GitHub Actions. The deployment

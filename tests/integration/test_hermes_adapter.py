@@ -31,6 +31,7 @@ class HermesAdapterTests(unittest.TestCase):
             "HERMES_TELEGRAM_CLIENT_SECRET": "test-secret-not-used-for-exchange",
             "HERMES_TELEGRAM_OWNER_USERNAME": "test_owner",
             "HERMES_TELEGRAM_ALLOWED_ID": "",
+            "HERMES_TELEGRAM_ALLOWED_IDS": "",
         }
         self.patcher = patch.dict(os.environ, self.environment)
         self.patcher.start()
@@ -118,6 +119,7 @@ class HermesAdapterTests(unittest.TestCase):
             {"HERMES_TELEGRAM_ALLOWED_ID": "0"},
             {"HERMES_TELEGRAM_OWNER_USERNAME": "invalid username"},
             {"HERMES_HOME": ""},
+            {"HERMES_TELEGRAM_ALLOWED_IDS": "12345,,67890"},
         ):
             with self.subTest(changes=changes), patch.dict(os.environ, changes):
                 provider = self.make_provider()
@@ -125,3 +127,32 @@ class HermesAdapterTests(unittest.TestCase):
                 self.assertFalse(provider.ready)
                 with self.assertRaises(ProviderError):
                     provider._claims_for(self.token())
+
+    def test_verified_invited_account_can_enter_without_enrolling_the_owner(self):
+        with patch.dict(os.environ, {"HERMES_TELEGRAM_ALLOWED_IDS": "67890,54321"}):
+            provider = self.make_provider()
+        claims = provider._verify_id_token(
+            self.token({"id": 67890, "preferred_username": "invited_account"})
+        )
+        self.assertEqual(claims["id"], 67890)
+        self.assertFalse((self.profile / "telegram-owner.json").exists())
+        with self.assertRaises(ProviderError):
+            provider._verify_id_token(self.token({"id": 99999, "preferred_username": "stranger"}))
+
+    def test_removing_an_invitation_rejects_existing_tokens(self):
+        with patch.dict(os.environ, {"HERMES_TELEGRAM_ALLOWED_IDS": "67890"}):
+            provider = self.make_provider()
+        token = self.token({"id": 67890, "preferred_username": "invited_account"})
+        provider._claims_for(token)
+        restarted = self.make_provider()
+        with self.assertRaises(ProviderError):
+            restarted._claims_for(token)
+        self.assertEqual(restarted._claims_for(self.token())["id"], 12345)
+
+    def test_invited_ids_do_not_replace_required_owner_configuration(self):
+        with patch.dict(
+            os.environ,
+            {"HERMES_TELEGRAM_OWNER_USERNAME": "", "HERMES_TELEGRAM_ALLOWED_IDS": "67890"},
+        ):
+            provider = self.make_provider()
+        self.assertFalse(provider.ready)

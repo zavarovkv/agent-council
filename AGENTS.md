@@ -18,7 +18,7 @@ Use descriptive module, function, and variable names. Keep modules focused on on
 
 Use `unittest`. Authorization tests must cover an unauthorized account, immutable-ID pinning, username reassignment, corrupted state and concurrency. Live deployment tests are opt-in via `HERMES_LIVE_URL`; they must not use real credentials or modify application data. Verify the existing service's response, process and configuration checksums around routing changes.
 
-For direct-origin tests, use `HERMES_LIVE_ORIGIN_IP` while retaining HTTPS hostname verification. Never accept an edge 403 as proof that the application auth gate works. Do not silently assign a default owner to a new installation. This deployment supports one trusted owner; separate auth and execution boundaries are required before supporting untrusted users or agents.
+For direct-origin tests, use `HERMES_LIVE_ORIGIN_IP` while retaining HTTPS hostname verification. Never accept an edge 403 as proof that the application auth gate works. Do not silently assign a default owner to a new installation. This deployment supports a trusted owner and explicitly invited collaborators sharing one runtime. Separate auth and execution boundaries are required before supporting untrusted users or agents. Test invitation grant and revocation, including rejection of a previously valid session after settings reload. Access-management commands must preserve owner settings and credentials and restart only Hermes.
 
 ## Commit & Pull Request Guidelines
 

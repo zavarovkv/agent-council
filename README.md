@@ -3,12 +3,13 @@
 A platform for managing, coordinating, and monitoring AI agents.
 
 The first integration is a self-hosted Hermes Agent with a web dashboard,
-owner-only Telegram authentication, persistent storage and Docker Compose.
+Telegram authentication for an owner and explicitly invited accounts, persistent
+storage and Docker Compose.
 Code and infrastructure are versioned in
 [zavarovkv/agent-council](https://github.com/zavarovkv/agent-council).
 
-This is an early deployment foundation for a **single trusted owner**. Multi-user
-permissions and isolation between untrusted agents are not implemented. Read
+This is an early deployment foundation for **trusted operators sharing one Hermes**.
+Per-user roles, private user workspaces and isolation between untrusted agents are not implemented. Read
 [the architecture](docs/architecture.md) and [security policy](SECURITY.md).
 
 ## Deployment
@@ -91,9 +92,33 @@ numeric Telegram ID. Later logins require that ID even after a username change
 or reassignment. Corrupted identity state denies access. Alternative dashboard
 providers are disabled. Until configured, the dashboard remains locked.
 
+### Add or remove people
+
+From this project on your Mac, replace `123456789` with the person's numeric
+Telegram account ID:
+
+```bash
+bash scripts/telegram-access.sh list
+bash scripts/telegram-access.sh add 123456789
+bash scripts/telegram-access.sh remove 123456789
+```
+
+One bot serves all invited accounts. The command stores invited IDs in
+`HERMES_TELEGRAM_ALLOWED_IDS` in `/etc/hermes/telegram.env` on the server, outside
+Git. The owner is configured separately and remains authorized. Each change
+recreates only Hermes to apply the list and close existing connections; valid
+tokens for removed accounts are then rejected. Credentials and agent state are
+preserved. A failed restart restores the previous settings.
+
+For manual administration, the same setting is a comma-separated list, for
+example `HERMES_TELEGRAM_ALLOWED_IDS=123456789,987654321`; apply it by recreating
+the Hermes service. Do not put real authentication files in Git or share them.
+Invited accounts have the same dashboard/tools/history access as the owner;
+these are trusted collaborators, not isolated tenants.
+
 No bot application needs to run. Each independent direct-Telegram installation
 registers its own Login client. Standard OIDC and optional centralized login are
-[proposed next steps](docs/authentication-options.md), not implemented features.
+[optional future architecture](docs/authentication-options.md), not implemented features.
 Never distribute a shared Telegram secret inside an image.
 
 ## ChatGPT / Codex account

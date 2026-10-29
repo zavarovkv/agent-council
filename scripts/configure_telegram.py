@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Read Telegram OIDC credentials privately over an interactive SSH terminal."""
 
+import fcntl
 import getpass
 import http.client
 import json
@@ -68,15 +69,26 @@ def main():
     elif not re.fullmatch(r"[0-9]{1,19}", owner_id) or not 0 < int(owner_id) < 2**63:
         raise SystemExit("The Telegram account ID is invalid.")
     values = {
+        **existing,
         "HERMES_TELEGRAM_CLIENT_ID": client_id,
         "HERMES_TELEGRAM_CLIENT_SECRET": secret,
         "HERMES_TELEGRAM_OWNER_USERNAME": owner_username,
         "HERMES_TELEGRAM_ALLOWED_ID": owner_id,
     }
-    write_environment(target, values, raw=docker_deployment)
-    if docker_deployment:
-        format_marker.write_text("raw\n", encoding="utf-8")
-        format_marker.chmod(0o600)
+    flags = os.O_CREAT | os.O_RDWR | getattr(os, "O_NOFOLLOW", 0)
+    with os.fdopen(os.open(target.with_suffix(".env.lock"), flags, 0o600), "a") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        latest = (
+            parse_environment(target.read_text(encoding="utf-8"), raw=raw_format)
+            if target.exists()
+            else {}
+        )
+        # Preserve invitations added while this interactive prompt was open.
+        values["HERMES_TELEGRAM_ALLOWED_IDS"] = latest.get("HERMES_TELEGRAM_ALLOWED_IDS", "")
+        write_environment(target, values, raw=docker_deployment)
+        if docker_deployment:
+            format_marker.write_text("raw\n", encoding="utf-8")
+            format_marker.chmod(0o600)
     if docker_deployment:
         subprocess.run(
             [
@@ -120,7 +132,7 @@ def main():
             "Credentials saved, but Hermes did not become ready; public access remains closed."
         )
     print("Saved privately. Hermes restarted. Open " + origin)
-    print("Only the configured Telegram owner can sign in.")
+    print("Only the configured owner and explicitly invited Telegram IDs can sign in.")
 
 
 if __name__ == "__main__":

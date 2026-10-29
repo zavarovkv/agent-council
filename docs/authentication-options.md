@@ -1,7 +1,10 @@
 # Authentication direction
 
 Status: proposed architecture, not implemented. The current deployment supports
-direct Telegram login for one trusted owner.
+direct Telegram login for an owner and a numeric allowlist of trusted collaborators.
+This direct mode is the preferred simple setup for the current deployment;
+no separate identity server is needed. The broker below is an optional future
+architecture for deployments that need it.
 
 Agent Council should use standard OpenID Connect (OIDC) for application login,
 with an optional shared identity service. Operators should be able to choose:
