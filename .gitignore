@@ -1,6 +1,10 @@
 __pycache__/
 *.py[cod]
 .venv/
+node_modules/
+.browser-fixture/
+test-results/
+playwright-report/
 .ruff_cache/
 .env
 .env.*

@@ -51,6 +51,14 @@ runtime is outside the current supported threat model.
 
 ## State and recovery
 
+The official Telegram popup result is verified server-side. Widget bootstrap
+POSTs require the configured HTTPS origin and JSON content. A single-use,
+short-lived challenge binds the signed nonce to an HttpOnly/Secure/__Host cookie.
+Challenge memory and per-client issue rates are bounded. JWT signature,
+issuer, audience, expiry and nonce are checked before owner enrollment. Widget
+tokens are posted in request bodies, not URLs or browser storage. Session cookies
+reuse Hermes' hardened helpers. The ordinary OIDC/PKCE flow is the SDK-failure fallback.
+
 Sessions, memories, skills and model OAuth credentials persist in the private
 data volume. Include them in a consistent backup, preferably encrypted off-server,
 and test recovery. A container restart test is not disaster-recovery validation.

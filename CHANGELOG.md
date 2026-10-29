@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Use the official Telegram Login SDK with a browser-bound, single-use server nonce and existing Hermes sessions.
+- Install Beauty.css as a locked npm build dependency and propose updates through Dependabot.
 - Style the Council sign-in page with pinned Beauty.css, system fonts and light/dark themes.
 - Move the Telegram-branded sign-in link to the header and remove the landing footer.
 - Add invited Telegram IDs and simple list/add/remove commands with restart rollback.

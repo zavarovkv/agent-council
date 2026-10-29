@@ -138,29 +138,38 @@ verified after this user-controlled login.
 
 ## Login appearance
 
-The sign-in page uses [Beauty.css](https://github.com/zavarovkv/beauty-css) **0.3.0**
-and Agent Council branding, with Russian copy, system fonts, responsive layout
-and automatic light/dark colors. Styling ships inside the image; the login page
-does not load a CDN, external fonts or additional JavaScript.
+The landing page uses [Beauty.css](https://github.com/zavarovkv/beauty-css) as an
+exact npm dependency, currently **0.3.0**. `package-lock.json` records registry
+integrity. A digest-pinned Node 24 build stage runs `npm ci --ignore-scripts`;
+only the CSS, package metadata and MIT license enter the final Hermes image.
+Node and npm are not installed in the running application. Beauty source is not
+copied into this repository. Page-specific overrides live in `assets/login/login.css`.
 
-Telegram sign-in sits in the header navigation, using the official Telegram
-logo and an outlined sign-in treatment based on Telegram's example. The button
-keeps the existing server-side OIDC/PKCE flow. On small screens the visible label
-is shorter, while its accessible name remains complete. The landing page has no footer.
+Dependabot proposes npm updates weekly. An update requires passing checks,
+review, image rebuild and deployment; changing the Beauty repository does not
+silently change production. To update manually, run `npm install --save-exact
+beauty-css@VERSION --ignore-scripts` and commit both package files.
 
-`assets/login/` contains the HTML and layout stylesheet. The exact generated
-Beauty artifact, its MIT license and a version/commit/checksum receipt live in
-`assets/login/vendor/`. Do not edit the vendored CSS; customize `login.css` or
-update the upstream artifact and receipt together.
+The header uses the **official Telegram Login JavaScript SDK and its native
+button**, loaded from `https://oauth.telegram.org/js/telegram-login.js?6`.
+It opens Telegram's popup. The local initializer in `assets/login/telegram-widget.js`
+posts the resulting ID token to the server; it does not trust decoded browser
+claims or persist tokens in browser storage. A server-side OIDC/PKCE link stays
+available if the SDK cannot load. The page has no footer and supports system
+light/dark colors, mobile layout and keyboard focus.
 
-The official Telegram logo is bundled with its source/checksum and usage notice.
-Landing HTML, CSS and provider artwork all ship in this same Git repository and
-Docker image; no separate server-side landing directory is required.
+The widget bridge uses same-origin HTTPS POSTs, a short-lived single-use nonce,
+a hardened browser cookie, bounded rate/capacity limits, real JWT verification
+and the same owner/invitation policy as other sessions. It creates standard
+Hermes HttpOnly/Secure session cookies. Widget sessions have no refresh token;
+the user signs in again when the signed token expires. Challenges are process-local;
+the current container runs one backend. Multiple workers need a shared challenge store.
 
-During image build, `scripts/install-login-theme.py` replaces the pinned Hermes
-HTML templates and OAuth link labels. Provider registration, auth links,
-callback handling and token verification remain upstream. The installer refuses
-an unexpected renderer checksum, so a Hermes update requires compatibility review.
+Landing HTML/CSS/initializer are in `assets/login/` and ship in the Docker image.
+`scripts/install-login-theme.py` verifies the pinned Hermes renderer and auth
+router before installing templates and the two widget bootstrap routes. Token
+verification and session cookie primitives come from Hermes. Updating Hermes
+requires a compatibility review.
 
 ![Beauty login in light mode](docs/screenshots/login-light.png)
 
@@ -222,6 +231,12 @@ virtual host remains unchanged.
 infrastructure and maintenance commands; `tests/` contains security checks;
 `assets/` contains the setup page. Local tests require Python **3.11+** and the
 standard library. The YAML profile helper runs inside the image.
+
+Frontend development uses Node **24** and `npm ci --ignore-scripts`. Run
+`npm run check` for JavaScript syntax. After `make test-integration`, run
+`npx playwright install chromium` and `make test-browser`. Browser tests load
+the actual public Telegram SDK, with a fake provider popup and fake backend;
+no account credentials or real login are used. CI installs the required browser.
 
 ```bash
 python3 -m venv .venv

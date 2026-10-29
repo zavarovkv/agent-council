@@ -1,36 +1,31 @@
 #!/usr/bin/env python3
-"""Decorate the pinned Hermes login renderer without replacing its auth logic."""
+"""Install the Council theme and official-widget bridge into the pinned Hermes build."""
 
 import ast
 import hashlib
-import json
 import sys
 from pathlib import Path
 
 UPSTREAM_SHA256 = "bdd4cadc0b4725b7f133fe4a897e0b6a6c5620f4349614f2c9505e32d07a738d"
+UPSTREAM_ROUTES_SHA256 = "b88945b2586de1288875ba1da6d8923d07bf34c1c97b16861e42e7d9633fdd08"
 
 
 def install(renderer: Path, assets: Path) -> None:
     original = renderer.read_bytes()
+    routes = renderer.with_name("routes.py")
+    routes_source = routes.read_bytes()
     if hashlib.sha256(original).hexdigest() != UPSTREAM_SHA256:
-        raise SystemExit(
-            "Hermes login renderer changed; review theme compatibility before building."
-        )
-    vendor = assets / "vendor"
-    receipt = json.loads((vendor / "beauty-css.json").read_text(encoding="utf-8"))
-    beauty = (vendor / "beauty.min.css").read_bytes()
-    if hashlib.sha256(beauty).hexdigest() != receipt["sha256"]:
-        raise SystemExit("Vendored Beauty.css checksum does not match its receipt.")
-    logo_receipt = json.loads((vendor / "telegram-logo.json").read_text(encoding="utf-8"))
-    logo = (vendor / "telegram-logo.svg").read_bytes()
-    if hashlib.sha256(logo).hexdigest() != logo_receipt["sha256"]:
-        raise SystemExit("Telegram logo checksum does not match its receipt.")
-    icon = logo.decode("utf-8").replace(
-        "<svg ", '<svg class="provider-icon" aria-hidden="true" focusable="false" ', 1
-    )
-    styles = beauty.decode("utf-8") + "\n" + (assets / "login.css").read_text(encoding="utf-8")
+        raise SystemExit("Hermes login renderer changed; review theme compatibility.")
+    if hashlib.sha256(routes_source).hexdigest() != UPSTREAM_ROUTES_SHA256:
+        raise SystemExit("Hermes auth routes changed; review widget compatibility.")
+    # npm ci validates the exact package against package-lock.json integrity.
+    beauty = (assets / "dependencies" / "beauty.min.css").read_text(encoding="utf-8")
+    styles = beauty + "\n" + (assets / "login.css").read_text(encoding="utf-8")
     login = (assets / "login.html").read_text(encoding="utf-8").replace("$STYLES", styles)
-    # Hermes formats its HTML with str.format: escape literal CSS braces first.
+    widget_script = (
+        "<script>\n" + (assets / "telegram-widget.js").read_text(encoding="utf-8") + "\n</script>"
+    )
+    login = login.replace("$WIDGET_SCRIPT", widget_script)
     login = login.replace("{", "{{").replace("}", "}}")
     login = login.replace("$PROVIDER_BUTTONS", "{provider_buttons}").replace(
         "$PASSWORD_SCRIPT", "{password_script}"
@@ -53,20 +48,19 @@ def install(renderer: Path, assets: Path) -> None:
         name = node.targets[0].id
         lines[node.lineno - 1 : node.end_lineno] = [f"{name} = {replacements[name]!r}\n"]
     themed = "".join(lines)
-    # Brand only the link label; the official OIDC flow stays with Hermes.
     label = "f'Sign in with {html.escape(p.display_name)}</a>'"
     if themed.count(label) != 2:
-        raise SystemExit("Expected OAuth link labels were not found.")
-    branded_label = (
-        'f\'{_COUNCIL_TELEGRAM_ICON if p.name == "telegram-owner" else ""}\' '
-        'f\'<span>Войти<span class="provider-label-tail"> через '
-        "{html.escape(p.display_name)}</span></span></a>'"
-    )
-    themed = themed.replace(label, branded_label)
-    themed += f"\n\n_COUNCIL_TELEGRAM_ICON = {icon!r}\n"
+        raise SystemExit("Expected OAuth fallback labels were not found.")
+    themed = themed.replace(label, "f'Войти через {html.escape(p.display_name)}</a>'")
     compile(themed, str(renderer), "exec")
     renderer.write_text(themed, encoding="utf-8")
-    print("Agent Council login installed with pinned Beauty.css; auth handlers preserved.")
+    routes.write_text(
+        routes_source.decode("utf-8")
+        + "\n\nfrom plugins.dashboard_auth.telegram_owner.widget import router as _council_widget_router\n"
+        + "router.include_router(_council_widget_router)\n",
+        encoding="utf-8",
+    )
+    print("Council theme and official Telegram Login bridge installed.")
 
 
 if __name__ == "__main__":

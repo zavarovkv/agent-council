@@ -4,6 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="light dark">
+  <script defer src="https://oauth.telegram.org/js/telegram-login.js?6"></script>
   <title>Вход — Agent Council</title>
   <style>$STYLES</style>
 </head>
@@ -14,14 +15,18 @@
       <div class="provider-list">
 $PROVIDER_BUTTONS
       </div>
+      <button class="tg-auth-button" data-style="outlined" type="button" disabled hidden
+        aria-label="Войти через Telegram"><span>Войти<span class="provider-label-tail"> через Telegram</span></span></button>
     </nav>
   </header>
   <main>
     <section class="login-panel" aria-labelledby="login-title">
       <h1 id="login-title">С возвращением.</h1>
       <p class="subtitle">Войдите, чтобы продолжить работу с агентами и рабочими сессиями.</p>
+      <p class="login-status" role="status" hidden></p>
     </section>
   </main>
 $PASSWORD_SCRIPT
+$WIDGET_SCRIPT
 </body>
 </html>

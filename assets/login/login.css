@@ -17,6 +17,31 @@ body > header {
   margin-block-end: 0;
 }
 
+header nav {
+  display: flex;
+  align-items: center;
+}
+
+header [hidden], .login-status[hidden] {
+  display: none;
+}
+
+/* Keep the official widget's geometry and behavior; adapt its outlined colors. */
+header .tg-auth-button[data-style~="outlined"] {
+  --border_color: var(--beauty-control-border);
+  color: var(--beauty-heading);
+}
+
+header .tg-auth-button[data-style~="outlined"]:hover {
+  border-color: var(--beauty-heading);
+  background: var(--beauty-surface);
+}
+
+.login-status {
+  margin-block-start: 1.5rem;
+  color: var(--beauty-muted);
+}
+
 .wordmark {
   color: var(--beauty-heading);
   font-size: 1.125rem;
@@ -53,7 +78,7 @@ main {
   gap: 1rem;
 }
 
-/* Telegram's outlined sign-in treatment; the native link retains OIDC/PKCE. */
+/* Server-side OIDC fallback when the official Telegram SDK cannot load. */
 .provider-btn {
   display: inline-flex;
   align-items: center;
@@ -78,13 +103,6 @@ main {
   border-color: var(--beauty-heading);
   background: var(--beauty-surface);
   color: var(--beauty-heading);
-}
-
-.provider-icon {
-  display: block;
-  flex: none;
-  inline-size: 1.375rem;
-  block-size: 1.375rem;
 }
 
 .provider-form {

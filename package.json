@@ -1,0 +1,17 @@
+{
+  "name": "agent-council-web-assets",
+  "version": "0.0.0",
+  "private": true,
+  "engines": {
+    "node": "24.x"
+  },
+  "scripts": {
+    "check": "node --check assets/login/telegram-widget.js"
+  },
+  "dependencies": {
+    "beauty-css": "0.3.0"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.64.1"
+  }
+}

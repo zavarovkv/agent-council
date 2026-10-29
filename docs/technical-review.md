@@ -25,16 +25,23 @@ No existing application directory or Docker socket is mounted into Hermes.
 
 ## Validation
 
-- Local suite: 28 unit tests pass; 5 live tests are opt-in and skipped locally.
+- Local suite: 33 unit tests pass; 5 live tests are opt-in and skipped locally.
 - Origin checks use the public hostname and origin routing;
   checks include private APIs, forged credentials, WebSocket access and setup-page
   HTML encoding.
-- All 12 pinned-image tests pass, using generated RSA keys to verify owner enrollment,
+- All 24 pinned-image tests pass, using generated RSA keys to verify owner enrollment,
   wrong signature/issuer/audience, expiry, unauthorized identities, per-request
   owner checks, missing/malformed settings and numeric-ID-only configuration.
   They also verify invitation grant and rejection of a removed account's
   previously valid token. Unit tests cover configuration preservation and
   restoration after a failed restart.
+- Official Telegram SDK browser tests exercise the actual popup and postMessage
+  callback, successful/denied UI handling and the SDK-unavailable fallback. Provider
+  popups and backend responses are fixtures; no real account credentials are used.
+- Widget results require same-origin HTTPS JSON POSTs, single-use browser-bound
+  nonces, signed token validation and the existing access policy. Redirect checks
+  reject decoded slash/backslash ambiguities. Beauty.css is an exact npm dependency
+  installed with lock-file integrity in a build-only Node stage; updates arrive as PRs.
 - A real Compose container receives fake secrets containing dollar signs,
   quotes, backslashes and hash characters unchanged.
 - Certbot's test renewal succeeds for both the custom and legacy hostname using

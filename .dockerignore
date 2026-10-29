@@ -1,5 +1,7 @@
 **
 !Dockerfile
+!package.json
+!package-lock.json
 !src/
 !src/**
 !assets/

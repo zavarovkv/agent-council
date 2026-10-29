@@ -45,7 +45,11 @@ class LoginThemeTests(unittest.TestCase):
         provider = SimpleNamespace(name='test" onclick="bad', display_name="<script>bad()</script>")
         document = self.render([provider], next_path='/" onmouseover="bad')
         parsed = Links(document)
-        self.assertNotIn("script", parsed.tags)
+        baseline = Links(
+            self.render([SimpleNamespace(name="telegram-owner", display_name="Telegram")])
+        )
+        self.assertEqual(parsed.tags.count("script"), baseline.tags.count("script"))
+        self.assertIn("&lt;script&gt;bad()&lt;/script&gt;", document)
         self.assertNotIn("onclick", parsed.links[0])
         self.assertEqual(
             parse_qs(urlsplit(parsed.links[0]["href"]).query)["provider"], [provider.name]
