@@ -36,9 +36,9 @@ stay outside the checkout. Container recreation preserves the bind-mounted
 state. This persistence is separate from an off-server disaster-recovery backup.
 
 The existing TravelLine Dashboard at `https://2.29.13.129/` is independent.
-Hermes initially uses `https://hermes.2.29.13.129.sslip.io/`. The requested
-`council.zavarov.com` has an HTTP challenge route prepared; DNS and its own
-certificate must be completed before the URL switches.
+Hermes is available at **https://council.zavarov.com/** through Cloudflare,
+with a separate origin certificate. The initial `sslip.io` hostname redirects
+to the custom domain.
 
 ## Initial migration
 
@@ -61,16 +61,14 @@ The stopped native profile is preserved. See
 ## Telegram sign-in
 
 In `@BotFather`, choose or create a bot and open **Login Widget**. Register the
-current public origin and its `/auth/callback` URL. After the custom-domain
-switch these will be:
+current public origin and its `/auth/callback` URL:
 
 ```text
 https://council.zavarov.com
 https://council.zavarov.com/auth/callback
 ```
 
-While the initial hostname is active, use that hostname instead. From the
-project on your Mac, run:
+From the project on your Mac, run:
 
 ```bash
 bash scripts/setup-telegram.sh
@@ -130,11 +128,13 @@ and sessions.
 
 ## Custom domain
 
-In Cloudflare create `A council → 2.29.13.129`, TTL `Auto`, proxy **DNS only**
-for initial activation. After DNS resolves, issue its certificate, enable the
-staged HTTPS virtual host, update `HERMES_PUBLIC_URL` in Compose settings and
-`dashboard.public_url` in the persisted profile, recreate Hermes, and update
-BotFather Allowed URLs. Keep the existing TravelLine virtual host unchanged.
+Cloudflare has `A council → 2.29.13.129` with proxying enabled. The HTTP-01
+challenge works through the proxy, and the origin has a valid Let's Encrypt
+certificate. Keep Cloudflare's connection to the origin encrypted; use Full
+(strict) mode for this hostname. The one-time switch is recorded in
+`scripts/activate-council.sh`, which has a configuration rollback. Both Nginx
+virtual hosts keep their challenge routes for renewal. The existing TravelLine
+virtual host remains unchanged.
 
 ## Development
 
@@ -153,7 +153,7 @@ make lint RUFF=.venv/bin/ruff
 Live checks require outbound HTTPS:
 
 ```bash
-HERMES_LIVE_URL=https://hermes.2.29.13.129.sslip.io make test
+HERMES_LIVE_URL=https://council.zavarov.com make test
 ```
 
 GitHub Actions runs tests, Ruff, Compose validation with example credentials
