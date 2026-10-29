@@ -99,15 +99,17 @@ class DriveSetupTests(unittest.TestCase):
             path = Path(directory) / "client.json"
             raw = json.dumps(client_fixture()).encode()
             path.write_bytes(raw)
-            with (
-                patch("sys.argv", ["setup-drive.py", "--client-json", str(path), "--verify"]),
-                patch.object(setup.subprocess, "run") as run,
-            ):
-                setup.main()
-            self.assertEqual(run.call_count, 2)
-            self.assertEqual(run.call_args_list[0].kwargs["input"], raw)
-            for call in run.call_args_list:
-                self.assertNotIn("not-a-real-secret", " ".join(call.args[0]))
+            for mode, calls in (("--verify", 2), ("--import-only", 1)):
+                with (
+                    self.subTest(mode=mode),
+                    patch("sys.argv", ["setup-drive.py", "--client-json", str(path), mode]),
+                    patch.object(setup.subprocess, "run") as run,
+                ):
+                    setup.main()
+                    self.assertEqual(run.call_count, calls)
+                    self.assertEqual(run.call_args_list[0].kwargs["input"], raw)
+                    for call in run.call_args_list:
+                        self.assertNotIn("not-a-real-secret", " ".join(call.args[0]))
 
 
 if __name__ == "__main__":

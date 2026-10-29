@@ -55,10 +55,16 @@ def main():
     parser.add_argument(
         "--client-json", type=Path, help="Downloaded Desktop OAuth JSON; never copied to Git."
     )
-    parser.add_argument(
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument(
         "--verify", action="store_true", help="Only check the saved grant and workspace."
     )
+    mode.add_argument(
+        "--import-only", action="store_true", help="Save the client without starting consent."
+    )
     args = parser.parse_args()
+    if args.import_only and not args.client_json:
+        parser.error("--import-only requires --client-json")
     host = os.environ.get("COUNCIL_SSH_HOST", "root@2.29.13.129")
     if host.startswith("-"):
         raise ValueError("Invalid SSH host.")
@@ -105,6 +111,8 @@ def main():
         ],
         check=True,
     )
+    if args.import_only:
+        return
 
 
 if __name__ == "__main__":
