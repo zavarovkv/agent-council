@@ -86,13 +86,13 @@ class HermesAdapterTests(unittest.TestCase):
         self.assertFalse((self.profile / "telegram-owner.json").exists())
 
     def test_real_token_for_different_username_is_denied(self):
-        with self.assertRaises(ProviderError):
+        with self.assertRaises(InvalidCodeError):
             self.provider._verify_id_token(self.token({"preferred_username": "another_user"}))
         self.assertFalse((self.profile / "telegram-owner.json").exists())
 
     def test_per_request_alias_rechecks_the_pinned_owner(self):
         self.provider._verify_id_token(self.token())
-        with self.assertRaises(ProviderError):
+        with self.assertRaises(InvalidCodeError):
             self.provider._claims_for(self.token({"id": 99999}))
 
     def test_missing_owner_configuration_does_not_default_to_repository_owner(self):
@@ -136,7 +136,7 @@ class HermesAdapterTests(unittest.TestCase):
         )
         self.assertEqual(claims["id"], 67890)
         self.assertFalse((self.profile / "telegram-owner.json").exists())
-        with self.assertRaises(ProviderError):
+        with self.assertRaises(InvalidCodeError):
             provider._verify_id_token(self.token({"id": 99999, "preferred_username": "stranger"}))
 
     def test_removing_an_invitation_rejects_existing_tokens(self):
@@ -145,7 +145,7 @@ class HermesAdapterTests(unittest.TestCase):
         token = self.token({"id": 67890, "preferred_username": "invited_account"})
         provider._claims_for(token)
         restarted = self.make_provider()
-        with self.assertRaises(ProviderError):
+        with self.assertRaises(InvalidCodeError):
             restarted._claims_for(token)
         self.assertEqual(restarted._claims_for(self.token())["id"], 12345)
 

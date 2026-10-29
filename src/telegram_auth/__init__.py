@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hmac
 import os
 from pathlib import Path
 
@@ -9,6 +10,7 @@ from pathlib import Path
 def register(ctx):
     """Use Hermes' OIDC/session implementation, then restrict verified identities."""
     from hermes_cli.dashboard_auth import ProviderError
+    from hermes_cli.dashboard_auth.base import InvalidCodeError
     from plugins.dashboard_auth.self_hosted import SelfHostedOIDCProvider
 
     from .owner import OwnerDenied, OwnerPolicy
@@ -19,6 +21,7 @@ def register(ctx):
 
         def __init__(self):
             client_id = os.environ.get("HERMES_TELEGRAM_CLIENT_ID", "").strip()
+            self.widget_client_id = client_id
             secret = os.environ.get("HERMES_TELEGRAM_CLIENT_SECRET", "").strip()
             super().__init__(
                 issuer="https://oauth.telegram.org",
@@ -56,12 +59,29 @@ def register(ctx):
             try:
                 self.owner_policy.authorize(claims)
             except OwnerDenied as exc:
-                raise ProviderError("This Telegram account has not been granted access.") from exc
+                raise InvalidCodeError(
+                    "This Telegram account has not been granted access."
+                ) from exc
             return claims
 
         # The upstream class aliases this method for per-request verification.
         # Override the alias too so an existing session cannot bypass the owner check.
         _claims_for = _verify_id_token
+
+        def complete_widget_login(self, id_token, nonce):
+            if not self.ready or self.owner_policy is None:
+                raise ProviderError("Telegram Login is not configured.")
+            # Validate the signed claims and browser nonce BEFORE owner enrollment.
+            claims = super()._verify_id_token(id_token)
+            claim_nonce = claims.get("nonce")
+            if (
+                not isinstance(claim_nonce, str)
+                or not claim_nonce.isascii()
+                or not hmac.compare_digest(claim_nonce, nonce)
+            ):
+                raise InvalidCodeError("Telegram nonce does not match this browser.")
+            self.owner_policy.authorize(claims)
+            return self._session(id_token, "", claims)
 
     # Register even before credentials arrive: the gate stays ON and refuses login.
     ctx.register_dashboard_auth_provider(TelegramOwnerProvider())

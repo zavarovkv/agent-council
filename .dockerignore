@@ -1,6 +1,13 @@
 **
 !Dockerfile
+!package.json
+!package-lock.json
 !src/
 !src/**
+!assets/
+!assets/login/
+!assets/login/**
+!scripts/
+!scripts/install-login-theme.py
 **/__pycache__/
 **/*.pyc

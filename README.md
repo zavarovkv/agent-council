@@ -70,8 +70,12 @@ current public origin and its `/auth/callback` URL:
 
 ```text
 https://council.zavarov.com
+https://council.zavarov.com/login
 https://council.zavarov.com/auth/callback
 ```
+
+Register `/login` as well: the official JavaScript SDK uses the current page
+URL when opening its popup. The OIDC fallback uses `/auth/callback`.
 
 From the project on your Mac, run:
 
@@ -136,6 +140,50 @@ GitHub. If device-code sign-in is disabled, enable it in ChatGPT security or
 workspace settings, or use Hermes' browser flow. A real response can only be
 verified after this user-controlled login.
 
+## Login appearance
+
+The landing page uses [Beauty.css](https://github.com/zavarovkv/beauty-css) as an
+exact npm dependency, currently **0.3.0**. `package-lock.json` records registry
+integrity. A digest-pinned Node 24 build stage runs `npm ci --ignore-scripts`;
+only the CSS, package metadata and MIT license enter the final Hermes image.
+The build stage adds no Node runtime to the final image; Hermes retains the
+tools supplied by its upstream image. Beauty source is not copied into this
+repository. Pages use the package unchanged, with no local CSS or style overrides.
+Shared styling improvements belong in Beauty.css and arrive through a package update.
+
+Dependabot proposes npm updates weekly. An update requires passing checks,
+review, image rebuild and deployment; changing the Beauty repository does not
+silently change production. To update manually, run `npm install --save-exact
+beauty-css@VERSION --ignore-scripts` and commit both package files.
+
+The header uses the **official Telegram Login JavaScript SDK and its default
+blue web button**, loaded from `https://oauth.telegram.org/js/telegram-login.js?6`.
+The SDK supplies the button styles and icon; Council does not override them.
+Beauty's documented `not-beauty` class excludes this button from its styling.
+It opens Telegram's popup. The local initializer in `assets/login/telegram-widget.js`
+posts the resulting ID token to the server; it does not trust decoded browser
+claims or persist tokens in browser storage. A server-side OIDC/PKCE link stays
+available if the SDK cannot load. The page has no footer and supports system
+light/dark colors, mobile layout and keyboard focus.
+
+The widget bridge uses same-origin HTTPS POSTs, a short-lived single-use nonce,
+a hardened browser cookie, bounded rate/capacity limits, real JWT verification
+and the same owner/invitation policy as other sessions. It creates standard
+Hermes HttpOnly/Secure session cookies. Widget sessions have no refresh token;
+the user signs in again when the signed token expires. Challenges are process-local;
+the current container runs one backend. Multiple workers need a shared challenge store.
+
+Landing HTML and initializer are in `assets/login/` and ship in the Docker image
+alongside the exact Beauty.css package artifact.
+`scripts/install-login-theme.py` verifies the pinned Hermes renderer and auth
+router before installing templates and the two widget bootstrap routes. Token
+verification and session cookie primitives come from Hermes. Updating Hermes
+requires a compatibility review.
+
+![Beauty login in light mode](docs/screenshots/login-light.png)
+
+The dark mobile layout is shown in [this screenshot](docs/screenshots/login-mobile-dark.png).
+
 ## Operations
 
 On the server:
@@ -192,6 +240,12 @@ virtual host remains unchanged.
 infrastructure and maintenance commands; `tests/` contains security checks;
 `assets/` contains the setup page. Local tests require Python **3.11+** and the
 standard library. The YAML profile helper runs inside the image.
+
+Frontend development uses Node **24** and `npm ci --ignore-scripts`. Run
+`npm run check` for JavaScript syntax. After `make test-integration`, run
+`npx playwright install chromium` and `make test-browser`. Browser tests load
+the actual public Telegram SDK, with a fake provider popup and fake backend;
+no account credentials or real login are used. CI installs the required browser.
 
 ```bash
 python3 -m venv .venv
