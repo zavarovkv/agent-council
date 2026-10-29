@@ -53,6 +53,7 @@ class ResearcherIntegrationTests(unittest.TestCase):
                     "-c",
                     """
 import json
+from types import SimpleNamespace
 from hermes_cli.plugins import PluginManager
 from hermes_cli.config import read_user_config_raw
 from tools.registry import registry
@@ -62,7 +63,9 @@ from tools.delegate_tool import delegate_task
 schema = registry.get_definitions({'delegate_task'})[0]['function']
 profiles = schema['parameters']['properties']['tasks']['items']['properties']['profile']['enum']
 assert profiles == ['dexter'], profiles
-rejected = json.loads(delegate_task(tasks=[{'goal': 'invalid route', 'profile': 'admin'}]))
+parent = SimpleNamespace(session_id='test', model='test-model', provider='openai-codex',
+    tool_progress_callback=None, _delegate_spinner=None, request_overrides={}, _safe_print=lambda line: None)
+rejected = json.loads(delegate_task(tasks=[{'goal': 'invalid route', 'profile': 'admin'}], parent_agent=parent))
 assert 'must be one of dexter' in rejected['error'], rejected
 config = read_user_config_raw()
 assert config['dashboard']['auth'] == 'telegram-owner'
