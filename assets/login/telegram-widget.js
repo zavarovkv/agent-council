@@ -3,13 +3,14 @@
   "use strict";
   async function initialize() {
     const button = document.querySelector("button.tg-auth-button");
+    const widget = document.querySelector(".telegram-widget");
     const fallback = document.querySelector("header .provider-list");
     const status = document.querySelector(".login-status");
     const link = Array.from(fallback?.querySelectorAll("a") || []).find((element) => {
       const url = new URL(element.href);
       return url.origin === location.origin && url.searchParams.get("provider") === "telegram-owner";
     });
-    if (!button || !link) return;
+    if (!button || !widget || !link) return;
     function message(text) {
       status.textContent = text;
       status.hidden = !text;
@@ -58,11 +59,11 @@
         try { await prepare(); } catch (error) { useFallback(error); }
       });
       fallback.hidden = true;
-      button.hidden = false;
+      widget.hidden = false;
       button.disabled = false;
     }
     function useFallback(error) {
-      button.hidden = true;
+      widget.hidden = true;
       fallback.hidden = false;
       message(error.message);
     }

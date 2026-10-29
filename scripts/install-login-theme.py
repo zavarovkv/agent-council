@@ -20,8 +20,7 @@ def install(renderer: Path, assets: Path) -> None:
         raise SystemExit("Hermes auth routes changed; review widget compatibility.")
     # npm ci validates the exact package against package-lock.json integrity.
     beauty = (assets / "dependencies" / "beauty.min.css").read_text(encoding="utf-8")
-    styles = beauty + "\n" + (assets / "login.css").read_text(encoding="utf-8")
-    login = (assets / "login.html").read_text(encoding="utf-8").replace("$STYLES", styles)
+    login = (assets / "login.html").read_text(encoding="utf-8").replace("$STYLES", beauty)
     widget_script = (
         "<script>\n" + (assets / "telegram-widget.js").read_text(encoding="utf-8") + "\n</script>"
     )
@@ -30,7 +29,7 @@ def install(renderer: Path, assets: Path) -> None:
     login = login.replace("$PROVIDER_BUTTONS", "{provider_buttons}").replace(
         "$PASSWORD_SCRIPT", "{password_script}"
     )
-    empty = (assets / "unavailable.html").read_text(encoding="utf-8").replace("$STYLES", styles)
+    empty = (assets / "unavailable.html").read_text(encoding="utf-8").replace("$STYLES", beauty)
     replacements = {"_LOGIN_HTML_TEMPLATE": login, "_EMPTY_HTML": empty}
     source = original.decode("utf-8")
     lines = source.splitlines(keepends=True)

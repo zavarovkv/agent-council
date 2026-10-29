@@ -148,7 +148,8 @@ integrity. A digest-pinned Node 24 build stage runs `npm ci --ignore-scripts`;
 only the CSS, package metadata and MIT license enter the final Hermes image.
 The build stage adds no Node runtime to the final image; Hermes retains the
 tools supplied by its upstream image. Beauty source is not copied into this
-repository. Page-specific overrides live in `assets/login/login.css`.
+repository. Pages use the package unchanged, with no local CSS or style overrides.
+Shared styling improvements belong in Beauty.css and arrive through a package update.
 
 Dependabot proposes npm updates weekly. An update requires passing checks,
 review, image rebuild and deployment; changing the Beauty repository does not
@@ -158,6 +159,7 @@ beauty-css@VERSION --ignore-scripts` and commit both package files.
 The header uses the **official Telegram Login JavaScript SDK and its default
 blue web button**, loaded from `https://oauth.telegram.org/js/telegram-login.js?6`.
 The SDK supplies the button styles and icon; Council does not override them.
+Beauty's documented `not-beauty` class excludes this button from its styling.
 It opens Telegram's popup. The local initializer in `assets/login/telegram-widget.js`
 posts the resulting ID token to the server; it does not trust decoded browser
 claims or persist tokens in browser storage. A server-side OIDC/PKCE link stays
@@ -171,7 +173,8 @@ Hermes HttpOnly/Secure session cookies. Widget sessions have no refresh token;
 the user signs in again when the signed token expires. Challenges are process-local;
 the current container runs one backend. Multiple workers need a shared challenge store.
 
-Landing HTML/CSS/initializer are in `assets/login/` and ship in the Docker image.
+Landing HTML and initializer are in `assets/login/` and ship in the Docker image
+alongside the exact Beauty.css package artifact.
 `scripts/install-login-theme.py` verifies the pinned Hermes renderer and auth
 router before installing templates and the two widget bootstrap routes. Token
 verification and session cookie primitives come from Hermes. Updating Hermes
