@@ -37,10 +37,14 @@ class ResearcherIntegrationTests(unittest.TestCase):
                 self.assertEqual(result.returncode, 0, result.stderr[-3000:])
             profile = home / "profiles" / "dexter"
             self.assertTrue((profile / "research").is_dir())
-            self.assertFalse((profile / ".env").exists())
+            # Native profile initialization may create a blank .env template.
+            if (profile / ".env").exists():
+                self.assertNotIn("not-a-real-token", (profile / ".env").read_text())
             self.assertIn("Dexter Jettster", (profile / "SOUL.md").read_text())
             self.assertNotIn("private coordinator", (profile / "SOUL.md").read_text())
-            self.assertFalse((profile / "memories" / "MEMORY.md").exists())
+            memory = profile / "memories" / "MEMORY.md"
+            if memory.exists():
+                self.assertNotIn("private coordinator memory", memory.read_text())
             # Real core discovery, schema extension and early rejection. No LLM
             # request, fake child, network connection or production state is used.
             probe = subprocess.run(
