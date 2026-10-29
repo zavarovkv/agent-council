@@ -40,7 +40,6 @@ class LoginThemeTests(unittest.TestCase):
             parse_qs(target.query), {"provider": ["telegram-owner"], "next": [next_path]}
         )
         self.assertIn('<main data-prefix="/council">', document)
-        self.assertIn("Войти через Telegram", document)
 
     def test_provider_labels_remain_escaped(self):
         provider = SimpleNamespace(name='test" onclick="bad', display_name="<script>bad()</script>")

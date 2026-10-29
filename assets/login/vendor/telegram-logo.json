@@ -1,0 +1,7 @@
+{
+  "source": "https://telegram.org/img/t_logo.svg",
+  "sha256": "85059d5e5bf7bda91ebab30664993c49867a26be6b947834aca16c846581766a",
+  "usage": "https://telegram.org/press#telegram-logos",
+  "button_reference": "https://core.telegram.org/bots/telegram-login#using-the-telegram-login-library",
+  "notice": "Telegram's logo is used to identify the sign-in provider; Agent Council does not represent Telegram."
+}

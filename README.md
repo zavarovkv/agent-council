@@ -143,10 +143,19 @@ and Agent Council branding, with Russian copy, system fonts, responsive layout
 and automatic light/dark colors. Styling ships inside the image; the login page
 does not load a CDN, external fonts or additional JavaScript.
 
+Telegram sign-in sits in the header navigation, using the official Telegram
+logo and an outlined sign-in treatment based on Telegram's example. The button
+keeps the existing server-side OIDC/PKCE flow. On small screens the visible label
+is shorter, while its accessible name remains complete. The landing page has no footer.
+
 `assets/login/` contains the HTML and layout stylesheet. The exact generated
 Beauty artifact, its MIT license and a version/commit/checksum receipt live in
 `assets/login/vendor/`. Do not edit the vendored CSS; customize `login.css` or
 update the upstream artifact and receipt together.
+
+The official Telegram logo is bundled with its source/checksum and usage notice.
+Landing HTML, CSS and provider artwork all ship in this same Git repository and
+Docker image; no separate server-side landing directory is required.
 
 During image build, `scripts/install-login-theme.py` replaces the pinned Hermes
 HTML templates and OAuth link labels. Provider registration, auth links,

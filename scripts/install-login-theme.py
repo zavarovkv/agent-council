@@ -21,6 +21,13 @@ def install(renderer: Path, assets: Path) -> None:
     beauty = (vendor / "beauty.min.css").read_bytes()
     if hashlib.sha256(beauty).hexdigest() != receipt["sha256"]:
         raise SystemExit("Vendored Beauty.css checksum does not match its receipt.")
+    logo_receipt = json.loads((vendor / "telegram-logo.json").read_text(encoding="utf-8"))
+    logo = (vendor / "telegram-logo.svg").read_bytes()
+    if hashlib.sha256(logo).hexdigest() != logo_receipt["sha256"]:
+        raise SystemExit("Telegram logo checksum does not match its receipt.")
+    icon = logo.decode("utf-8").replace(
+        "<svg ", '<svg class="provider-icon" aria-hidden="true" focusable="false" ', 1
+    )
     styles = beauty.decode("utf-8") + "\n" + (assets / "login.css").read_text(encoding="utf-8")
     login = (assets / "login.html").read_text(encoding="utf-8").replace("$STYLES", styles)
     # Hermes formats its HTML with str.format: escape literal CSS braces first.
@@ -46,11 +53,17 @@ def install(renderer: Path, assets: Path) -> None:
         name = node.targets[0].id
         lines[node.lineno - 1 : node.end_lineno] = [f"{name} = {replacements[name]!r}\n"]
     themed = "".join(lines)
-    # Translate only OAuth link labels. URL generation and verification stay upstream.
+    # Brand only the link label; the official OIDC flow stays with Hermes.
     label = "f'Sign in with {html.escape(p.display_name)}</a>'"
     if themed.count(label) != 2:
         raise SystemExit("Expected OAuth link labels were not found.")
-    themed = themed.replace(label, "f'Войти через {html.escape(p.display_name)}</a>'")
+    branded_label = (
+        'f\'{_COUNCIL_TELEGRAM_ICON if p.name == "telegram-owner" else ""}\' '
+        'f\'<span>Войти<span class="provider-label-tail"> через '
+        "{html.escape(p.display_name)}</span></span></a>'"
+    )
+    themed = themed.replace(label, branded_label)
+    themed += f"\n\n_COUNCIL_TELEGRAM_ICON = {icon!r}\n"
     compile(themed, str(renderer), "exec")
     renderer.write_text(themed, encoding="utf-8")
     print("Agent Council login installed with pinned Beauty.css; auth handlers preserved.")

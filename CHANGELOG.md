@@ -3,6 +3,7 @@
 ## Unreleased
 
 - Style the Council sign-in page with pinned Beauty.css, system fonts and light/dark themes.
+- Move the Telegram-branded sign-in link to the header and remove the landing footer.
 - Add invited Telegram IDs and simple list/add/remove commands with restart rollback.
 - Add explicit Telegram owner configuration without a repository-owner fallback.
 - Keep the authentication provider registered and closed for malformed settings.
