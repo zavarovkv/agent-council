@@ -6,6 +6,7 @@ import sqlite3
 import sys
 import tempfile
 import unittest
+from contextlib import closing
 from pathlib import Path
 
 MODULE = Path(__file__).parents[1] / "src/telegram_auth/sessions.py"
@@ -30,7 +31,7 @@ class SessionStoreTests(unittest.TestCase):
         self.assertEqual(restarted.lookup(token), issued)
         self.assertEqual(issued.expires_at, self.now + 30 * 86400)
         self.assertEqual(self.path.stat().st_mode & 0o777, 0o600)
-        with sqlite3.connect(self.path) as db:
+        with closing(sqlite3.connect(self.path)) as db:
             stored = json.dumps(db.execute("SELECT * FROM sessions").fetchall())
         self.assertNotIn(token, stored)
         self.assertNotIn("private-login-nonce", stored)
