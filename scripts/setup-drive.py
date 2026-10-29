@@ -76,6 +76,8 @@ def main():
         subprocess.run(
             ssh_options() + ["-T", host, remote_command("import-client")], input=client, check=True
         )
+    if args.import_only:
+        return
     if args.verify:
         subprocess.run(ssh_options() + ["-T", host, remote_command("verify")], check=True)
         return
@@ -111,8 +113,6 @@ def main():
         ],
         check=True,
     )
-    if args.import_only:
-        return
 
 
 if __name__ == "__main__":
