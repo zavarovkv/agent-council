@@ -136,6 +136,27 @@ GitHub. If device-code sign-in is disabled, enable it in ChatGPT security or
 workspace settings, or use Hermes' browser flow. A real response can only be
 verified after this user-controlled login.
 
+## Login appearance
+
+The sign-in page uses [Beauty.css](https://github.com/zavarovkv/beauty-css) **0.3.0**
+and Agent Council branding, with Russian copy, system fonts, responsive layout
+and automatic light/dark colors. Styling ships inside the image; the login page
+does not load a CDN, external fonts or additional JavaScript.
+
+`assets/login/` contains the HTML and layout stylesheet. The exact generated
+Beauty artifact, its MIT license and a version/commit/checksum receipt live in
+`assets/login/vendor/`. Do not edit the vendored CSS; customize `login.css` or
+update the upstream artifact and receipt together.
+
+During image build, `scripts/install-login-theme.py` replaces the pinned Hermes
+HTML templates and OAuth link labels. Provider registration, auth links,
+callback handling and token verification remain upstream. The installer refuses
+an unexpected renderer checksum, so a Hermes update requires compatibility review.
+
+![Beauty login in light mode](docs/screenshots/login-light.png)
+
+The dark mobile layout is shown in [this screenshot](docs/screenshots/login-mobile-dark.png).
+
 ## Operations
 
 On the server:

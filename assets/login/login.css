@@ -1,0 +1,107 @@
+/* Council layout; Beauty.css owns typography, palettes and native controls. */
+body {
+  box-sizing: border-box;
+  min-block-size: 100vh;
+  min-block-size: 100svh;
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  margin-block: 0;
+  padding-block: clamp(1.5rem, 5vh, 3rem);
+}
+
+body > header {
+  margin-block-end: 0;
+}
+
+.wordmark {
+  color: var(--beauty-heading);
+  font-size: 1.125rem;
+  font-weight: 650;
+  letter-spacing: -0.035em;
+}
+
+.wordmark > span {
+  color: var(--beauty-link);
+}
+
+main {
+  display: grid;
+  align-content: center;
+  padding-block: 4rem;
+}
+
+.login-panel {
+  max-inline-size: 32rem;
+}
+
+.subtitle {
+  max-inline-size: 29rem;
+  margin-block-end: 2rem;
+  color: var(--beauty-muted);
+  font-size: 1.0625rem;
+}
+
+.provider-list {
+  display: grid;
+  justify-items: start;
+  gap: 1rem;
+}
+
+/* Upstream supplies native links and forms with this stable class. */
+.provider-btn {
+  display: inline-block;
+  box-sizing: border-box;
+  min-block-size: 2.75rem;
+  max-inline-size: 100%;
+  padding: 0.75em 1.25em;
+  border: 1px solid var(--beauty-link);
+  border-radius: var(--beauty-radius);
+  background: var(--beauty-link);
+  color: var(--beauty-background);
+  font: var(--beauty-button-font);
+  text-align: center;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.provider-btn:hover {
+  border-color: var(--beauty-hover);
+  background: var(--beauty-hover);
+  color: var(--beauty-background);
+}
+
+.provider-form {
+  inline-size: 100%;
+}
+
+.form-title {
+  margin-block-end: 1rem;
+  font-weight: var(--beauty-heading-weight);
+}
+
+.form-error {
+  margin-block-end: 1rem;
+  color: var(--beauty-danger);
+}
+
+body > footer {
+  margin-block-start: 0;
+  padding-block: 1.25rem 0;
+}
+
+@media (max-width: 30rem) {
+  .provider-list {
+    justify-items: stretch;
+  }
+
+  main {
+    padding-block: 3rem;
+  }
+}
+
+@media print {
+  body {
+    display: block;
+    min-block-size: auto;
+  }
+}

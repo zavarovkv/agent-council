@@ -10,6 +10,8 @@ Local tests use Python 3.11+ and the standard library. Install `requirements-dev
 
 ## Coding Style & Naming Conventions
 
+The sign-in theme lives in `assets/login/`. Vendor the exact Beauty.css distribution with its license and version/commit/checksum receipt; keep overrides in `login.css`. The Docker build installer checks the pinned Hermes renderer before replacing presentation templates. Preserve upstream auth link generation, next-path escaping, proxy prefixes and provider/session verification. Inspect desktop/mobile and light/dark appearances for theme changes.
+
 Follow the selected language's standard conventions and keep indentation consistent within each file. Configure a formatter and linter when adding the language toolchain, and commit their configuration.
 
 Use descriptive module, function, and variable names. Keep modules focused on one responsibility. Match existing naming patterns as the codebase develops, and avoid mixing unrelated cleanup with functional changes.

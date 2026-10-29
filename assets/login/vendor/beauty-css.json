@@ -1,0 +1,9 @@
+{
+  "name": "beauty-css",
+  "version": "0.3.0",
+  "repository": "https://github.com/zavarovkv/beauty-css",
+  "commit": "e73f558c38b0be99fc373435299e3ab2c60c008d",
+  "source": "dist/beauty.min.css",
+  "sha256": "d0ed35c5a8c2afcda9899646ba0cf3f9e488549f8f7f2e22bce82c84cd78d75c",
+  "license": "MIT"
+}
