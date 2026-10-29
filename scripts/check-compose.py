@@ -26,55 +26,47 @@ def main():
             HERMES_PUBLIC_URL="https://council.example.com",
             COUNCIL_HERMES_IMAGE="agent-council-hermes:test",
         )
-        result = subprocess.run(
-            [
-                "docker",
-                "compose",
-                "-f",
-                str(repository / "compose.yaml"),
-                "config",
-                "--no-env-resolution",
-                "--format",
-                "json",
-            ],
-            cwd=repository,
-            env=environment,
-            check=True,
-            capture_output=True,
-            text=True,
+        # Exercise the original service's env_file directly. Compose versions
+        # differ in their normalized `config` output, and that output also
+        # escapes dollars. Only the container's actual environment is the contract.
+        fixture = Path(directory) / "override.yaml"
+        assertion = (
+            "import base64,os; "
+            "assert os.environ['HERMES_TELEGRAM_CLIENT_SECRET'] == "
+            f"base64.b64decode('{base64.b64encode(literal.encode()).decode()}')"
+            ".decode(), 'Compose changed a literal secret value'"
         )
-        config = json.loads(result.stdout)
-        service = config["services"]["hermes"]
-        # `compose config` escapes dollars for round-tripping. Check the actual
-        # container environment instead, using only the real env_file definition.
-        fixture = Path(directory) / "compose.json"
         fixture.write_text(
-            json.dumps(
-                {
-                    "name": "agent-council-env-contract",
-                    "services": {
-                        "check": {
-                            "image": service["image"],
-                            "env_file": service["env_file"],
-                            "network_mode": "none",
-                            "read_only": True,
-                            "user": "10000:10000",
-                            "entrypoint": ["/opt/hermes/.venv/bin/python", "-c"],
-                            "command": [
-                                "import base64,os; "
-                                "assert os.environ['HERMES_TELEGRAM_CLIENT_SECRET'] == "
-                                f"base64.b64decode('{base64.b64encode(literal.encode()).decode()}')"
-                                ".decode(), 'Compose changed a literal secret value'"
-                            ],
-                        }
-                    },
-                }
-            ),
+            "services:\n"
+            "  hermes:\n"
+            '    entrypoint: ["/opt/hermes/.venv/bin/python", "-c"]\n'
+            f"    command: {json.dumps([assertion])}\n"
+            '    user: "10000:10000"\n'
+            "    read_only: true\n"
+            '    restart: "no"\n'
+            "    volumes: !reset []\n"
+            "    ports: !reset []\n"
+            "    networks: !reset []\n"
+            "    network_mode: none\n",
             encoding="utf-8",
         )
         subprocess.run(
-            ["docker", "compose", "-f", str(fixture), "run", "--rm", "--no-deps", "check"],
+            [
+                "docker",
+                "compose",
+                "--project-name",
+                "agent-council-env-contract",
+                "-f",
+                str(repository / "compose.yaml"),
+                "-f",
+                str(fixture),
+                "run",
+                "--rm",
+                "--no-deps",
+                "hermes",
+            ],
             cwd=repository,
+            env=environment,
             check=True,
         )
     print("Compose literal-secret contract: OK")
