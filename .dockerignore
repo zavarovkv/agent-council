@@ -7,9 +7,12 @@
 !assets/
 !assets/login/
 !assets/login/**
+!agents/
+!agents/**
 !scripts/
 !scripts/install-login-theme.py
 !scripts/initialize-profile.py
 !scripts/initialize-profile.sh
+!scripts/provision-researcher.py
 **/__pycache__/
 **/*.pyc
