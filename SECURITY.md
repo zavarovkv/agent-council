@@ -1,5 +1,12 @@
 # Security policy
 
+Interactive Telegram logins use a revocable, random application session lasting
+30 days by default (configurable 1–90). The short-lived Telegram token is fully
+verified at login and is not retained. Only session-token hashes and verified
+identity metadata persist in the private profile database. Every request checks
+the current owner/invitation policy; logout removes the session record. Keep the
+profile database private and outside Git, and include it only in protected backups.
+
 ## Reporting
 
 Use [GitHub's private vulnerability reporting form](https://github.com/zavarovkv/agent-council/security/advisories/new).

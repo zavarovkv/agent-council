@@ -53,12 +53,22 @@ def install(renderer: Path, assets: Path) -> None:
     themed = themed.replace(label, "f'Войти через {html.escape(p.display_name)}</a>'")
     compile(themed, str(renderer), "exec")
     renderer.write_text(themed, encoding="utf-8")
-    routes.write_text(
-        routes_source.decode("utf-8")
-        + "\n\nfrom plugins.dashboard_auth.telegram_owner.widget import router as _council_widget_router\n"
-        + "router.include_router(_council_widget_router)\n",
-        encoding="utf-8",
+    logout = "    _at, rt = read_session_cookies(request)\n    # Best-effort revoke"
+    updated_routes = routes_source.decode("utf-8")
+    if updated_routes.count(logout) != 1:
+        raise SystemExit("Expected logout hook was not found.")
+    updated_routes = updated_routes.replace(
+        logout,
+        "    _at, rt = read_session_cookies(request)\n"
+        "    await _council_revoke_access_cookie(_at)\n    # Best-effort revoke",
     )
+    updated_routes += (
+        "\n\nfrom plugins.dashboard_auth.telegram_owner.widget import router as _council_widget_router\n"
+        "from plugins.dashboard_auth.telegram_owner.widget import revoke_access_cookie as _council_revoke_access_cookie\n"
+        "router.include_router(_council_widget_router)\n"
+    )
+    compile(updated_routes, str(routes), "exec")
+    routes.write_text(updated_routes, encoding="utf-8")
     print("Council theme and official Telegram Login bridge installed.")
 
 

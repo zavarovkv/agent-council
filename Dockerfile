@@ -10,6 +10,11 @@ FROM nousresearch/hermes-agent:v0.22.5@sha256:9c5561579f3ffdf333401797094ac3a743
 LABEL org.opencontainers.image.source="https://github.com/zavarovkv/agent-council"
 LABEL org.opencontainers.image.description="Hermes integration for Agent Council"
 
+COPY scripts/initialize-profile.py /opt/agent-council/initialize-profile.py
+COPY scripts/initialize-profile.sh /etc/cont-init.d/03-council-session-store
+RUN chmod 0555 /etc/cont-init.d/03-council-session-store \
+    && chmod 0444 /opt/agent-council/initialize-profile.py
+
 # Ship the owner policy as immutable application code, separate from user data.
 COPY src/telegram_auth/ /opt/hermes/plugins/dashboard_auth/telegram_owner/
 RUN chmod -R a+rX,go-w /opt/hermes/plugins/dashboard_auth/telegram_owner

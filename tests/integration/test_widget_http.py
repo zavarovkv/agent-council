@@ -14,6 +14,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from hermes_cli.dashboard_auth.middleware import gated_auth_middleware
 from hermes_cli.dashboard_auth.registry import register_global_provider, unregister_global_provider
+from hermes_cli.dashboard_auth.routes import router as auth_router
 from plugins.dashboard_auth.telegram_owner import register, widget
 from plugins.dashboard_auth.telegram_owner.challenges import ChallengeStore
 
@@ -36,6 +37,7 @@ class WidgetHTTPTests(unittest.TestCase):
             "HERMES_TELEGRAM_OWNER_USERNAME": "test_owner",
             "HERMES_TELEGRAM_ALLOWED_ID": "",
             "HERMES_TELEGRAM_ALLOWED_IDS": "67890",
+            "HERMES_TELEGRAM_SESSION_DAYS": "30",
         }
         patcher = patch.dict(os.environ, environment)
         patcher.start()
@@ -49,7 +51,7 @@ class WidgetHTTPTests(unittest.TestCase):
         app = FastAPI()
         app.state.auth_required = True
         app.middleware("http")(gated_auth_middleware)
-        app.include_router(widget.router)
+        app.include_router(auth_router)
 
         @app.get("/api/protected")
         def protected():
@@ -115,6 +117,44 @@ class WidgetHTTPTests(unittest.TestCase):
         for flag in ("HttpOnly", "Secure", "SameSite=lax", "Path=/"):
             self.assertIn(flag, cookie)
         self.assertEqual(self.client.get("/api/protected").status_code, 200)
+
+    def test_session_outlives_telegram_token_and_survives_provider_restart(self):
+        token = self.token(self.challenge())
+        response = self.complete(token)
+        self.assertEqual(response.status_code, 200)
+        cookie = self.client.cookies.get("__Host-hermes_session_at")
+        self.assertNotEqual(cookie, token)
+        self.provider.session_store.clock = lambda: time.time() + 86400
+        self.provider._get_jwks_client.side_effect = AssertionError("No IDP request after login")
+        self.assertEqual(self.client.get("/api/protected").status_code, 200)
+        restarted = self.make_provider()
+        restarted.session_store.clock = lambda: time.time() + 86400
+        self.assertIsNotNone(restarted.verify_session(access_token=cookie))
+        self.assertGreater(restarted.verify_session(access_token=cookie).expires_at, time.time())
+        headers = response.headers.get_list("set-cookie")
+        session_cookie = next(
+            h for h in headers if h.startswith("__Host-hermes_session_at=") and "Max-Age=0" not in h
+        )
+        self.assertRegex(session_cookie, r"Max-Age=259[12][0-9]{3}")
+
+    def test_logout_revokes_captured_application_session(self):
+        self.assertEqual(self.complete(self.token(self.challenge())).status_code, 200)
+        captured = self.client.cookies.get("__Host-hermes_session_at")
+        response = self.client.post("/auth/logout", follow_redirects=False)
+        self.assertEqual(response.status_code, 302)
+        self.assertIsNone(self.provider.verify_session(access_token=captured))
+        self.assertEqual(self.client.get("/api/protected").status_code, 401)
+
+    def test_expired_application_session_is_rejected_and_store_failure_keeps_cookie(self):
+        self.assertEqual(self.complete(self.token(self.challenge())).status_code, 200)
+        self.provider.session_store.clock = lambda: time.time() + 31 * 86400
+        self.assertEqual(self.client.get("/api/protected").status_code, 401)
+        self.provider.session_store.clock = time.time
+        self.assertEqual(self.complete(self.token(self.challenge())).status_code, 200)
+        self.provider.session_store.path.write_bytes(b"corrupted database")
+        response = self.client.get("/api/protected")
+        self.assertEqual(response.status_code, 503)
+        self.assertNotIn("Max-Age=0", response.headers.get("set-cookie", ""))
 
     def test_invited_account_is_authorized_without_pinning_owner(self):
         response = self.complete(

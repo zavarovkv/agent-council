@@ -1,6 +1,7 @@
 """Exchange official Telegram Login results for existing verified Hermes sessions."""
 
 import json
+import logging
 import os
 from urllib.parse import unquote, urlsplit
 
@@ -25,6 +26,16 @@ router = APIRouter(prefix="/auth/login/telegram-widget")
 store = ChallengeStore()
 NONCE_COOKIE = "__Host-council_telegram_nonce"
 COOKIE_ATTRIBUTES = {"secure": True, "httponly": True, "samesite": "strict", "path": "/"}
+
+
+async def revoke_access_cookie(token):
+    """Existing Hermes logout also revokes the persistent application session."""
+    provider = get_provider("telegram-owner")
+    if provider is not None and token:
+        try:
+            await run_in_threadpool(provider.revoke_access_session, access_token=token)
+        except ProviderError:
+            logging.getLogger(__name__).warning("Dashboard session revocation unavailable.")
 
 
 def _response(data, status=200):
