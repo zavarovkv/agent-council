@@ -152,6 +152,59 @@ separately from the dashboard's Telegram login application.
 with temporary in-memory data, no network, no published ports and no credentials.
 It checks gateway readiness and rejection of unauthenticated dashboard API access.
 
+## Dexter Jettster: internal competitor researcher
+
+The image includes the official `advanced-delegation` plugin at reviewed commit
+`e404b6816b20237a82f6fbe2749b5a576cf75dba`, verified by archive checksum.
+It is opt-in; building the image does not create agents or change routing.
+Versioned role instructions live in `agents/dexter/`. Mutable profiles, reports,
+credentials and memory remain in the persistent data volume.
+
+After configuring the coordinator's Codex account, stop its gateway, provision
+the profile as the runtime user, then start the gateway again:
+
+```bash
+bash scripts/compose-server.sh exec hermes /command/s6-svc -d /run/service/gateway-default
+bash scripts/compose-server.sh exec hermes /command/s6-svwait -d -t 30000 /run/service/gateway-default
+bash scripts/compose-server.sh exec --user hermes hermes python3 /opt/agent-council/provision-researcher.py
+bash scripts/compose-server.sh exec hermes /command/s6-svc -u /run/service/gateway-default
+bash scripts/compose-server.sh exec --user hermes hermes hermes gateway ensure
+```
+
+Wait for the gateway to stop before provisioning; do not interrupt an active
+conversation. The installer uses Hermes' native profile API and config writer.
+It creates `dexter` without cloning the coordinator's identity, chats, channels
+or credentials. It selects the same model and uses Hermes' root credential-pool
+fallback for the renewable Codex grant. Reports belong in
+`/opt/data/profiles/dexter/research/`.
+
+The coordinator gets the `competitor-research` skill and an explicit
+`delegate_task` route with `profile: dexter`. Other delegation tasks retain their
+usual route. Dexter has no separate Telegram bot; Qui-Gon collects the brief,
+delegates and reviews the sourced result before replying to the owner. A new
+task starts with fresh worker context; pass needed facts and prior report paths
+in the brief. In an existing Telegram session, use
+`/delegation profile_routes --now` to refresh its delegation schema.
+
+Rerunning setup preserves reports and unrelated settings. It refuses unmanaged
+profiles, conflicting delegation policies and edited managed instructions.
+The original coordinator config is retained privately as
+`/opt/data/config.yaml.before-dexter`; restore it and restart the gateway to
+disable this route. Back up the whole data directory before deployment.
+
+Profiles share the trusted container and its execution privileges. A role prompt
+is not a filesystem sandbox or a boundary for untrusted users. Routed workers
+inherit the parent's permitted tools, with Hermes' built-in delegation exclusions.
+
+### Telegram chat automation
+
+The messaging bot currently handles direct messages from explicitly allowed
+users. Connecting it under Telegram **Settings → Chat Automation** alone does
+not enable a secretary: this Hermes adapter has no business-connection reply
+routing. Do not expand the execution allowlist to all contacts as a workaround.
+A secretary needs separate conversation state and restricted execution, plus
+explicit rules for drafts versus automatic replies before activation.
+
 ## Login appearance
 
 The landing page uses [Beauty.css](https://github.com/zavarovkv/beauty-css) as an
