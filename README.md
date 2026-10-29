@@ -3,14 +3,19 @@
 A platform for managing, coordinating, and monitoring AI agents.
 
 The first integration is a self-hosted Hermes Agent with a web dashboard,
-owner-only Telegram authentication, persistent storage and Docker Compose.
+Telegram authentication for an owner and explicitly invited accounts, persistent
+storage and Docker Compose.
 Code and infrastructure are versioned in
 [zavarovkv/agent-council](https://github.com/zavarovkv/agent-council).
 
+This is an early deployment foundation for **trusted operators sharing one Hermes**.
+Per-user roles, private user workspaces and isolation between untrusted agents are not implemented. Read
+[the architecture](docs/architecture.md) and [security policy](SECURITY.md).
+
 ## Deployment
 
-Prerequisites: Linux, Docker Engine 29+, Docker Compose v2.24+, Bash, OpenSSH
-and Python 3 for setup scripts. The current server has Engine 29.9.2 and Compose
+Prerequisites: Linux, Docker Engine 29+, Docker Compose **2.30+**, Bash, OpenSSH
+and Python **3.11+** for setup scripts. The current server has Engine 29.9.2 and Compose
 5.6.1. The official Hermes **v0.22.5** base image is pinned by SHA-256.
 
 `Dockerfile` adds the owner policy as immutable application code. `compose.yaml`
@@ -26,7 +31,7 @@ actual Hermes process to the configured unprivileged UID/GID.
 | Telegram Client ID / Secret | `/etc/hermes/telegram.env`, root-only |
 | Sessions, memory, skills, model login | `/var/lib/agent-council/hermes` → `/opt/data` |
 | Agent workspace | `/var/lib/agent-council/workspace` → `/workspace` |
-| Nginx virtual host | `/etc/nginx/sites-available/hermes` |
+| Nginx virtual host | `/etc/nginx/sites-available/council` |
 | Separate HTTPS certificates | `/etc/hermes/letsencrypt` |
 | Native profile backup | `/opt/hermes-deploy/docker-migration/hermes-native-before-docker.tar` |
 | Retained native profile | `/var/lib/hermes/.hermes` |
@@ -79,11 +84,42 @@ The secret is hidden and saved directly on the server. The Bot API token is
 a different credential. The script recreates Hermes to load the environment,
 checks its auth gate, then removes the setup-status page.
 
-Only a verified **@zavarov** login can bootstrap access. Hermes verifies the
-OIDC signature, issuer, audience and expiry before the owner policy pins the
+Explicitly configure the owner: a numeric `HERMES_TELEGRAM_ALLOWED_ID` is
+preferred, or `HERMES_TELEGRAM_OWNER_USERNAME` can bootstrap the first login.
+The current deployment uses `@zavarov`; a new installation has **no default
+owner**. Hermes verifies the OIDC signature, issuer, audience and expiry before the owner policy pins the
 numeric Telegram ID. Later logins require that ID even after a username change
 or reassignment. Corrupted identity state denies access. Alternative dashboard
 providers are disabled. Until configured, the dashboard remains locked.
+
+### Add or remove people
+
+From this project on your Mac, replace `123456789` with the person's numeric
+Telegram account ID:
+
+```bash
+bash scripts/telegram-access.sh list
+bash scripts/telegram-access.sh add 123456789
+bash scripts/telegram-access.sh remove 123456789
+```
+
+One bot serves all invited accounts. The command stores invited IDs in
+`HERMES_TELEGRAM_ALLOWED_IDS` in `/etc/hermes/telegram.env` on the server, outside
+Git. The owner is configured separately and remains authorized. Each change
+recreates only Hermes to apply the list and close existing connections; valid
+tokens for removed accounts are then rejected. Credentials and agent state are
+preserved. A failed restart restores the previous settings.
+
+For manual administration, the same setting is a comma-separated list, for
+example `HERMES_TELEGRAM_ALLOWED_IDS=123456789,987654321`; apply it by recreating
+the Hermes service. Do not put real authentication files in Git or share them.
+Invited accounts have the same dashboard/tools/history access as the owner;
+these are trusted collaborators, not isolated tenants.
+
+No bot application needs to run. Each independent direct-Telegram installation
+registers its own Login client. Standard OIDC and optional centralized login are
+[optional future architecture](docs/authentication-options.md), not implemented features.
+Never distribute a shared Telegram secret inside an image.
 
 ## ChatGPT / Codex account
 
@@ -126,6 +162,20 @@ the initial migration, stop Compose and enable/start `hermes-dashboard.service`.
 Back up any new Docker state before rollback to preserve post-cutover logins
 and sessions.
 
+When upgrading from the initial quoted authentication env file, first run
+`python3 scripts/migrate-auth-environment.py` as root on the server, **before**
+recreating a container with this version of Compose. It preserves a root-only
+backup and writes literal raw values. The `.env.format` marker makes repeat
+runs safe. Keep a copy of the previous checkout/image and restore the previous
+env file together if rolling back across this format change. In raw env files,
+quotes are part of the value; do not add shell-style quoting.
+
+The `hermes-cert-renew.timer` uses the pinned maintenance-only Certbot container.
+It mounts only this deployment's ACME directories. It has no access to the
+existing application's virtual environment. The renewal script validates and
+gracefully reloads Nginx only when a certificate changes. On the server, check
+renewal with `bash scripts/renew-certificates.sh --dry-run`.
+
 ## Custom domain
 
 Cloudflare has `A council → 2.29.13.129` with proxying enabled. The HTTP-01
@@ -140,7 +190,7 @@ virtual host remains unchanged.
 
 `src/telegram_auth/` contains the owner policy; `config/` and `scripts/` contain
 infrastructure and maintenance commands; `tests/` contains security checks;
-`assets/` contains the setup page. Local tests require Python **3.9+** and the
+`assets/` contains the setup page. Local tests require Python **3.11+** and the
 standard library. The YAML profile helper runs inside the image.
 
 ```bash
@@ -148,17 +198,30 @@ python3 -m venv .venv
 .venv/bin/python -m pip install -r requirements-dev.txt
 make test
 make lint RUFF=.venv/bin/ruff
+make test-integration  # requires Docker; pulls the pinned Hermes image
 ```
 
 Live checks require outbound HTTPS:
 
 ```bash
 HERMES_LIVE_URL=https://council.zavarov.com make test
+# On the origin server, test origin auth independently of Cloudflare filtering:
+HERMES_LIVE_URL=https://council.zavarov.com HERMES_LIVE_ORIGIN_IP=127.0.0.1 make test
 ```
 
-GitHub Actions runs tests, Ruff, Compose validation with example credentials
-and Dockerfile checks. It does not receive server/account secrets or deploy
+The optional origin IP changes only routing; TLS still verifies the public
+hostname. A Cloudflare rejection is not evidence that application auth works.
+
+GitHub Actions runs Python 3.11/3.14 tests, Ruff, ShellCheck, actionlint,
+Dockerfile checks, real Compose credential parsing and offline RSA/JWT tests
+against the pinned Hermes adapter. It does not receive server/account secrets or deploy
 automatically. Never print production `docker compose config`; use `--quiet`.
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for contributions and
+[the technical review](docs/technical-review.md) for findings and remaining work.
+The project's source license is awaiting the owner's selection. Public source
+availability alone does not grant an open-source license. Hermes and container
+dependencies retain their own licenses.
 
 ## References
 

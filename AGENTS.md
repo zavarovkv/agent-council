@@ -6,7 +6,7 @@ Agent Council is a platform for managing, coordinating and monitoring AI agents.
 
 ## Build, Test, and Development Commands
 
-Local tests use Python 3.9+ and the standard library. Install `requirements-dev.txt` into `.venv` for the pinned Ruff formatter/linter. Run `make test`, `make lint RUFF=.venv/bin/ruff`, and `make format RUFF=.venv/bin/ruff`. `make inspect` reads the remote server. Hermes runs in its official Python 3.14 image. Keep the base image digest pinned. Validate Compose with an example env file and `config --quiet`; never print production Compose configuration because it includes resolved secrets.
+Local tests use Python 3.11+ and the standard library. Install `requirements-dev.txt` into `.venv` for the pinned Ruff formatter/linter. Run `make test`, `make lint RUFF=.venv/bin/ruff`, and `make format RUFF=.venv/bin/ruff`. `make test-integration` requires Docker and checks the real adapter offline plus literal Compose credentials. CI checks Bash with ShellCheck and workflows with actionlint. Compose 2.30+ is required for raw auth env files. `make inspect` reads the remote server. Hermes runs in its official Python 3.14 image. Keep image digests and workflow action commits pinned. Never print production Compose configuration because it includes resolved secrets; use `config --quiet`.
 
 ## Coding Style & Naming Conventions
 
@@ -17,6 +17,8 @@ Use descriptive module, function, and variable names. Keep modules focused on on
 ## Testing Guidelines
 
 Use `unittest`. Authorization tests must cover an unauthorized account, immutable-ID pinning, username reassignment, corrupted state and concurrency. Live deployment tests are opt-in via `HERMES_LIVE_URL`; they must not use real credentials or modify application data. Verify the existing service's response, process and configuration checksums around routing changes.
+
+For direct-origin tests, use `HERMES_LIVE_ORIGIN_IP` while retaining HTTPS hostname verification. Never accept an edge 403 as proof that the application auth gate works. Do not silently assign a default owner to a new installation. This deployment supports a trusted owner and explicitly invited collaborators sharing one runtime. Separate auth and execution boundaries are required before supporting untrusted users or agents. Test invitation grant and revocation, including rejection of a previously valid session after settings reload. Access-management commands must preserve owner settings and credentials and restart only Hermes.
 
 ## Commit & Pull Request Guidelines
 

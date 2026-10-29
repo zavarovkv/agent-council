@@ -10,7 +10,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from telegram_auth.owner import OwnerDenied, OwnerPolicy, telegram_id
+from telegram_auth.owner import OwnerDenied, OwnerPolicy, parse_telegram_ids, telegram_id
 
 
 class TelegramOwnerTests(unittest.TestCase):
@@ -80,6 +80,38 @@ class TelegramOwnerTests(unittest.TestCase):
         for value in (None, True, False, 0, -1, 1.5, "1.5", "-1", "", "１２３", 2**63):
             with self.subTest(value=value), self.assertRaises(OwnerDenied):
                 telegram_id(value)
+
+    def test_invited_account_can_enter_without_pinning_the_owner(self):
+        policy = OwnerPolicy(self.pin, "zavarov", additional_ids="67890, 54321")
+        self.assertEqual(policy.authorize({"id": 67890, "preferred_username": "guest_one"}), 67890)
+        self.assertFalse(self.pin.exists())
+        self.assertEqual(policy.authorize({"id": 12345, "preferred_username": "zavarov"}), 12345)
+        self.assertEqual(json.loads(self.pin.read_text())["telegram_id"], 12345)
+        with self.assertRaises(OwnerDenied):
+            policy.authorize({"id": 99999, "preferred_username": "guest_two"})
+
+    def test_invited_account_does_not_replace_an_existing_owner(self):
+        self.policy.authorize({"id": 12345, "preferred_username": "zavarov"})
+        policy = OwnerPolicy(self.pin, "zavarov", additional_ids="67890")
+        self.assertEqual(policy.authorize({"id": 67890}), 67890)
+        self.assertEqual(json.loads(self.pin.read_text())["telegram_id"], 12345)
+        self.assertEqual(policy.authorize({"id": 12345}), 12345)
+
+    def test_removed_invitation_is_denied_after_reloading_settings(self):
+        invited = OwnerPolicy(self.pin, "", "12345", additional_ids="67890,54321")
+        self.assertEqual(invited.authorize({"id": 67890}), 67890)
+        updated = OwnerPolicy(self.pin, "", "12345", additional_ids="54321")
+        with self.assertRaises(OwnerDenied):
+            updated.authorize({"id": 67890})
+        self.assertEqual(updated.authorize({"id": 54321}), 54321)
+        self.assertEqual(updated.authorize({"id": 12345}), 12345)
+
+    def test_access_list_is_strict_and_normalizes_duplicates(self):
+        self.assertEqual(parse_telegram_ids("67890, 54321,67890"), frozenset({54321, 67890}))
+        self.assertEqual(parse_telegram_ids("  "), frozenset())
+        for value in (None, "0", "-1", "1.5", "12345,", ",12345", "12345,,67890", "@user"):
+            with self.subTest(value=value), self.assertRaises(OwnerDenied):
+                parse_telegram_ids(value)
 
 
 if __name__ == "__main__":
