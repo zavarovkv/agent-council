@@ -24,6 +24,12 @@ bridge network and a loopback port. No host Docker socket or TravelLine
 directories are mounted. The official image starts s6 as root and drops the
 actual Hermes process to the configured unprivileged UID/GID.
 
+Compose runs `gateway run` with `HERMES_DASHBOARD=1`. The upstream s6 supervisor
+manages both the model/messaging gateway and the dashboard in the same container.
+A dashboard-only command does not register gateway services and cannot execute
+model requests. No host systemd service or detached shell process is needed.
+The health check requires the protected dashboard and a live supervised gateway.
+
 | Item | Server location |
 | --- | --- |
 | Deployment checkout | `/opt/agent-council` |
@@ -139,6 +145,21 @@ inside the container as Hermes; credentials persist in `/opt/data`, outside
 GitHub. If device-code sign-in is disabled, enable it in ChatGPT security or
 workspace settings, or use Hermes' browser flow. A real response can only be
 verified after this user-controlled login.
+
+After sign-in, check the runtime from the server checkout:
+
+```bash
+bash scripts/compose-server.sh exec --user hermes hermes hermes gateway ensure
+bash scripts/compose-server.sh exec --user hermes hermes hermes chat --oneshot --query 'Reply exactly OK.'
+```
+
+The model selection and renewable account credentials belong in the persistent
+profile, not in the Dockerfile or Git. A Telegram messaging bot is configured
+separately from the dashboard's Telegram login application.
+
+`make test-integration` also boots the actual Compose gateway/dashboard command
+with temporary in-memory data, no network, no published ports and no credentials.
+It checks gateway readiness and rejection of unauthenticated dashboard API access.
 
 ## Login appearance
 
