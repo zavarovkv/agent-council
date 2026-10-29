@@ -1,0 +1,5 @@
+name: telegram-owner
+version: 1.0.0
+description: Telegram OIDC login restricted to the owner's persistent Telegram account ID.
+author: agent-council
+kind: backend

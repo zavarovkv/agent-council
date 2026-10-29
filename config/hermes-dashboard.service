@@ -1,0 +1,46 @@
+[Unit]
+Description=Hermes dashboard with owner-only Telegram authentication
+After=network-online.target
+Wants=network-online.target
+StartLimitIntervalSec=120
+StartLimitBurst=5
+
+[Service]
+Type=simple
+User=hermes
+Group=hermes
+WorkingDirectory=/var/lib/hermes
+Environment=HOME=/var/lib/hermes
+Environment=HERMES_HOME=/var/lib/hermes/.hermes
+Environment=PATH=/var/lib/hermes/.local/bin:/usr/local/bin:/usr/bin:/bin
+Environment=PYTHONUNBUFFERED=1
+Environment=HERMES_WEB_BUILD_LIGHT=1
+EnvironmentFile=/etc/hermes/telegram.env
+ExecStart=/var/lib/hermes/.local/bin/hermes dashboard --host 127.0.0.1 --port 9119 --no-open
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=30
+UMask=0077
+NoNewPrivileges=true
+CapabilityBoundingSet=
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+ReadWritePaths=/var/lib/hermes /opt/hermes
+ReadOnlyPaths=/var/lib/hermes/.hermes/plugins/telegram-owner
+InaccessiblePaths=/opt/tl-dashboard /etc/nginx /etc/letsencrypt
+MemoryHigh=1536M
+MemoryMax=2G
+CPUQuota=100%
+CPUWeight=20
+IOWeight=20
+TasksMax=256
+LimitNOFILE=16384
+
+[Install]
+WantedBy=multi-user.target

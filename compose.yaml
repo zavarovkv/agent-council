@@ -1,0 +1,65 @@
+name: agent-council
+
+services:
+  hermes:
+    image: ${COUNCIL_HERMES_IMAGE:-agent-council-hermes:local}
+    build:
+      context: .
+    command: [dashboard, --host, 0.0.0.0, --port, "9119", --no-open]
+    restart: unless-stopped
+    stop_grace_period: 30s
+    env_file:
+      - ${HERMES_AUTH_ENV_FILE:-/etc/hermes/telegram.env}
+    environment:
+      HERMES_UID: ${HERMES_UID:-10000}
+      HERMES_GID: ${HERMES_GID:-10000}
+      HERMES_PUBLIC_URL: ${HERMES_PUBLIC_URL:-https://hermes.2.29.13.129.sslip.io}
+      HERMES_HOME: /opt/data
+      HERMES_WRITE_SAFE_ROOT: /opt/data
+      PYTHONUNBUFFERED: "1"
+    ports:
+      - "127.0.0.1:${HERMES_HTTP_PORT:-9119}:9119"
+    volumes:
+      - ${HERMES_DATA_DIR:-./.docker-data/hermes}:/opt/data
+      - ${HERMES_WORKSPACE_DIR:-./.docker-data/workspace}:/workspace
+    networks:
+      hermes:
+        ipv4_address: 172.30.90.2
+    security_opt:
+      - no-new-privileges:true
+    cap_drop: [ALL]
+    cap_add: [CHOWN, DAC_OVERRIDE, FOWNER, SETGID, SETUID, KILL]
+    cpus: "1.0"
+    mem_limit: 2g
+    mem_reservation: 1536m
+    pids_limit: 256
+    logging:
+      driver: local
+      options:
+        max-size: 10m
+        max-file: "3"
+    healthcheck:
+      test:
+        - CMD
+        - python3
+        - -c
+        - >-
+          import json,os,urllib.request,urllib.parse;
+          host=urllib.parse.urlsplit(os.environ['HERMES_PUBLIC_URL']).netloc;
+          req=urllib.request.Request('http://127.0.0.1:9119/api/status',headers={'Host':host});
+          data=json.load(urllib.request.urlopen(req,timeout=4));
+          assert data.get('auth_required') is True and data.get('auth_providers')==['telegram-owner']
+      start_period: 60s
+      interval: 15s
+      timeout: 8s
+      retries: 4
+
+networks:
+  hermes:
+    driver: bridge
+    driver_opts:
+      com.docker.network.bridge.name: br-council
+    ipam:
+      config:
+        - subnet: 172.30.90.0/24
+          gateway: 172.30.90.1

@@ -1,0 +1,9 @@
+[Unit]
+Description=Renew the separate Hermes HTTPS certificate
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/opt/tl-dashboard/certbot/bin/certbot renew --quiet --config-dir /etc/hermes/letsencrypt --work-dir /var/lib/hermes-acme --logs-dir /var/log/hermes-acme --deploy-hook "/usr/sbin/nginx -t && /usr/bin/systemctl reload nginx"
+UMask=0077

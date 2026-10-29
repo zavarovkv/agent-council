@@ -1,0 +1,10 @@
+[Unit]
+Description=Check the Hermes HTTPS certificate twice daily
+
+[Timer]
+OnCalendar=*-*-* 04,16:30:00
+RandomizedDelaySec=1800
+Persistent=true
+
+[Install]
+WantedBy=timers.target
