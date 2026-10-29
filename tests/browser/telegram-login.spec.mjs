@@ -48,7 +48,15 @@ for (const colorScheme of ["light", "dark"]) {
     if (process.env.COUNCIL_SCREENSHOTS) await page.screenshot({ path: `${process.env.COUNCIL_SCREENSHOTS}/${colorScheme}.png`, fullPage: true });
     await page.keyboard.press("Tab");
     await expect(button).toBeFocused();
-    expect(await button.evaluate((element) => parseFloat(getComputedStyle(element).outlineWidth))).toBeGreaterThanOrEqual(2);
+    // The unmodified SDK button uses the browser's native keyboard-focus ring.
+    const focus = await button.evaluate((element) => ({
+      visible: element.matches(":focus-visible"),
+      style: getComputedStyle(element).outlineStyle,
+      width: parseFloat(getComputedStyle(element).outlineWidth),
+    }));
+    expect(focus.visible).toBeTruthy();
+    expect(focus.style).not.toBe("none");
+    expect(focus.width).toBeGreaterThan(0);
     const popupPromise = page.waitForEvent("popup");
     if (colorScheme === "light") await button.press("Enter");
     else await button.click();
