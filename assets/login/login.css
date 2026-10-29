@@ -26,17 +26,6 @@ header [hidden], .login-status[hidden] {
   display: none;
 }
 
-/* Keep the official widget's geometry and behavior; adapt its outlined colors. */
-header .tg-auth-button[data-style~="outlined"] {
-  --border_color: var(--beauty-control-border);
-  color: var(--beauty-heading);
-}
-
-header .tg-auth-button[data-style~="outlined"]:hover {
-  border-color: var(--beauty-heading);
-  background: var(--beauty-surface);
-}
-
 .login-status {
   margin-block-start: 1.5rem;
   color: var(--beauty-muted);

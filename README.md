@@ -155,8 +155,9 @@ review, image rebuild and deployment; changing the Beauty repository does not
 silently change production. To update manually, run `npm install --save-exact
 beauty-css@VERSION --ignore-scripts` and commit both package files.
 
-The header uses the **official Telegram Login JavaScript SDK and its native
-button**, loaded from `https://oauth.telegram.org/js/telegram-login.js?6`.
+The header uses the **official Telegram Login JavaScript SDK and its default
+blue web button**, loaded from `https://oauth.telegram.org/js/telegram-login.js?6`.
+The SDK supplies the button styles and icon; Council does not override them.
 It opens Telegram's popup. The local initializer in `assets/login/telegram-widget.js`
 posts the resulting ID token to the server; it does not trust decoded browser
 claims or persist tokens in browser storage. A server-side OIDC/PKCE link stays
