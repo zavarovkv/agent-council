@@ -152,6 +152,41 @@ separately from the dashboard's Telegram login application.
 with temporary in-memory data, no network, no published ports and no credentials.
 It checks gateway readiness and rejection of unauthenticated dashboard API access.
 
+## Shared file and knowledge workspaces
+
+Workspace locations are private profile settings in
+`/opt/data/council-workspace.json`: `files` identifies the Google Drive folder;
+`knowledge_base` identifies the Notion root page. The coordinator's local
+`council-workspace` skill describes the filing policy. These settings select
+destinations; they do not grant cloud API access. Keep credentials, downloaded
+documents and generated skills outside Git and the image.
+
+Google Drive uses Hermes' bundled `google-workspace` integration. Its setup
+requires a Google Cloud Desktop OAuth client and user consent. Request only
+the needed Drive/Docs/Sheets services. Client credentials and renewable grants
+belong in the persistent profile, not in chat, command arguments or logs.
+Verify access to the chosen folder before claiming cloud storage is ready.
+
+Notion can use its [official remote MCP](https://developers.notion.com/guides/mcp/get-started-with-mcp)
+at `https://mcp.notion.com/mcp`, with `auth: oauth`. Prepare it disabled until the
+owner authorizes access. In the dashboard's **MCP** page, choose **Authenticate**
+for `notion`, complete Notion's consent screen, then enable and test the server.
+Hermes handles the HTTPS callback at `/api/mcp/oauth/callback/notion`; no token
+needs to be copied into chat. Retain only the needed tools: connection identity,
+tool-access metadata, search, fetch, create pages and update a page.
+
+OAuth may expose the selected Notion workspace rather than only the preferred
+CouncilBase page. The owner must accept that scope. A filing instruction is not
+an API permission boundary. If access must be limited to one page, use a separate
+Notion internal connection shared only with that page and its descendants,
+instead of granting workspace-wide OAuth access.
+
+After authorization, verify a real read of the configured root page/folder and
+read back created artifacts. Each provider needs its own authorization. Access
+through a connected plugin in a development conversation does not authorize the
+server's Hermes runtime. Dexter returns local research artifacts to Qui-Gon;
+the coordinator reviews results and files them using its own cloud connection.
+
 ## Dexter Jettster: internal competitor researcher
 
 The image includes the official `advanced-delegation` plugin at reviewed commit
