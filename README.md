@@ -70,8 +70,12 @@ current public origin and its `/auth/callback` URL:
 
 ```text
 https://council.zavarov.com
+https://council.zavarov.com/login
 https://council.zavarov.com/auth/callback
 ```
+
+Register `/login` as well: the official JavaScript SDK uses the current page
+URL when opening its popup. The OIDC fallback uses `/auth/callback`.
 
 From the project on your Mac, run:
 
@@ -142,8 +146,9 @@ The landing page uses [Beauty.css](https://github.com/zavarovkv/beauty-css) as a
 exact npm dependency, currently **0.3.0**. `package-lock.json` records registry
 integrity. A digest-pinned Node 24 build stage runs `npm ci --ignore-scripts`;
 only the CSS, package metadata and MIT license enter the final Hermes image.
-Node and npm are not installed in the running application. Beauty source is not
-copied into this repository. Page-specific overrides live in `assets/login/login.css`.
+The build stage adds no Node runtime to the final image; Hermes retains the
+tools supplied by its upstream image. Beauty source is not copied into this
+repository. Page-specific overrides live in `assets/login/login.css`.
 
 Dependabot proposes npm updates weekly. An update requires passing checks,
 review, image rebuild and deployment; changing the Beauty repository does not
