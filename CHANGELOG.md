@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Align header sign-in actions to the right with Beauty.css 0.4.0's `beauty-nav-end` helper, without local styling overrides.
+
 - Use the official Telegram Login SDK with a browser-bound, single-use server nonce and existing Hermes sessions.
 - Install Beauty.css as a locked npm build dependency and propose updates through Dependabot.
 - Style the Council sign-in page with pinned Beauty.css, system fonts and light/dark themes.
