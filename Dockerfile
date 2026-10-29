@@ -19,8 +19,9 @@ LABEL org.opencontainers.image.description="Hermes integration for Agent Council
 COPY --from=web-assets /vendor/advanced-delegation/ /opt/hermes/plugins/advanced-delegation/
 COPY agents/ /opt/agent-council/agents/
 COPY scripts/provision-researcher.py /opt/agent-council/provision-researcher.py
+COPY scripts/configure-drive.py /opt/agent-council/configure-drive.py
 RUN chmod -R a+rX,go-w /opt/hermes/plugins/advanced-delegation /opt/agent-council/agents \
-    && chmod 0444 /opt/agent-council/provision-researcher.py
+    && chmod 0444 /opt/agent-council/provision-researcher.py /opt/agent-council/configure-drive.py
 
 COPY scripts/initialize-profile.py /opt/agent-council/initialize-profile.py
 COPY scripts/initialize-profile.sh /etc/cont-init.d/03-council-session-store

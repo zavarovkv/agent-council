@@ -163,9 +163,33 @@ documents and generated skills outside Git and the image.
 
 Google Drive uses Hermes' bundled `google-workspace` integration. Its setup
 requires a Google Cloud Desktop OAuth client and user consent. Request only
-the needed Drive/Docs/Sheets services. Client credentials and renewable grants
+the needed file services. The pinned upstream setup command requests mail,
+calendar and contacts too; Council's setup requests only the Drive scope.
+Client credentials and renewable grants
 belong in the persistent profile, not in chat, command arguments or logs.
 Verify access to the chosen folder before claiming cloud storage is ready.
+
+Create a **Desktop app** client in a dedicated Google Cloud project, enable the
+Google Drive API and download its JSON. From the local checkout, run:
+
+```bash
+python3 scripts/setup-drive.py --client-json /path/to/downloaded-client.json
+python3 scripts/setup-drive.py --verify
+```
+
+The JSON travels on SSH stdin. Google's SDK handles PKCE, state and the code
+exchange through a temporary callback on the private container bridge. An SSH
+tunnel binds only local `127.0.0.1:8765`; no Docker port or firewall rule is added.
+The browser must run on the same computer as this command. Open the printed
+Google consent URL and approve access. The callback closes after completion or
+five minutes. Grants persist privately as `google_token.json`, in the format
+consumed by Hermes' Google Workspace tools. Verification refreshes the grant,
+reads the selected folder and checks that it permits new files, without writes.
+
+The Drive scope grants access across the consenting account's Drive, even though
+CouncilBase is the chosen filing destination. Google shows this scope for the
+owner's consent. Configure the app's audience and publishing status deliberately;
+Google's **Testing** status can limit refresh grants to seven days.
 
 Notion can use its [official remote MCP](https://developers.notion.com/guides/mcp/get-started-with-mcp)
 at `https://mcp.notion.com/mcp`, with `auth: oauth`. Prepare it disabled until the

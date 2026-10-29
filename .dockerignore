@@ -14,5 +14,6 @@
 !scripts/initialize-profile.py
 !scripts/initialize-profile.sh
 !scripts/provision-researcher.py
+!scripts/configure-drive.py
 **/__pycache__/
 **/*.pyc
