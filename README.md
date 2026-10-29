@@ -169,8 +169,15 @@ light/dark colors, mobile layout and keyboard focus.
 The widget bridge uses same-origin HTTPS POSTs, a short-lived single-use nonce,
 a hardened browser cookie, bounded rate/capacity limits, real JWT verification
 and the same owner/invitation policy as other sessions. It creates standard
-Hermes HttpOnly/Secure session cookies. Widget sessions have no refresh token;
-the user signs in again when the signed token expires. Challenges are process-local;
+Hermes HttpOnly/Secure session cookies. After either login flow verifies Telegram's
+token, the app issues a random, revocable session valid for **30 days**, independent
+of that token's short lifetime. Only a SHA-256 hash and verified identity are stored
+in `/opt/data/dashboard-sessions.sqlite3`, with private file permissions. This survives
+container restarts. Logout revokes the record; every request rechecks owner/invitation
+access. Set `HERMES_TELEGRAM_SESSION_DAYS` to 1–90 days to change the lifetime.
+Existing token-based cookies require one new login to gain the persistent session.
+Database failures return 503 and retain the cookie instead of logging the user out.
+Challenges are process-local;
 the current container runs one backend. Multiple workers need a shared challenge store.
 
 Landing HTML and initializer are in `assets/login/` and ship in the Docker image
@@ -179,6 +186,10 @@ alongside the exact Beauty.css package artifact.
 router before installing templates and the two widget bootstrap routes. Token
 verification and session cookie primitives come from Hermes. Updating Hermes
 requires a compatibility review.
+
+Container startup initializes a fresh profile's `state.db` using Hermes' official
+`SessionDB` under its runtime user and profile-maintenance lock. Existing stores
+are retained. Browsing history therefore works before a gateway or chat bot is started.
 
 ![Beauty login in light mode](docs/screenshots/login-light.png)
 

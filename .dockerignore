@@ -9,5 +9,7 @@
 !assets/login/**
 !scripts/
 !scripts/install-login-theme.py
+!scripts/initialize-profile.py
+!scripts/initialize-profile.sh
 **/__pycache__/
 **/*.pyc

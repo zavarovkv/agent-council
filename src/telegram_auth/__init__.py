@@ -14,6 +14,7 @@ def register(ctx):
     from plugins.dashboard_auth.self_hosted import SelfHostedOIDCProvider
 
     from .owner import OwnerDenied, OwnerPolicy
+    from .sessions import PREFIX, SessionStore, SessionStoreError
 
     class TelegramOwnerProvider(SelfHostedOIDCProvider):
         name = "telegram-owner"
@@ -35,16 +36,22 @@ def register(ctx):
             additional_ids = os.environ.get("HERMES_TELEGRAM_ALLOWED_IDS", "")
             home = os.environ.get("HERMES_HOME", "").strip()
             self.owner_policy = None
+            self.session_store = None
             if home and (owner_username or owner_id):
                 try:
                     self.owner_policy = OwnerPolicy(
                         Path(home) / "telegram-owner.json", owner_username, owner_id, additional_ids
                     )
-                except OwnerDenied:
+                    self.session_store = SessionStore(
+                        Path(home).resolve() / "dashboard-sessions.sqlite3",
+                        client_id,
+                        days=int(os.environ.get("HERMES_TELEGRAM_SESSION_DAYS", "30")),
+                    )
+                except (OwnerDenied, ValueError):
                     # A malformed setting must not prevent provider registration:
                     # the dashboard must retain its authentication gate.
                     pass
-            self.ready = bool(client_id and secret and self.owner_policy is not None)
+            self.ready = bool(client_id and secret and self.owner_policy and self.session_store)
 
         def start_login(self, *, redirect_uri):
             if not self.ready:
@@ -68,6 +75,52 @@ def register(ctx):
         # Override the alias too so an existing session cannot bypass the owner check.
         _claims_for = _verify_id_token
 
+        def _persistent_session(self, claims):
+            if not self.ready:
+                raise ProviderError("Telegram Login is not configured.")
+            self.owner_policy.authorize(claims)
+            try:
+                token, stored = self.session_store.issue(claims)
+            except SessionStoreError as exc:
+                raise ProviderError("Dashboard session store unavailable.") from exc
+            return self._session(token, "", {**stored.claims, "exp": stored.expires_at})
+
+        def complete_login(self, *, code, state, code_verifier, redirect_uri):
+            session = super().complete_login(
+                code=code, state=state, code_verifier=code_verifier, redirect_uri=redirect_uri
+            )
+            try:
+                return self._persistent_session(super()._verify_id_token(session.access_token))
+            except OwnerDenied as exc:
+                raise InvalidCodeError(
+                    "This Telegram account has not been granted access."
+                ) from exc
+
+        def verify_session(self, *, access_token):
+            if not isinstance(access_token, str) or not access_token.startswith(PREFIX):
+                return super().verify_session(access_token=access_token)
+            if not self.ready:
+                return None
+            try:
+                stored = self.session_store.lookup(access_token)
+                if stored is None:
+                    return None
+                try:
+                    self.owner_policy.authorize(stored.claims)
+                except OwnerDenied:
+                    self.session_store.revoke(access_token)
+                    return None
+                return self._session(access_token, "", {**stored.claims, "exp": stored.expires_at})
+            except SessionStoreError as exc:
+                raise ProviderError("Dashboard session store unavailable.") from exc
+
+        def revoke_access_session(self, *, access_token):
+            if self.session_store is not None:
+                try:
+                    self.session_store.revoke(access_token)
+                except SessionStoreError as exc:
+                    raise ProviderError("Dashboard session store unavailable.") from exc
+
         def complete_widget_login(self, id_token, nonce):
             if not self.ready or self.owner_policy is None:
                 raise ProviderError("Telegram Login is not configured.")
@@ -80,8 +133,7 @@ def register(ctx):
                 or not hmac.compare_digest(claim_nonce, nonce)
             ):
                 raise InvalidCodeError("Telegram nonce does not match this browser.")
-            self.owner_policy.authorize(claims)
-            return self._session(id_token, "", claims)
+            return self._persistent_session(claims)
 
     # Register even before credentials arrive: the gate stays ON and refuses login.
     ctx.register_dashboard_auth_provider(TelegramOwnerProvider())
