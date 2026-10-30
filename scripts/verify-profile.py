@@ -9,6 +9,37 @@ from contextlib import closing
 from pathlib import Path
 
 
+def verify_managed_skills(home):
+    import yaml
+
+    marker = home / ".council/instructions.json"
+    if not marker.exists():
+        return
+    if marker.is_symlink():
+        raise ValueError("Refusing a symlinked instruction marker.")
+    files = json.loads(marker.read_text())["files"]
+    if not isinstance(files, dict) or len(files) > 1024:
+        raise ValueError("Invalid managed instruction inventory.")
+    for name in files:
+        relative = Path(name)
+        if relative.is_absolute() or ".." in relative.parts:
+            raise ValueError("Invalid managed instruction path.")
+        if relative.name != "SKILL.md":
+            continue
+        path = home / relative
+        if path.resolve() != path or not path.is_file() or path.stat().st_size > 1048576:
+            raise ValueError("Invalid managed skill file.")
+        parts = path.read_text().split("---\n", 2)
+        if len(parts) != 3 or parts[0] or not parts[2].strip():
+            raise ValueError("Managed skills need YAML front matter and a Markdown body.")
+        metadata = yaml.safe_load(parts[1])
+        if not isinstance(metadata, dict) or not all(
+            isinstance(metadata.get(field), str) and metadata[field].strip()
+            for field in ("name", "description")
+        ):
+            raise ValueError("Managed skills need a name and description.")
+
+
 def main():
     from hermes_cli.config import read_user_config_raw
     from hermes_state import SessionDB
@@ -18,6 +49,7 @@ def main():
     if home != Path("/opt/data") or os.geteuid() == 0:
         raise ValueError("Verify a mounted copy as the unprivileged runtime user.")
     read_user_config_raw(home / "config.yaml")
+    verify_managed_skills(home)
     private_instructions = home / ".council/secretary/instructions"
     if private_instructions.exists() or private_instructions.is_symlink():
         sys.path.insert(0, "/opt/agent-council")
