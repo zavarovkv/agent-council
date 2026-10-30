@@ -1,5 +1,6 @@
 """Private authenticated HTTP API; separate history, no Telegram token or owner tools."""
 
+import hashlib
 import hmac
 import json
 import logging
@@ -12,11 +13,11 @@ from contextlib import contextmanager
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
+from .instructions import AUDIENCES, load_skills
+
 PROMPT = """Ты цифровой помощник владельца аккаунта.
 Отвечаешь собеседнику в выбранном владельцем чате через его аккаунт.
-Пиши по-русски, если собеседник не выбрал другой язык. Будь кратким, спокойным и полезным.
 Представляйся помощником владельца, когда это нужно для ясности; не выдавай себя за человека.
-Избегай навязчивых шуток и отсылок; личность ассистента не должна мешать делу.
 Можешь помочь с общими вопросами, уточнить запрос и сформулировать его для владельца.
 Не утверждай, что передал запрос, создал задачу, назначил встречу или выполнил действие: таких инструментов нет.
 Не знаешь личное расписание, контакты, документы и решения владельца. Не выдумывай их.
@@ -28,13 +29,18 @@ PROMPT = """Ты цифровой помощник владельца аккау
 
 
 class Service:
-    def __init__(self, home, key, *, generate=None, clock=time.time, prompt=PROMPT):
+    def __init__(self, home, key, *, skills, generate=None, clock=time.time, prompt=PROMPT):
         if not re.fullmatch(r"[a-f0-9]{64}", key):
             raise ValueError("A dedicated 256-bit service key is required.")
         from .model import generate as model_generate
 
         self.home, self.key = Path(home), key
         self.generate, self.clock = generate or model_generate, clock
+        if set(skills) != AUDIENCES or any(
+            not isinstance(body, str) or not body.strip() for body in skills.values()
+        ):
+            raise ValueError("All secretary skills are required.")
+        self.skills = dict(skills)
         self.prompt = prompt
         self.lock = threading.Lock()
         self.capacity = threading.BoundedSemaphore(2)
@@ -68,8 +74,13 @@ class Service:
         return hmac.compare_digest(authorization.encode(), ("Bearer " + self.key).encode())
 
     def reply(self, payload):
-        if set(payload) != {"request_id", "conversation", "text"}:
+        fields = {"request_id", "conversation", "text"}
+        if set(payload) not in (fields, fields | {"audience"}):
             raise ValueError("Unexpected request fields.")
+        # Older trusted bridges safely use the new-user scenario during a rollout.
+        audience = payload.get("audience", "new-users")
+        if not isinstance(audience, str) or audience not in AUDIENCES:
+            raise ValueError("Unknown secretary audience.")
         request, conversation, text = (
             payload[key] for key in ("request_id", "conversation", "text")
         )
@@ -80,6 +91,8 @@ class Service:
             or not 0 < len(text) <= 6000
         ):
             raise ValueError("Invalid or oversized request.")
+        # Reclassification must not expose the context or cached answer of another scenario.
+        conversation = hashlib.sha256(f"{conversation}:{audience}".encode()).hexdigest()
         if not self.capacity.acquire(blocking=False):
             raise BlockingIOError("Service capacity reached.")
         try:
@@ -112,7 +125,7 @@ class Service:
                     "INSERT INTO turns(request_id,conversation,question,answer,created) VALUES (?,?,?,?,?)",
                     (request, conversation, text, None, now),
                 )
-            messages = [{"role": "system", "content": self.prompt}]
+            messages = [{"role": "system", "content": self.prompt + "\n" + self.skills[audience]}]
             for question, answer in history:
                 messages.extend(
                     [
@@ -242,6 +255,7 @@ def main():
     service = Service(
         home,
         os.environ.get("COUNCIL_SECRETARY_KEY", ""),
+        skills=load_skills("/opt/agent-council/agents/secretary"),
         prompt=f"Твоё имя: {assistant_name}. Ты личный помощник {owner_name}.\n" + PROMPT,
     )
     Server(("0.0.0.0", 9120), service).serve_forever()

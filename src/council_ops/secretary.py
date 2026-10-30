@@ -64,6 +64,8 @@ def prepare(runtime, *, owner_name, assistant_name):
     values.update(
         COUNCIL_SECRETARY_OWNER_NAME=owner_name, COUNCIL_SECRETARY_ASSISTANT_NAME=assistant_name
     )
+    values.setdefault("COUNCIL_SECRETARY_CONTACT_IDS", "")
+    values.setdefault("COUNCIL_SECRETARY_SPOUSE_USERNAME", "")
     atomic_write(
         settings.secretary_file,
         "".join(f"{key}={value}\n" for key, value in values.items()).encode(),

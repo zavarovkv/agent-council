@@ -21,6 +21,32 @@ BUSINESS_FIELDS = (
 )
 
 
+def contact_ids(value):
+    """An explicit private operator list, never usernames or message claims."""
+    if not isinstance(value, str):
+        raise ValueError("Contact IDs must be a comma-separated string.")
+    if not value:
+        return frozenset()
+    parts = value.split(",")
+    if len(parts) > 10000 or any(
+        not re.fullmatch(r"[1-9][0-9]{0,15}", part) or int(part) >= 2**52 for part in parts
+    ):
+        raise ValueError("Use comma-separated positive numeric Telegram contact IDs.")
+    return frozenset(map(int, parts))
+
+
+def normalize_username(value):
+    """A conversation-style selector only; never an authorization identity."""
+    if not isinstance(value, str):
+        raise ValueError("Use a literal Telegram username.")
+    if not value:
+        return ""
+    value = value.removeprefix("@")
+    if not re.fullmatch(r"[a-zA-Z][a-zA-Z0-9_]{3,31}", value):
+        raise ValueError("Invalid Telegram username for the spouse conversation style.")
+    return value.lower()
+
+
 class NoRedirect(urllib.request.HTTPRedirectHandler):
     def redirect_request(self, *_args, **_kwargs):
         return None
@@ -63,10 +89,14 @@ class Bridge:
         request=request_reply,
         acknowledge=acknowledge_reply,
         clock=time.time,
+        contacts=frozenset(),
+        spouse_username="",
     ):
         self.application, self.owner, self.key, self.store = application, owner, key, store
         self.request, self.clock = request, clock
         self.acknowledge = acknowledge
+        self.contacts = frozenset(contacts)
+        self.spouse_username = normalize_username(spouse_username)
         self.tasks = {}
         self.capacity = asyncio.Semaphore(2)
 
@@ -130,7 +160,15 @@ class Bridge:
         identity = hashlib.sha256(
             f"{identifier}:{chat}:{message.message_id}:{update.update_id}".encode()
         ).hexdigest()
-        if self.store.submit(identity, identifier, chat, message.message_id, text, created):
+        if self.store.submit(
+            identity,
+            identifier,
+            chat,
+            message.message_id,
+            text,
+            created,
+            sender_username=normalize_username(getattr(sender, "username", None) or ""),
+        ):
             self.kick(identifier, chat)
 
     def kick(self, connection, chat):
@@ -160,6 +198,7 @@ class Bridge:
                         "request_id": job["id"],
                         "conversation": hashlib.sha256(f"{connection}:{chat}".encode()).hexdigest(),
                         "text": job["text"],
+                        "audience": self.audience(chat, job["sender_username"]),
                     }
                     reply = await asyncio.to_thread(self.request, self.key, payload)
                     # Rights can be revoked, or a human may take over while the model is running.
@@ -194,6 +233,11 @@ class Bridge:
                 logger.warning("Secretary request failed; private provider/update details omitted.")
         self.tasks.pop((connection, chat), None)
 
+    def audience(self, chat, sender_username):
+        if self.spouse_username and sender_username == self.spouse_username:
+            return "spouse"
+        return "contacts" if chat in self.contacts else "new-users"
+
 
 def attach(application, _adapter):
     from telegram import Update
@@ -223,7 +267,14 @@ def attach(application, _adapter):
             store = Store(
                 Path(os.environ["HERMES_HOME"]) / "plugin-data/council-secretary/queue.sqlite3"
             )
-            bridge = Bridge(application, int(owner), key, store)
+            bridge = Bridge(
+                application,
+                int(owner),
+                key,
+                store,
+                contacts=contact_ids(os.environ.get("COUNCIL_SECRETARY_CONTACT_IDS", "")),
+                spouse_username=os.environ.get("COUNCIL_SECRETARY_SPOUSE_USERNAME", ""),
+            )
             asyncio.get_running_loop().create_task(bridge.recover())
         except Exception:
             bridge = None
