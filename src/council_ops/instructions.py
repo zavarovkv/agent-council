@@ -374,6 +374,7 @@ def apply(runtime, source, revision, *, fetch=False):
             runtime,
             backup,
             prepare_copy=lambda home: install_files(home, files, revision, uid, gid),
+            instruction_mode="profile" if has_secretary else "image",
         )
         changed = True
         install_files(runtime.settings.data_dir, files, revision, uid, gid)

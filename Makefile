@@ -8,7 +8,7 @@ test:
 	for script in scripts/*.sh; do bash -n "$$script"; done
 
 test-integration:
-	docker build -t agent-council-hermes:test .
+	docker build --build-arg COUNCIL_REVISION=$$(git rev-parse HEAD) -t agent-council-hermes:test .
 	$(PYTHON) scripts/check-compose.py
 	$(PYTHON) scripts/check-runtime.py
 	docker run --rm --network none --read-only --tmpfs /tmp:rw,nosuid,nodev,size=64m --user 10000:10000 --entrypoint /opt/hermes/.venv/bin/python -e PYTHONDONTWRITEBYTECODE=1 -v "$(CURDIR)/tests/integration:/tests:ro" --workdir /opt/hermes agent-council-hermes:test -m unittest discover -s /tests -v
