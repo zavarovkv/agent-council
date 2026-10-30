@@ -272,6 +272,14 @@ def doctor(runtime):
     backups = backup_status(runtime.settings)
     backups["timer"] = unit_status(runtime, "agent-council-backup.timer")
     instructions = instruction_status(runtime.settings.data_dir)
+    rejected = runtime.settings.env_file.with_name("instructions-update-failure.json")
+    if rejected.is_file() and not rejected.is_symlink():
+        try:
+            revision = json.loads(rejected.read_text())["revision"]
+            if re.fullmatch(r"[a-f0-9]{40}", revision):
+                instructions["rejected_revision"] = revision
+        except (OSError, ValueError, TypeError, KeyError):
+            instructions["failure_record_available"] = False
     instructions["timer"] = unit_status(runtime, "agent-council-skills.timer")
     instructions["service"] = unit_status(runtime, "agent-council-skills.service")
     return {

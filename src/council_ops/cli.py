@@ -9,7 +9,7 @@ import tempfile
 from pathlib import Path
 
 from .config import OperationError, Settings
-from .doctor import doctor
+from .doctor import doctor, unit_status
 from .guard import ServiceGuard
 from .install import install, recover
 from .instructions import apply as apply_instructions
@@ -21,6 +21,15 @@ from .runtime import Runtime
 from .secretary import prepare as prepare_secretary
 from .setup import configure_backups
 from .snapshots import snapshot
+
+
+def pause_instruction_updates(runtime):
+    state = unit_status(runtime, "agent-council-skills.timer")
+    if state.get("ActiveState") == "active" or state.get("UnitFileState") in {
+        "enabled",
+        "enabled-runtime",
+    }:
+        runtime.run(["systemctl", "disable", "--now", "agent-council-skills.timer"])
 
 
 def parser():
@@ -200,6 +209,7 @@ def main(argv=None):
                 raise OperationError(
                     "Restore requires --confirm; current directories will be retained."
                 )
+            pause_instruction_updates(runtime)
             result = {"retained": restore(runtime, arguments.backup)}
         elif arguments.action == "init-cloud-backups":
             Restic(runtime).initialize()

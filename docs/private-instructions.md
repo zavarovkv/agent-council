@@ -71,6 +71,10 @@ The host-only timer checks it every five minutes and uses the same guarded apply
 path. Busy agents, dirty source checkouts and conflicting local edits stop that
 attempt; the timer retries later. Documentation-only commits update the recorded
 revision without restarting services. No code image is rebuilt.
+Failed copied-profile validation or cutover quarantines that commit instead of
+repeatedly stopping the service. A corrected `main` commit is eligible again;
+an explicit successful `apply-instructions` also clears the failure record.
+`doctor` reports the rejected revision and automation status.
 
 ```bash
 sudo install -m 0644 config/agent-council-skills.service config/agent-council-skills.timer /etc/systemd/system/
@@ -84,6 +88,8 @@ Review the unit's checkout paths for a different host. Inspect failures with
 `systemctl status agent-council-skills.service`; diagnostics omit private text
 and keys. To freeze instruction releases, disable the timer. Local generated
 skills are still exported and reviewed before publication to `main`.
+Manual `restore` disables the instruction timer so automatic updates cannot
+immediately undo the rollback. Re-enable it after reviewing the intended release.
 
 The secretary receives only its own bundle at `/opt/data/instructions` inside
 its separate profile mount. Its root-only environment selects

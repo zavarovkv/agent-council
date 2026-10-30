@@ -11,7 +11,17 @@ from unittest.mock import patch
 from test_operations import FakeRuntime, Fixture
 
 from council_ops.config import OperationError, read_settings
-from council_ops.instructions import MARKER, apply, checkout, collect, export, install_files, sync
+from council_ops.instructions import (
+    FAILURE,
+    MARKER,
+    InstructionReleaseError,
+    apply,
+    checkout,
+    collect,
+    export,
+    install_files,
+    sync,
+)
 from secretary_worker.instructions import configured_instructions
 
 REVISION = "d" * 40
@@ -157,8 +167,11 @@ class PrivateInstructionTests(unittest.TestCase):
         )
         with patch("council_ops.instructions.checkout"):
             apply(self.runtime, self.source, REVISION)
+            failure = self.runtime.settings.env_file.with_name(FAILURE)
+            failure.write_text(json.dumps({"revision": REVISION}))
             self.runtime.events.clear()
             result = apply(self.runtime, self.source, REVISION)
+        self.assertFalse(failure.exists())
         values = read_settings(secret)
         self.assertEqual(values["COUNCIL_SECRETARY_KEY"], "a" * 64)
         self.assertEqual(values["COUNCIL_SECRETARY_OWNER_ID"], "12345")
@@ -187,6 +200,33 @@ class PrivateInstructionTests(unittest.TestCase):
             with self.assertRaisesRegex(OperationError, "compatible"):
                 apply(self.runtime, self.source, REVISION)
         self.assertNotIn("stop", self.runtime.events)
+
+    def test_failed_auto_release_is_not_retried_until_a_new_commit_or_explicit_retry(self):
+        self.install()
+        original = self.runtime.run
+
+        def run(arguments, **kwargs):
+            if arguments[0] == "git":
+                return "f" * 40 if arguments[-1] == "FETCH_HEAD" else REVISION
+            return original(arguments, **kwargs)
+
+        with (
+            patch("council_ops.instructions.clean_checkout", return_value=["git"]),
+            patch.object(self.runtime, "run", side_effect=run),
+            patch(
+                "council_ops.instructions.apply",
+                side_effect=InstructionReleaseError("Fixture validation failure"),
+            ) as release,
+        ):
+            with self.assertRaises(InstructionReleaseError):
+                sync(self.runtime, self.source)
+            with self.assertRaisesRegex(OperationError, "failed release validation"):
+                sync(self.runtime, self.source)
+            self.assertEqual(release.call_count, 1)
+        self.assertEqual(
+            json.loads(self.runtime.settings.env_file.with_name(FAILURE).read_text())["revision"],
+            "f" * 40,
+        )
 
     def test_checkout_rejects_wrong_revision_dirty_ignored_files_and_nested_checkouts(self):
         def git(*arguments):

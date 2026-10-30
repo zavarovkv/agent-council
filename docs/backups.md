@@ -112,6 +112,9 @@ sudo python3 scripts/manage.py verify-backup /var/backups/agent-council/backup-T
 sudo python3 scripts/manage.py restore /var/backups/agent-council/backup-TIMESTAMP-ID --confirm
 ```
 
+Manual restore disables the optional instruction-update timer so it cannot
+immediately undo restored rules. Re-enable that timer after reviewing the intended revision.
+
 Restore checks a copy, stops only Hermes and swaps its data/workspace. Existing
 directories are retained as `*.before-restore-*`; a failed restored boot puts
 them back. Authentication and Compose are restored with the image, while this

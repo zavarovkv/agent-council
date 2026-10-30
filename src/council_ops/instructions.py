@@ -5,6 +5,7 @@ import json
 import os
 import re
 from dataclasses import dataclass, field
+from datetime import UTC, datetime
 from pathlib import Path, PurePosixPath
 
 from secretary_worker.instructions import load_instructions
@@ -14,6 +15,7 @@ from .lifecycle import identity, restore, smoke
 from .snapshots import snapshot
 
 MARKER = ".council/instructions.json"
+FAILURE = "instructions-update-failure.json"
 ROLE = re.compile(r"[a-z][a-z0-9_-]{0,63}\Z")
 CREDENTIAL = re.compile(
     r"gh[pousr]_[A-Za-z0-9]{30,}|github_pat_[A-Za-z0-9_]{30,}|"
@@ -27,6 +29,17 @@ CREDENTIAL = re.compile(
 class Artifact:
     data: bytes = field(repr=False)
     executable: bool = False
+
+
+class InstructionReleaseError(OperationError):
+    """A candidate failed after checkpointing; require a new commit or explicit retry."""
+
+
+def clear_failure(settings):
+    path = settings.env_file.with_name(FAILURE)
+    if path.is_symlink():
+        raise OperationError("Refusing a symlinked instruction failure record.")
+    path.unlink(missing_ok=True)
 
 
 def digest(data):
@@ -251,9 +264,26 @@ def sync(runtime, source):
     candidate = runtime.run([*git, "rev-parse", "FETCH_HEAD"])
     if not re.fullmatch(r"[a-f0-9]{40}", candidate):
         raise OperationError("Invalid private update revision.")
+    failure = runtime.settings.env_file.with_name(FAILURE)
+    if failure.is_symlink():
+        raise OperationError("Refusing a symlinked instruction failure record.")
+    if failure.is_file() and json.loads(failure.read_text()).get("revision") == candidate:
+        raise OperationError(
+            "This private revision failed release validation; fix it in main or retry explicitly."
+        )
     try:
         runtime.run([*git, "switch", "--detach", candidate])
         return apply(runtime, source, candidate)
+    except InstructionReleaseError:
+        atomic_write(
+            failure,
+            (
+                json.dumps({"revision": candidate, "failed_at": datetime.now(UTC).isoformat()})
+                + "\n"
+            ).encode(),
+        )
+        runtime.run([*git, "switch", "--detach", original])
+        raise
     except Exception:
         runtime.run([*git, "switch", "--detach", original])
         raise
@@ -330,6 +360,7 @@ def apply(runtime, source, revision, *, fetch=False):
                 atomic_write(marker, (json.dumps(value, indent=2) + "\n").encode())
                 uid, gid = identity(runtime.settings)
                 os.chown(marker, uid, gid)
+            clear_failure(runtime.settings)
             return {
                 "instructions_revision": revision,
                 "files_installed": len(files),
@@ -362,9 +393,10 @@ def apply(runtime, source, revision, *, fetch=False):
         else:
             runtime.start()
             runtime.ready()
-        raise OperationError(
+        raise InstructionReleaseError(
             "Instruction installation failed; previous service and state restored."
         ) from None
+    clear_failure(runtime.settings)
     return {"instructions_revision": revision, "files_installed": len(files), "backup": str(backup)}
 
 

@@ -6,6 +6,7 @@ from types import SimpleNamespace
 
 from test_operations import Fixture
 
+from council_ops.cli import pause_instruction_updates
 from council_ops.doctor import backup_status, instruction_status, unit_status
 from council_ops.instructions import Artifact, install_files
 
@@ -75,3 +76,13 @@ class AutomationStatusTests(unittest.TestCase):
                 "ExecMainStatus": "0",
             },
         )
+
+    def test_manual_rollback_pauses_only_the_owned_instruction_timer(self):
+        calls = []
+
+        def run(arguments):
+            calls.append(arguments)
+            return "ActiveState=active\nUnitFileState=enabled\n" if arguments[1] == "show" else ""
+
+        pause_instruction_updates(SimpleNamespace(run=run))
+        self.assertEqual(calls[-1], ["systemctl", "disable", "--now", "agent-council-skills.timer"])
