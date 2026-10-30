@@ -63,6 +63,28 @@ the owned services. Failure restores the prior profile, auth and Compose state.
 An identical installed revision is a no-op. Removing tracked files removes only
 those managed artifacts, preserving unrelated local files.
 
+## Automatic updates
+
+After the first reviewed installation, the private repository's `main` branch
+can be the approved update channel. Only trusted maintainers should write there.
+The host-only timer checks it every five minutes and uses the same guarded apply
+path. Busy agents, dirty source checkouts and conflicting local edits stop that
+attempt; the timer retries later. Documentation-only commits update the recorded
+revision without restarting services. No code image is rebuilt.
+
+```bash
+sudo install -m 0644 config/agent-council-skills.service config/agent-council-skills.timer /etc/systemd/system/
+sudo systemd-analyze verify /etc/systemd/system/agent-council-skills.service /etc/systemd/system/agent-council-skills.timer
+sudo systemctl daemon-reload
+sudo systemctl enable --now agent-council-skills.timer
+systemctl list-timers agent-council-skills.timer
+```
+
+Review the unit's checkout paths for a different host. Inspect failures with
+`systemctl status agent-council-skills.service`; diagnostics omit private text
+and keys. To freeze instruction releases, disable the timer. Local generated
+skills are still exported and reviewed before publication to `main`.
+
 The secretary receives only its own bundle at `/opt/data/instructions` inside
 its separate profile mount. Its root-only environment selects
 `COUNCIL_SECRETARY_INSTRUCTIONS=profile`; missing/invalid rules then prevent

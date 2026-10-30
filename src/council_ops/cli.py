@@ -14,6 +14,7 @@ from .guard import ServiceGuard
 from .install import install, recover
 from .instructions import apply as apply_instructions
 from .instructions import export as export_instructions
+from .instructions import sync as sync_instructions
 from .lifecycle import deploy, restore, smoke
 from .restic import Restic, cloud_backup
 from .runtime import Runtime
@@ -57,6 +58,10 @@ def parser():
         default=[],
         help="Also export this relative main-profile skill directory",
     )
+    sync = commands.add_parser(
+        "sync-instructions", help="Apply the private main branch through the guarded installer"
+    )
+    sync.add_argument("source", type=Path)
     secretary = commands.add_parser(
         "prepare-secretary", help="Prepare a separate tool-free Telegram secretary profile"
     )
@@ -145,6 +150,7 @@ def main(argv=None):
             "restore",
             "cloud-backup",
             "apply-instructions",
+            "sync-instructions",
         ):
             doctor(runtime)
         if arguments.action == "doctor":
@@ -160,6 +166,8 @@ def main(argv=None):
                 arguments.revision,
                 include_skills=arguments.include_skill,
             )
+        elif arguments.action == "sync-instructions":
+            result = sync_instructions(runtime, arguments.source)
         elif arguments.action == "prepare-secretary":
             doctor(runtime)
             result = prepare_secretary(

@@ -1,0 +1,10 @@
+[Unit]
+Description=Check approved private instruction updates every five minutes
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=5min
+AccuracySec=15s
+
+[Install]
+WantedBy=timers.target

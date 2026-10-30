@@ -11,7 +11,7 @@ from unittest.mock import patch
 from test_operations import FakeRuntime, Fixture
 
 from council_ops.config import OperationError, read_settings
-from council_ops.instructions import MARKER, apply, checkout, collect, export, install_files
+from council_ops.instructions import MARKER, apply, checkout, collect, export, install_files, sync
 from secretary_worker.instructions import configured_instructions
 
 REVISION = "d" * 40
@@ -25,6 +25,7 @@ class PrivateInstructionTests(unittest.TestCase):
         self.home = self.fixture.data
         self.source = self.fixture.root / "private-source"
         (self.source / "assistant/skills/custom/scripts").mkdir(parents=True)
+        self.source.chmod(0o700)
         (self.source / "assistant/SOUL.md").write_text("Private assistant identity")
         (self.source / "assistant/skills/custom/SKILL.md").write_text(
             "---\nname: custom\n---\nFixture skill"
@@ -216,6 +217,10 @@ class PrivateInstructionTests(unittest.TestCase):
             ).stdout.strip(),
         )
         checkout(runtime, self.source, revision)
+        self.source.chmod(0o755)
+        with self.assertRaises(OperationError):
+            checkout(runtime, self.source, revision)
+        self.source.chmod(0o700)
         with self.assertRaises(OperationError):
             checkout(runtime, self.source, "0" * 40)
         (self.source / "secret.env").write_text("fixture")
@@ -224,3 +229,71 @@ class PrivateInstructionTests(unittest.TestCase):
         (self.source / "secret.env").unlink()
         with self.assertRaises(OperationError):
             checkout(runtime, self.source / "assistant", revision)
+
+    def test_automatic_main_update_noop_and_drift_preservation_use_real_git(self):
+        def git(*arguments):
+            return subprocess.run(
+                ["git", "-C", str(self.source), *arguments],
+                check=True,
+                capture_output=True,
+                text=True,
+            ).stdout.strip()
+
+        def commit():
+            git("add", ".")
+            git(
+                "-c",
+                "user.name=Fixture",
+                "-c",
+                "user.email=fixture@example.test",
+                "commit",
+                "-m",
+                "Fixture change",
+            )
+            return git("rev-parse", "HEAD")
+
+        git("init", "--initial-branch=main")
+        first = commit()
+        remote = self.fixture.root / "remote.git"
+        subprocess.run(["git", "init", "--bare", str(remote)], check=True, capture_output=True)
+        git("remote", "add", "origin", str(remote))
+        git("push", "origin", "main")
+        install_files(self.home, collect(self.source, self.home), first, self.uid, self.gid)
+        (self.source / "assistant/SOUL.md").write_text("Updated from approved main")
+        second = commit()
+        git("push", "origin", "main")
+        git("switch", "--detach", first)
+        original = self.runtime.run
+
+        def run(arguments, **kwargs):
+            if arguments[0] == "git":
+                return subprocess.run(
+                    arguments, check=True, capture_output=True, text=True
+                ).stdout.strip()
+            return original(arguments, **kwargs)
+
+        with patch.object(self.runtime, "run", side_effect=run):
+            result = sync(self.runtime, self.source)
+            self.assertEqual(result["instructions_revision"], second)
+            self.assertEqual((self.home / "SOUL.md").read_text(), "Updated from approved main")
+            git("switch", "main")
+            (self.source / "README.md").write_text("Documentation only")
+            third = commit()
+            git("push", "origin", "main")
+            git("switch", "--detach", second)
+            self.runtime.events.clear()
+            self.assertFalse(sync(self.runtime, self.source)["changed"])
+            self.assertNotIn("stop", self.runtime.events)
+            self.assertEqual(json.loads((self.home / MARKER).read_text())["revision"], third)
+            git("switch", "main")
+            (self.source / "assistant/SOUL.md").write_text("Next approved instruction")
+            commit()
+            git("push", "origin", "main")
+            git("switch", "--detach", third)
+            (self.home / "SOUL.md").write_text("Unsaved local edit")
+            self.runtime.events.clear()
+            with self.assertRaises(OperationError):
+                sync(self.runtime, self.source)
+            self.assertEqual(git("rev-parse", "HEAD"), third)
+            self.assertEqual((self.home / "SOUL.md").read_text(), "Unsaved local edit")
+            self.assertNotIn("stop", self.runtime.events)

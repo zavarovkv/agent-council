@@ -186,14 +186,28 @@ def install_files(home, files, revision, uid, gid):
     os.chown(marker, uid, gid)
 
 
-def checkout(runtime, source, revision, *, fetch=False):
+def clean_checkout(runtime, source):
     source = source.absolute()
+    if source.resolve() != source or not source.is_dir():
+        raise OperationError("Use a regular private checkout.")
+    if source.stat().st_uid != os.geteuid() or source.stat().st_mode & 0o077:
+        raise OperationError("The private checkout must be operator-owned and mode 0700.")
+    metadata = source / ".git"
     if (
-        source.resolve() != source
-        or not source.is_dir()
-        or not re.fullmatch(r"[a-f0-9]{40}", revision)
+        metadata.is_symlink()
+        or not metadata.is_dir()
+        or metadata.stat().st_uid != os.geteuid()
+        or metadata.stat().st_mode & 0o022
     ):
-        raise OperationError("Use a regular private checkout and a full reviewed commit SHA.")
+        raise OperationError("Use a protected standalone Git metadata directory.")
+    config = metadata / "config"
+    if (
+        config.is_symlink()
+        or not config.is_file()
+        or config.stat().st_uid != os.geteuid()
+        or config.stat().st_mode & 0o022
+    ):
+        raise OperationError("Git configuration must not be writable by another account.")
     settings = runtime.settings
     for private in (
         settings.repository,
@@ -210,12 +224,39 @@ def checkout(runtime, source, revision, *, fetch=False):
         [*git, "status", "--porcelain", "--untracked-files=all", "--ignored"]
     ):
         raise OperationError("Install a clean private checkout at its reviewed revision.")
+    return git
+
+
+def checkout(runtime, source, revision, *, fetch=False):
+    if not re.fullmatch(r"[a-f0-9]{40}", revision):
+        raise OperationError("Use a full reviewed commit SHA.")
+    git = clean_checkout(runtime, source)
     if fetch:
         runtime.run([*git, "fetch", "--no-tags", "origin", revision])
         runtime.run([*git, "switch", "--detach", revision])
     if runtime.run([*git, "rev-parse", "HEAD"]) != revision:
         raise OperationError("The private checkout differs from the reviewed revision.")
     return git
+
+
+def sync(runtime, source):
+    """Follow the private main branch only after explicit initial installation."""
+    if not previous_files(runtime.settings.data_dir):
+        raise OperationError("Apply a reviewed private revision before enabling automatic updates.")
+    git = clean_checkout(runtime, source)
+    original = runtime.run([*git, "rev-parse", "HEAD"])
+    if not re.fullmatch(r"[a-f0-9]{40}", original):
+        raise OperationError("Invalid private source revision.")
+    runtime.run([*git, "fetch", "--no-tags", "origin", "main"])
+    candidate = runtime.run([*git, "rev-parse", "FETCH_HEAD"])
+    if not re.fullmatch(r"[a-f0-9]{40}", candidate):
+        raise OperationError("Invalid private update revision.")
+    try:
+        runtime.run([*git, "switch", "--detach", candidate])
+        return apply(runtime, source, candidate)
+    except Exception:
+        runtime.run([*git, "switch", "--detach", original])
+        raise
 
 
 def apply(runtime, source, revision, *, fetch=False):
@@ -273,10 +314,22 @@ def apply(runtime, source, revision, *, fetch=False):
         )
         == "profile"
     )
-    if marker.is_file() and json.loads(marker.read_text()).get("revision") == revision:
-        if selector_matches and previous_files(runtime.settings.data_dir) == {
+    if marker.is_file():
+        same_files = previous_files(runtime.settings.data_dir) == {
             name: digest(artifact.data) for name, artifact in files.items()
-        }:
+        }
+        same_modes = same_files and all(
+            destination(runtime.settings.data_dir, name).stat().st_mode & 0o777
+            == (0o700 if artifact.executable else 0o600)
+            for name, artifact in files.items()
+        )
+        if selector_matches and same_files and same_modes:
+            value = json.loads(marker.read_text())
+            if value.get("revision") != revision:
+                value["revision"] = revision
+                atomic_write(marker, (json.dumps(value, indent=2) + "\n").encode())
+                uid, gid = identity(runtime.settings)
+                os.chown(marker, uid, gid)
             return {
                 "instructions_revision": revision,
                 "files_installed": len(files),
