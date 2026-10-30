@@ -35,6 +35,9 @@ survives restarts. If Telegram does not confirm delivery, the next poll retries;
 an ambiguous network response can therefore produce a duplicate alert. It never
 retries assistant conversation messages. Active maintenance holds the operations
 lock, so monitoring skips that poll without clearing earlier incidents.
+Instruction/research timers also defer a busy lock or active conversation to
+their next tick without recording a failed unit. Invalid/stale state, rejected
+releases and other errors still fail; daily backup failures are never suppressed.
 
 Inspect locally:
 
