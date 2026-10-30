@@ -3,6 +3,7 @@
 
 import json
 import os
+import shutil
 import subprocess
 import tempfile
 from pathlib import Path
@@ -16,9 +17,12 @@ def main():
         home.mkdir(mode=0o700)
         uid, gid = (os.getuid(), os.getgid()) if os.getuid() else (10000, 10000)
         os.chown(home, uid, gid)
+        shutil.copytree(repository / "instructions/secretary", home / "instructions")
         auth = root / "fixture.env"
         auth.write_text(
-            "COUNCIL_SECRETARY_KEY=" + "a" * 64 + "\nCOUNCIL_SECRETARY_OWNER_ID=12345\n"
+            "COUNCIL_SECRETARY_KEY="
+            + "a" * 64
+            + "\nCOUNCIL_SECRETARY_OWNER_ID=12345\nCOUNCIL_SECRETARY_INSTRUCTIONS=profile\n"
         )
         auth.chmod(0o600)
         override = root / "offline.yaml"

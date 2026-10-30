@@ -97,6 +97,9 @@ queues. Public and business conversations have separate history contexts.
 The [instruction index](../instructions/README.md) links all versioned roles.
 Secretary-wide rules live in
 [`instructions/secretary/POLICY.md`](../instructions/secretary/POLICY.md).
+These are public image defaults. For personal deployment rules, use the
+[private instruction workflow](private-instructions.md); when enabled, edit
+the secretary directory in that repository and apply its reviewed commit.
 The three editable reply scenarios are selected in priority order:
 
 - [`instructions/secretary/skills/spouse/SKILL.md`](../instructions/secretary/skills/spouse/SKILL.md):

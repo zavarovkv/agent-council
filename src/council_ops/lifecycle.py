@@ -16,7 +16,7 @@ def identity(settings):
     return int(settings.values["HERMES_UID"]), int(settings.values["HERMES_GID"])
 
 
-def smoke(runtime, backup, *, image=None):
+def smoke(runtime, backup, *, image=None, prepare_copy=None):
     backup, manifest = load_manifest(backup)
     image = image or manifest["image_id"]
     if not re.fullmatch(r"sha256:[0-9a-f]{64}", manifest["image_id"]):
@@ -39,6 +39,8 @@ def smoke(runtime, backup, *, image=None):
         roots = {"hermes": root / "hermes", "workspace": root / "workspace"}
         for name, target in roots.items():
             copy_state(backup / name, target, uid=uid, gid=gid)
+        if prepare_copy is not None:
+            prepare_copy(roots["hermes"])
         runtime.run(
             [
                 "docker",

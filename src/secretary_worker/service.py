@@ -10,7 +10,7 @@ from pathlib import Path
 
 from .history import History
 from .http import Server
-from .instructions import AUDIENCES, load_instructions
+from .instructions import AUDIENCES, configured_instructions
 from .protocol import ReplyRequest, request_id
 
 
@@ -78,7 +78,7 @@ def main():
         raise SystemExit("The isolated worker requires a non-root user and its own data mount.")
     owner_name = os.environ.get("COUNCIL_SECRETARY_OWNER_NAME", "владельца аккаунта")
     assistant_name = os.environ.get("COUNCIL_SECRETARY_ASSISTANT_NAME", "Ассистент")
-    instructions = load_instructions("/opt/agent-council/instructions/secretary")
+    instructions = configured_instructions(home, os.environ)
     service = Service(
         home,
         os.environ.get("COUNCIL_SECRETARY_KEY", ""),

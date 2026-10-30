@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Install reviewed private instruction commits through host-only Git access, copied-profile validation, drift checks and checkpoint rollback; export runtime skill edits for review.
+- Let the isolated secretary load its own persistent instruction bundle without private Git credentials or access to other roles.
 - Organize versioned agent instructions in `instructions/` with a linked editing guide; load the common secretary policy from Markdown.
 - Separate Telegram admission, policy, transport and durable delivery; separate worker protocol, HTTP, history and model composition.
 - Recheck queued work before model generation, clean up cancelled tasks and acknowledge only generated replies.

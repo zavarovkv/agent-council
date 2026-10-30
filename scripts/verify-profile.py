@@ -4,6 +4,7 @@
 import json
 import os
 import sqlite3
+import sys
 from contextlib import closing
 from pathlib import Path
 
@@ -17,6 +18,14 @@ def main():
     if home != Path("/opt/data") or os.geteuid() == 0:
         raise ValueError("Verify a mounted copy as the unprivileged runtime user.")
     read_user_config_raw(home / "config.yaml")
+    private_instructions = home / ".council/secretary/instructions"
+    if private_instructions.exists() or private_instructions.is_symlink():
+        sys.path.insert(0, "/opt/agent-council")
+        from secretary_worker.instructions import load_instructions
+
+        if private_instructions.resolve() != private_instructions:
+            raise ValueError("Refusing a symlinked secretary instruction directory.")
+        load_instructions(private_instructions)
     for path in [home / "state.db", *sorted((home / "profiles").glob("*/state.db"))]:
         if not path.exists():
             continue

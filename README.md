@@ -47,6 +47,9 @@ Start with the [instruction index](instructions/README.md). Shared instructions
 are grouped by role: `assistant/`, `dexter/` and `secretary/`. The secretary's
 common policy and three reply scenarios are editable Markdown files.
 
+Personal rules can live in a [private instruction repository](docs/private-instructions.md),
+installed by reviewed commit without including private Git access in Docker or CI.
+
 Commit and deploy secretary changes to apply them. Researcher instructions use
 an explicit profile installer that preserves manual edits. Private/generated
 Hermes skills remain in persistent storage. [AGENTS.md](AGENTS.md) contains the
