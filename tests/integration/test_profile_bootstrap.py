@@ -11,7 +11,6 @@ import unittest
 from contextlib import closing
 from pathlib import Path
 
-import yaml
 from hermes_cli.web_server_sessions import _open_session_db_at_path
 
 
@@ -45,7 +44,7 @@ class ProfileBootstrapTests(unittest.TestCase):
                 "---\nname: [invalid\n---\nBody",
             ):
                 skill.write_text(invalid)
-                with self.subTest(value=invalid), self.assertRaises((ValueError, yaml.YAMLError)):
+                with self.subTest(value=invalid), self.assertRaises(ValueError):
                     module.verify_managed_skills(home)
             skill.write_text("---\nname: example\ndescription: Fixture skill\n---\nValid body")
             module.verify_managed_skills(home)

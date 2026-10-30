@@ -10,11 +10,11 @@ from pathlib import Path
 
 
 def verify_managed_skills(home):
-    import yaml
-
     marker = home / ".council/instructions.json"
     if not marker.exists():
         return
+    from utils import fast_safe_load
+
     if marker.is_symlink():
         raise ValueError("Refusing a symlinked instruction marker.")
     files = json.loads(marker.read_text())["files"]
@@ -32,7 +32,10 @@ def verify_managed_skills(home):
         parts = path.read_text().split("---\n", 2)
         if len(parts) != 3 or parts[0] or not parts[2].strip():
             raise ValueError("Managed skills need YAML front matter and a Markdown body.")
-        metadata = yaml.safe_load(parts[1])
+        try:
+            metadata = fast_safe_load(parts[1])
+        except Exception:
+            raise ValueError("Invalid managed skill YAML metadata.") from None
         if not isinstance(metadata, dict) or not all(
             isinstance(metadata.get(field), str) and metadata[field].strip()
             for field in ("name", "description")
