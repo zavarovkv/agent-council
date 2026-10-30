@@ -225,14 +225,54 @@ def build(runtime):
     return revision, image
 
 
-def deploy(runtime):
+def deploy(runtime, *, instruction_source=None, instruction_revision=None):
+    files = None
+    if instruction_source is not None or instruction_revision is not None:
+        from .instructions import (
+            checkout,
+            collect,
+            install_files,
+            previous_files,
+            validate_existing,
+        )
+
+        if instruction_source is None or instruction_revision is None:
+            raise OperationError("Select both a private instruction source and reviewed revision.")
+        instruction_source = instruction_source.absolute()
+        checkout(runtime, instruction_source, instruction_revision)
+        files = collect(instruction_source, runtime.settings.data_dir)
+        validate_existing(runtime.settings.data_dir, files)
+
+        def secretary(names):
+            return any(name.startswith(".council/secretary/instructions/") for name in names)
+
+        if secretary(files) != secretary(previous_files(runtime.settings.data_dir)):
+            raise OperationError(
+                "Apply secretary role/source changes separately before a combined release."
+            )
+        if (
+            secretary(files)
+            and read_settings(runtime.settings.secretary_file).get(
+                "COUNCIL_SECRETARY_INSTRUCTIONS", "image"
+            )
+            != "profile"
+        ):
+            raise OperationError("Apply the private secretary selector before a combined release.")
     revision, image = build(runtime)
     backup = snapshot(runtime, restart=False)
     switched = False
     try:
         smoke(runtime, backup)  # Prove the previous image is usable before attempting an upgrade.
-        smoke(runtime, backup, image=image)
+        uid, gid = identity(runtime.settings)
+        prepare_copy = (
+            (lambda home: install_files(home, files, instruction_revision, uid, gid))
+            if files is not None
+            else None
+        )
+        smoke(runtime, backup, image=image, prepare_copy=prepare_copy)
         switched = True
+        if files is not None:
+            install_files(runtime.settings.data_dir, files, instruction_revision, uid, gid)
         runtime.settings.select_image(image)
         runtime.activate_source(runtime.settings.repository / "compose.yaml")
         runtime.start()
@@ -250,4 +290,10 @@ def deploy(runtime):
             "Candidate verification failed; the previous service was restarted unchanged."
         ) from None
     atomic_write(runtime.settings.env_file.with_name("revision"), (revision + "\n").encode())
-    return {"revision": revision, "image": image, "backup": str(backup)}
+    result = {"revision": revision, "image": image, "backup": str(backup)}
+    if files is not None:
+        from .instructions import clear_failure
+
+        clear_failure(runtime.settings)
+        result["instructions_revision"] = instruction_revision
+    return result

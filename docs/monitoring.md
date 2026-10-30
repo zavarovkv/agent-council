@@ -27,6 +27,8 @@ safe provider outcome categories, backup verification age, automation and free
 disk space. A backup older than 36 hours or a failed backup unit needs attention.
 Business/public queue thresholds are three/ten minutes. Managed instruction
 drift, rejected releases and disabled/failed updates also raise an incident.
+When research filing is configured, its timer and pending age are checked too;
+a filing waiting more than 30 minutes needs attention.
 
 One notification covers a new/changed incident; recovery is reported once. State
 survives restarts. If Telegram does not confirm delivery, the next poll retries;

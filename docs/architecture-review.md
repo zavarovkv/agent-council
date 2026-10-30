@@ -165,6 +165,13 @@ where writes must survive lost responses and restarts. A filing retry must reuse
 the same report and update one index row. Link saved artifacts from the native
 task board and verify destinations through the configured cloud integration.
 
+Implemented: coordinator-only `research_archive` validates a completed native
+Dexter task and closed run, attaches an immutable Markdown artifact and persists
+filing steps. It uses the native MCP client/grant, verifies report/index readback,
+reuses page identity across revisions and protects human edits. A host timer
+retries missing steps without model calls. Unknown creates pause for reconciliation
+instead of blindly publishing a duplicate. See [research workflow](research.md).
+
 ### P2 — Make operator state visible in one place
 
 Expose a trusted operator view for each agent: profile, model/provider readiness,

@@ -7,8 +7,17 @@ from types import SimpleNamespace
 from test_operations import Fixture
 
 from council_ops.cli import pause_instruction_updates
-from council_ops.doctor import backup_status, instruction_status, unit_status
+from council_ops.doctor import (
+    backup_status,
+    generation_status,
+    instruction_status,
+    research_status,
+    unit_status,
+)
 from council_ops.instructions import Artifact, install_files
+from research_filing.store import Store
+from secretary_worker.history import History
+from secretary_worker.protocol import ReplyRequest
 
 
 class AutomationStatusTests(unittest.TestCase):
@@ -86,3 +95,36 @@ class AutomationStatusTests(unittest.TestCase):
 
         pause_instruction_updates(SimpleNamespace(run=run))
         self.assertEqual(calls[-1], ["systemctl", "disable", "--now", "agent-council-skills.timer"])
+
+    def test_generation_and_filing_diagnostics_read_only_safe_aggregate_fields(self):
+        home = self.fixture.data
+        history = History(home / ".council/secretary")
+        request = ReplyRequest.parse(
+            {
+                "request_id": "a" * 64,
+                "conversation": "b" * 64,
+                "text": "private sender message",
+                "route": "business",
+            }
+        )
+        history.begin(request)
+        history.failed(request.identifier, "provider_auth")
+        generation = generation_status(home)
+        self.assertEqual(generation["last_outcomes"]["business"]["outcome"], "provider_auth")
+        self.assertEqual(generation["reserved_last_hour"]["business"], 1)
+        (self.fixture.config / "research.json").write_text('{"schema":1}')
+        store = Store(home)
+        store.save(
+            {
+                "id": "fixture",
+                "state": "indexing",
+                "created_at": 1,
+                "body": "private report content",
+            }
+        )
+        before = store.path.read_bytes()
+        filing = research_status(self.fixture.settings())
+        self.assertEqual(filing["pending"], 1)
+        self.assertEqual(before, store.path.read_bytes())
+        for value in ("private sender message", "private report content", "a" * 64):
+            self.assertNotIn(value, json.dumps({"generation": generation, "filing": filing}))

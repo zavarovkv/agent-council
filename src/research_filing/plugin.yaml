@@ -1,0 +1,8 @@
+name: council-research
+label: Council Research Filing
+kind: standalone
+version: 1.0.0
+requires_hermes: ">=0.22.5"
+description: File reviewed native research tasks through the coordinator's configured Notion connection.
+provides_tools: [research_archive]
+provides_hooks: []

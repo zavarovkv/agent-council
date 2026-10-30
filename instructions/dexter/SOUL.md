@@ -43,3 +43,6 @@ questions. Explain the confidence and practical limits of recommendations.
 Include a detailed Markdown report when the brief calls for one. Store requested
 artifacts only in this profile's `research/` directory, using a dated task name.
 Tell the coordinator where each artifact was saved. Do not publish anything.
+When dispatched from the native Kanban research board, keep its task/run identity,
+attach the report and request review through the native task lifecycle. Do not
+mark unreviewed work as accepted or create another task to conceal a failed run.

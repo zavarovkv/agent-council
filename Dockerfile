@@ -25,7 +25,7 @@ RUN chmod 0444 /opt/agent-council/LICENSE /opt/agent-council/healthcheck.py /opt
 
 COPY --from=web-assets /vendor/advanced-delegation/ /opt/hermes/plugins/advanced-delegation/
 COPY instructions/ /opt/agent-council/instructions/
-COPY scripts/provision-researcher.py /opt/agent-council/provision-researcher.py
+COPY scripts/provision-researcher.py scripts/provision-research-workflow.py /opt/agent-council/
 COPY scripts/configure-drive.py /opt/agent-council/configure-drive.py
 RUN chmod -R a+rX,go-w /opt/hermes/plugins/advanced-delegation /opt/agent-council/instructions \
     && chmod 0444 /opt/agent-council/provision-researcher.py /opt/agent-council/configure-drive.py
@@ -42,7 +42,8 @@ RUN chmod -R a+rX,go-w /opt/hermes/plugins/dashboard_auth/telegram_owner
 # Native SDK hook, plus a separate tool-free HTTP worker. No upstream source patches.
 COPY src/telegram_secretary/ /opt/hermes/plugins/council-secretary/
 COPY src/secretary_worker/ /opt/agent-council/secretary_worker/
-RUN chmod -R a+rX,go-w /opt/hermes/plugins/council-secretary /opt/agent-council/secretary_worker
+COPY src/research_filing/ /opt/hermes/plugins/council-research/
+RUN chmod -R a+rX,go-w /opt/hermes/plugins/council-secretary /opt/hermes/plugins/council-research /opt/agent-council/secretary_worker
 
 COPY assets/login/ /opt/agent-council-theme/
 COPY --from=web-assets /styles/node_modules/beauty-css/dist/beauty.min.css /opt/agent-council-theme/dependencies/beauty.min.css

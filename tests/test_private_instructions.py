@@ -22,6 +22,7 @@ from council_ops.instructions import (
     install_files,
     sync,
 )
+from council_ops.lifecycle import deploy
 from secretary_worker.instructions import configured_instructions
 
 REVISION = "d" * 40
@@ -68,6 +69,54 @@ class PrivateInstructionTests(unittest.TestCase):
         self.assertEqual((self.home / "SOUL.md").stat().st_mode & 0o777, 0o600)
         self.assertEqual((self.home / "history.txt").read_text(), "original history")
         self.assertEqual(json.loads((self.home / MARKER).read_text())["revision"], REVISION)
+
+    def test_combined_code_instruction_release_rolls_back_both_and_uses_one_cutover(self):
+        self.install()
+        (self.source / "assistant/SOUL.md").write_text("Reviewed next identity")
+
+        def git(*arguments):
+            return subprocess.run(
+                ["git", "-C", str(self.source), *arguments],
+                check=True,
+                capture_output=True,
+                text=True,
+            ).stdout.strip()
+
+        git("init", "--initial-branch=main")
+        git("add", ".")
+        git(
+            "-c",
+            "user.name=Fixture",
+            "-c",
+            "user.email=fixture@example.test",
+            "commit",
+            "-m",
+            "Reviewed private release",
+        )
+        revision = git("rev-parse", "HEAD")
+        original = self.runtime.run
+
+        def run(arguments, **kwargs):
+            if arguments[0] == "git":
+                return subprocess.run(
+                    arguments, check=True, capture_output=True, text=True
+                ).stdout.strip()
+            return original(arguments, **kwargs)
+
+        self.runtime.fail_candidate = True
+        with patch.object(self.runtime, "run", side_effect=run):
+            with self.assertRaises(OperationError):
+                deploy(self.runtime, instruction_source=self.source, instruction_revision=revision)
+            self.assertEqual((self.home / "SOUL.md").read_text(), "Private assistant identity")
+            self.assertEqual(json.loads((self.home / MARKER).read_text())["revision"], REVISION)
+            self.runtime.fail_candidate = False
+            self.runtime.events.clear()
+            result = deploy(
+                self.runtime, instruction_source=self.source, instruction_revision=revision
+            )
+        self.assertEqual(result["instructions_revision"], revision)
+        self.assertEqual((self.home / "SOUL.md").read_text(), "Reviewed next identity")
+        self.assertEqual(self.runtime.events.count("stop"), 1)
 
     def test_local_edits_are_preserved_and_can_be_adopted_only_as_the_reviewed_candidate(self):
         self.install()

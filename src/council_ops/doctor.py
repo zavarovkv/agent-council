@@ -158,6 +158,7 @@ def generation_status(home):
     path = home / ".council/secretary/secretary-history.sqlite3"
     if not path.exists() and not path.is_symlink():
         return {"available": False}
+
     try:
         if path.resolve() != path or not path.is_file():
             raise ValueError("Invalid history path")
@@ -197,6 +198,46 @@ def generation_status(home):
         }
     except (ValueError, OSError, sqlite3.Error):
         return {"available": False}
+
+
+def research_status(settings):
+    configured = settings.env_file.with_name("research.json").is_file()
+    result = {"configured": configured}
+    if not configured:
+        return result
+    path = settings.data_dir / ".council/research-filing/outbox.sqlite3"
+    if not path.exists() and not path.is_symlink():
+        return {**result, "available": True, "pending": 0, "oldest_pending_age_seconds": 0}
+    try:
+        if path.resolve() != path or not path.is_file():
+            raise ValueError("Invalid outbox")
+        with closing(sqlite3.connect(path.as_uri() + "?mode=ro", uri=True)) as db:
+            if db.execute("PRAGMA quick_check").fetchall() != [("ok",)]:
+                raise ValueError("Invalid outbox")
+            counts = dict(db.execute("SELECT state,count(*) FROM filings GROUP BY state"))
+            oldest = db.execute("SELECT min(created) FROM filings WHERE state!='done'").fetchone()[
+                0
+            ]
+        if not set(counts) <= {
+            "queued",
+            "creating",
+            "writing",
+            "indexing",
+            "notion_verified",
+            "done",
+        }:
+            raise ValueError("Invalid filing state")
+        return {
+            **result,
+            "available": True,
+            "counts": counts,
+            "pending": sum(n for state, n in counts.items() if state != "done"),
+            "oldest_pending_age_seconds": max(0, int(time.time() - oldest))
+            if oldest is not None
+            else 0,
+        }
+    except (OSError, ValueError, sqlite3.Error):
+        return {**result, "available": False}
 
 
 def doctor(runtime):
@@ -342,6 +383,8 @@ def doctor(runtime):
             instructions["failure_record_available"] = False
     instructions["timer"] = unit_status(runtime, "agent-council-skills.timer")
     instructions["service"] = unit_status(runtime, "agent-council-skills.service")
+    research = research_status(runtime.settings)
+    research["timer"] = unit_status(runtime, "agent-council-research.timer")
     return {
         "status": inspected["State"]["Status"],
         "health": inspected["State"].get("Health", {}).get("Status"),
@@ -352,4 +395,5 @@ def doctor(runtime):
         "secretary": secretary,
         "backups": backups,
         "instructions": instructions,
+        "research": research,
     }
