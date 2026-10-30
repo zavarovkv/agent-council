@@ -3,6 +3,7 @@
 import importlib.util
 import json
 import os
+import subprocess
 import sys
 import tempfile
 import threading
@@ -80,6 +81,24 @@ class NativeHandlerTests(unittest.IsolatedAsyncioTestCase):
 
 
 class WorkerModelTests(unittest.TestCase):
+    def test_bundled_plugin_can_be_enabled_through_the_real_hermes_cli(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            Path(temporary, "config.yaml").write_text('{"security":{"allow_lazy_installs":false}}')
+            result = subprocess.run(
+                ["/opt/hermes/.venv/bin/hermes", "plugins", "enable", "council-secretary"],
+                env={**os.environ, "HERMES_HOME": temporary},
+                capture_output=True,
+                text=True,
+                timeout=45,
+            )
+            self.assertEqual(
+                result.returncode, 0, "Pinned Hermes CLI must enable the bundled extension offline"
+            )
+            from hermes_cli.config import read_user_config_raw
+
+            config = read_user_config_raw(Path(temporary) / "config.yaml")
+            self.assertIn("council-secretary", config["plugins"]["enabled"])
+
     def test_native_provider_gets_only_messages_and_never_tool_execution_or_reasoning_output(self):
         with tempfile.TemporaryDirectory() as temporary:
             Path(temporary, "config.yaml").write_text(
