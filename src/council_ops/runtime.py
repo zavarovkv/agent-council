@@ -8,7 +8,7 @@ import time
 import uuid
 from contextlib import contextmanager
 
-from .config import OperationError, atomic_write, read_settings
+from .config import OperationDeferred, OperationError, atomic_write, read_settings
 
 
 class Runtime:
@@ -76,10 +76,10 @@ class Runtime:
                 source,
             )
         )
-        if not status["fresh"] or status["agents"] != 0 or status["work"]:
-            raise OperationError(
-                "Hermes is busy or its status is stale; retry maintenance when idle."
-            )
+        if not status["fresh"] or type(status["agents"]) is not int or status["agents"] < 0:
+            raise OperationError("Hermes status is stale or invalid; inspect readiness.")
+        if status["agents"] or status["work"]:
+            raise OperationDeferred("Hermes is busy; retry maintenance when idle.")
         # Inspect locally; never emit command lines, which may include private prompts.
         processes = self.run(["docker", "top", self.container(), "-eo", "pid,args"])
         if any(
@@ -91,7 +91,7 @@ class Runtime:
                 "port=CALLBACK_PORT",
             )
         ):
-            raise OperationError("Finish interactive account setup before deployment maintenance.")
+            raise OperationDeferred("Finish interactive account setup before maintenance.")
         source = (
             "import sqlite3; from pathlib import Path; "
             "root=Path('/opt/data/plugin-data/council-secretary'); "
@@ -103,7 +103,7 @@ class Runtime:
             "exec", "-T", "--user", "hermes", "hermes", "/opt/hermes/.venv/bin/python", "-c", source
         )
         if pending != "0":
-            raise OperationError("Secretary replies are pending; retry maintenance when idle.")
+            raise OperationDeferred("Secretary replies are pending; retry maintenance when idle.")
 
     def run(self, arguments, *, timeout=180, interactive=False, environment=None):
         try:

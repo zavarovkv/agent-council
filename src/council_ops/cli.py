@@ -8,7 +8,7 @@ import sys
 import tempfile
 from pathlib import Path
 
-from .config import OperationError, Settings
+from .config import OperationDeferred, OperationError, Settings
 from .doctor import doctor, unit_status
 from .guard import ServiceGuard
 from .install import install, recover
@@ -169,13 +169,25 @@ def main(argv=None):
     settings = Settings.load(arguments.repository, arguments.env_file, arguments.backup_dir)
     if os.geteuid() != 0:
         raise OperationError("Run deployment operations as root on the Docker host.")
+    try:
+        operate(arguments, settings)
+    except OperationDeferred:
+        if arguments.action not in {"sync-instructions", "flush-research"}:
+            raise
+        print(json.dumps({"operation_deferred": arguments.action, "retry": "next_timer_tick"}))
+
+
+def operate(arguments, settings):
     if arguments.action == "monitor":
         print(json.dumps(monitor(settings, test=arguments.test_notification)))
         return
     lock_path = settings.env_file.with_name("operations.lock")
     flags = os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW
     with os.fdopen(os.open(lock_path, flags, 0o600), "a") as lock:
-        fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        try:
+            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            raise OperationDeferred("Another owned operation is active; retry later.") from None
         runtime = Runtime(settings)
         runtime.preflight()
         runtime.guard = ServiceGuard(settings.env_file.with_name("protected-services.json"))

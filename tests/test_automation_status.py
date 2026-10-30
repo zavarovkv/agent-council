@@ -1,12 +1,17 @@
+import fcntl
+import io
 import json
 import os
 import tempfile
 import unittest
+from contextlib import redirect_stdout
 from types import SimpleNamespace
+from unittest.mock import patch
 
 from test_operations import Fixture
 
-from council_ops.cli import pause_instruction_updates
+from council_ops.cli import main, pause_instruction_updates
+from council_ops.config import OperationDeferred, OperationError
 from council_ops.doctor import (
     backup_status,
     generation_status,
@@ -15,6 +20,7 @@ from council_ops.doctor import (
     unit_status,
 )
 from council_ops.instructions import Artifact, install_files
+from council_ops.runtime import Runtime
 from research_filing.store import Store
 from secretary_worker.history import History
 from secretary_worker.protocol import ReplyRequest
@@ -95,6 +101,60 @@ class AutomationStatusTests(unittest.TestCase):
 
         pause_instruction_updates(SimpleNamespace(run=run))
         self.assertEqual(calls[-1], ["systemctl", "disable", "--now", "agent-council-skills.timer"])
+
+    def test_background_timers_defer_a_real_busy_lock_without_constructing_runtime(self):
+        settings = self.fixture.settings()
+        with (
+            settings.env_file.with_name("operations.lock").open("a") as lock,
+            patch("council_ops.cli.Settings.load", return_value=settings),
+            patch("council_ops.cli.os.geteuid", return_value=0),
+            patch("council_ops.cli.Runtime") as runtime,
+        ):
+            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            for argv in (["sync-instructions", "/private/source"], ["flush-research"]):
+                with self.subTest(action=argv[0]), redirect_stdout(io.StringIO()) as output:
+                    main(argv)
+                    self.assertEqual(
+                        json.loads(output.getvalue()),
+                        {"operation_deferred": argv[0], "retry": "next_timer_tick"},
+                    )
+            with self.assertRaises(OperationDeferred):
+                main(["deploy"])
+            runtime.assert_not_called()
+
+    def test_only_expected_busy_conditions_are_suppressed_for_repeating_timers(self):
+        with (
+            patch("council_ops.cli.Settings.load", return_value=self.fixture.settings()),
+            patch("council_ops.cli.os.geteuid", return_value=0),
+            patch("council_ops.cli.operate", side_effect=OperationDeferred("active work")),
+            redirect_stdout(io.StringIO()) as output,
+        ):
+            main(["flush-research"])
+            self.assertEqual(json.loads(output.getvalue())["retry"], "next_timer_tick")
+            with self.assertRaises(OperationDeferred):
+                main(["cloud-backup"])
+        with (
+            patch("council_ops.cli.Settings.load", return_value=self.fixture.settings()),
+            patch("council_ops.cli.os.geteuid", return_value=0),
+            patch("council_ops.cli.operate", side_effect=OperationError("invalid state")),
+        ):
+            with self.assertRaises(OperationError):
+                main(["flush-research"])
+
+    def test_active_work_defers_but_stale_or_invalid_readiness_still_fails(self):
+        runtime = Runtime(self.fixture.settings())
+        runtime.inspect = lambda: {"State": {"Running": True}}
+        for status, expected in (
+            ({"fresh": True, "agents": 1, "work": False}, OperationDeferred),
+            ({"fresh": True, "agents": 0, "work": True}, OperationDeferred),
+            ({"fresh": False, "agents": 0, "work": False}, OperationError),
+            ({"fresh": True, "agents": None, "work": False}, OperationError),
+        ):
+            with self.subTest(status=status):
+                runtime.compose = lambda *_args, status=status: json.dumps(status)
+                with self.assertRaises(expected) as raised:
+                    runtime.require_idle()
+                self.assertIs(type(raised.exception), expected)
 
     def test_generation_and_filing_diagnostics_read_only_safe_aggregate_fields(self):
         home = self.fixture.data

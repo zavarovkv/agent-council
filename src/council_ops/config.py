@@ -12,6 +12,10 @@ class OperationError(RuntimeError):
     """Safe operator-facing error; never include subprocess output or credentials."""
 
 
+class OperationDeferred(OperationError):
+    """An owned operation or active conversation must finish before retrying."""
+
+
 def read_settings(path):
     if path.is_symlink() or not path.is_file():
         raise OperationError("A regular deployment env file is required.")
