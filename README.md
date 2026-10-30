@@ -12,9 +12,12 @@ The project is in early development. Its first integration is a self-hosted
 - ChatGPT / Codex account setup through Hermes.
 - A login page built with [Beauty.css](https://github.com/zavarovkv/beauty-css).
 - Consistent restore points, deployment rollback and encrypted Cloudflare R2 backup tooling.
+- An opt-in, isolated Telegram secretary for replying through the owner's selected private chats.
 
 Collaborators share one runtime and the same permissions. Per-user roles and
 isolation between untrusted users are not implemented yet.
+The [secretary](docs/secretary.md) is a separate tool-free service, with no access
+to the private agent's files, credentials or integrations.
 
 ## Setup
 

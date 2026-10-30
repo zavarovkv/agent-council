@@ -74,8 +74,10 @@ class Settings:
         settings = cls(repository, env_file, backup_dir, values)
         if env_file == settings.auth_file:
             raise OperationError("Deployment settings and authentication must use separate files.")
+        if settings.secretary_file in (env_file, settings.auth_file):
+            raise OperationError("The secretary service key must use a separate file.")
         locations = [settings.data_dir, settings.workspace_dir, backup_dir]
-        for path in [*locations, env_file, settings.auth_file]:
+        for path in [*locations, env_file, settings.auth_file, settings.secretary_file]:
             if not path.is_absolute() or path.resolve() != path:
                 raise OperationError("Use absolute paths without symlinks or parent traversal.")
             if any(character in str(path) for character in ",:\n\r"):
@@ -88,7 +90,7 @@ class Settings:
             for other in locations[index + 1 :]:
                 if contained(path, other) or contained(other, path):
                     raise OperationError("Data, workspace and backup directories must not overlap.")
-            for config in (env_file, settings.auth_file):
+            for config in (env_file, settings.auth_file, settings.secretary_file):
                 if contained(config, path):
                     raise OperationError("Host configuration must be outside the runtime volumes.")
         for name in ("HERMES_UID", "HERMES_GID"):
@@ -133,12 +135,29 @@ class Settings:
     def auth_file(self):
         return self.required_path("HERMES_AUTH_ENV_FILE")
 
+    @property
+    def secretary_file(self):
+        return Path(
+            self.values.get(
+                "COUNCIL_SECRETARY_ENV_FILE", str(self.env_file.with_name("secretary.env"))
+            )
+        )
+
     def select_image(self, image):
+        self.update_values({"COUNCIL_HERMES_IMAGE": image})
+
+    def update_values(self, values):
+        for key, value in values.items():
+            if not re.fullmatch(r"[A-Z][A-Z0-9_]*", key) or any(
+                c in value for c in "\n\r\x00\"'`$"
+            ):
+                raise OperationError("Invalid literal deployment setting.")
         lines = self.env_file.read_text().splitlines(keepends=True)
-        prefix = "COUNCIL_HERMES_IMAGE="
-        updated = [prefix + image + "\n" if line.startswith(prefix) else line for line in lines]
-        if not any(line.startswith(prefix) for line in lines):
-            if updated and not updated[-1].endswith("\n"):
-                updated[-1] += "\n"
-            updated.append(prefix + image + "\n")
+        updated, remaining = [], dict(values)
+        for line in lines:
+            key = line.partition("=")[0]
+            updated.append(key + "=" + remaining.pop(key) + "\n" if key in remaining else line)
+        if updated and not updated[-1].endswith("\n"):
+            updated[-1] += "\n"
+        updated.extend(key + "=" + value + "\n" for key, value in remaining.items())
         atomic_write(self.env_file, "".join(updated).encode())

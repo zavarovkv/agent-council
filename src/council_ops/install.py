@@ -112,7 +112,16 @@ def recover(runtime, backup, *, rebuild=False):
     settings.auth_file.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
     atomic_write(settings.auth_file, (backup / "auth.env").read_bytes())
     atomic_write(settings.auth_file.with_suffix(".env.format"), b"raw\n")
-    settings.select_image(image)
+    if "secretary.env" in manifest["files"]:
+        atomic_write(settings.secretary_file, (backup / "secretary.env").read_bytes())
+    settings.update_values(
+        {
+            "COUNCIL_HERMES_IMAGE": image,
+            "COUNCIL_SECRETARY_ENABLED": "true"
+            if "secretary" in manifest.get("running_services", [])
+            else "false",
+        }
+    )
     runtime.activate_source(backup / "compose.yaml")
     runtime.start()
     runtime.ready()

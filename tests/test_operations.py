@@ -69,6 +69,9 @@ class FakeRuntime:
     def image(self):
         return IMAGE, {"org.opencontainers.image.revision": "c" * 40}
 
+    def running_services(self):
+        return ["hermes"]
+
     def compose_source(self):
         return self.settings.env_file.with_name("active-compose.yaml")
 
@@ -279,6 +282,18 @@ class OperationTests(unittest.TestCase):
         retained = restore(runtime, backup)
         self.assertEqual((self.fixture.data / "history.txt").read_text(), "original history")
         self.assertEqual((Path(retained["hermes"]) / "history.txt").read_text(), "newer live data")
+
+    def test_secretary_key_and_service_selection_restore_with_the_profile(self):
+        runtime = FakeRuntime(self.fixture.settings())
+        runtime.running_services = lambda: ["hermes", "secretary"]
+        private_key = runtime.settings.secretary_file
+        private_key.write_text("COUNCIL_SECRETARY_KEY=" + "a" * 64 + "\n")
+        private_key.chmod(0o600)
+        backup = snapshot(runtime)
+        private_key.write_text("COUNCIL_SECRETARY_KEY=" + "b" * 64 + "\n")
+        restore(runtime, backup)
+        self.assertIn("a" * 64, private_key.read_text())
+        self.assertEqual(read_settings(self.fixture.env)["COUNCIL_SECRETARY_ENABLED"], "true")
 
     def test_compose_cannot_dump_secrets_or_inherit_a_foreign_volume(self):
         runtime = Runtime(self.fixture.settings())

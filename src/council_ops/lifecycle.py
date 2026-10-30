@@ -106,6 +106,9 @@ def restore(runtime, backup, *, require_idle=True):
     old_env = settings.env_file.read_bytes()
     old_auth = settings.auth_file.read_bytes()
     old_compose = runtime.compose_source().read_bytes()
+    old_secretary = (
+        settings.secretary_file.read_bytes() if settings.secretary_file.exists() else None
+    )
     stopped = False
     try:
         for name, target in roots.items():
@@ -124,9 +127,18 @@ def restore(runtime, backup, *, require_idle=True):
             displaced[name] = retained
             os.replace(stages[name], target)
         # Preserve this host's paths, UID/GID and origin; only the image and auth are restored.
-        settings.select_image(image)
+        settings.update_values(
+            {
+                "COUNCIL_HERMES_IMAGE": image,
+                "COUNCIL_SECRETARY_ENABLED": "true"
+                if "secretary" in manifest.get("running_services", [])
+                else "false",
+            }
+        )
         runtime.activate_source(backup / "compose.yaml")
         atomic_write(settings.auth_file, (backup / "auth.env").read_bytes())
+        if "secretary.env" in manifest["files"]:
+            atomic_write(settings.secretary_file, (backup / "secretary.env").read_bytes())
         runtime.start()
         runtime.ready()
         runtime.check_protected()
@@ -148,6 +160,10 @@ def restore(runtime, backup, *, require_idle=True):
             atomic_write(settings.env_file, old_env)
             atomic_write(settings.auth_file, old_auth)
             atomic_write(settings.env_file.with_name("active-compose.yaml"), old_compose)
+            if old_secretary is not None:
+                atomic_write(settings.secretary_file, old_secretary)
+            else:
+                settings.secretary_file.unlink(missing_ok=True)
             runtime.start()
             runtime.ready()
         raise

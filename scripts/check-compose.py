@@ -22,6 +22,7 @@ def main():
         )
         environment = dict(os.environ)
         environment.update(
+            COUNCIL_SECRETARY_ENV_FILE=str(env_file),
             HERMES_AUTH_ENV_FILE=str(env_file),
             HERMES_PUBLIC_URL="https://council.example.com",
             COUNCIL_HERMES_IMAGE="agent-council-hermes:test",

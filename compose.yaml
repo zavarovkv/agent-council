@@ -11,6 +11,9 @@ services:
     env_file:
       - path: ${HERMES_AUTH_ENV_FILE:-/etc/hermes/telegram.env}
         format: raw
+      - path: ${COUNCIL_SECRETARY_ENV_FILE:-/etc/agent-council/secretary.env}
+        format: raw
+        required: false
     environment:
       HERMES_UID: ${HERMES_UID:-10000}
       HERMES_GID: ${HERMES_GID:-10000}
@@ -20,6 +23,7 @@ services:
       HERMES_DASHBOARD: "1"
       HERMES_DASHBOARD_HOST: 0.0.0.0
       HERMES_DASHBOARD_PORT: "9119"
+      COUNCIL_SECRETARY_ENABLED: ${COUNCIL_SECRETARY_ENABLED:-false}
       PYTHONUNBUFFERED: "1"
     ports:
       - "127.0.0.1:${HERMES_HTTP_PORT:-9119}:9119"
@@ -37,6 +41,7 @@ services:
     networks:
       hermes:
         ipv4_address: 172.30.90.2
+      secretary:
     security_opt:
       - no-new-privileges:true
     cap_drop: [ALL]
@@ -60,6 +65,51 @@ services:
       timeout: 12s
       retries: 4
 
+  secretary:
+    profiles: [secretary]
+    image: ${COUNCIL_HERMES_IMAGE:-agent-council-hermes:local}
+    entrypoint: [/opt/hermes/.venv/bin/python, -m, secretary_worker.service]
+    working_dir: /opt/agent-council
+    user: "${HERMES_UID:-10000}:${HERMES_GID:-10000}"
+    restart: unless-stopped
+    stop_grace_period: 15s
+    read_only: true
+    env_file:
+      - path: ${COUNCIL_SECRETARY_ENV_FILE:-/etc/agent-council/secretary.env}
+        format: raw
+        required: false
+    environment:
+      HERMES_HOME: /opt/data
+      HOME: /opt/data/home
+      XDG_CACHE_HOME: /tmp/cache
+      PYTHONDONTWRITEBYTECODE: "1"
+      PYTHONUNBUFFERED: "1"
+    volumes:
+      - type: bind
+        source: ${HERMES_DATA_DIR:?Set an absolute data path}/profiles/secretary
+        target: /opt/data
+        bind:
+          create_host_path: false
+    networks: [secretary]
+    tmpfs:
+      - /tmp:rw,nosuid,nodev,size=64m
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    cpus: "0.5"
+    mem_limit: 512m
+    pids_limit: 64
+    logging:
+      driver: local
+      options:
+        max-size: 5m
+        max-file: "2"
+    healthcheck:
+      test: [CMD, /opt/hermes/.venv/bin/python, -c, "import json,urllib.request; assert json.load(urllib.request.urlopen('http://127.0.0.1:9120/health', timeout=3))['tools'] is False"]
+      start_period: 15s
+      interval: 15s
+      timeout: 5s
+      retries: 3
+
   certbot:
     image: certbot/certbot:v5.8.0@sha256:f70ad0adbb7e117f0fe42a63c553f28ea451edabc0148757b6efcd9735acaa20
     profiles: [maintenance]
@@ -76,6 +126,8 @@ services:
       - /var/www/hermes-acme:/var/www/hermes-acme
 
 networks:
+  secretary:
+    driver: bridge
   hermes:
     driver: bridge
     driver_opts:

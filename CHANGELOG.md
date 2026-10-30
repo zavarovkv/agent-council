@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Add a native Telegram Business handler and a separate, tool-free secretary with its own model login, per-chat history, revocation checks and a durable reply queue.
+
 - License Agent Council under MIT; preserve third-party licenses.
 - Add versioned install, deployment, consistent backup and image/data rollback commands.
 - Track the active Compose source outside Git and use Git-revision image tags with OCI labels.
