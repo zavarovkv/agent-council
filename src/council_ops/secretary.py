@@ -37,7 +37,7 @@ def prepare(runtime, *, owner_name, assistant_name):
         ) from None
     if type(owner) is not int or not 0 < owner < 2**63:
         raise OperationError("A valid immutable numeric owner pin is required.")
-    profile = settings.data_dir / "profiles/secretary"
+    profile = settings.data_dir / ".council/secretary"
     marker = profile / ".council-secretary.json"
     if profile.resolve() != profile or marker.is_symlink():
         raise OperationError("Refusing a symlinked secretary profile.")

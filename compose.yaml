@@ -88,7 +88,7 @@ services:
       PYTHONUNBUFFERED: "1"
     volumes:
       - type: bind
-        source: ${HERMES_DATA_DIR:?Set an absolute data path}/profiles/secretary
+        source: ${HERMES_DATA_DIR:?Set an absolute data path}/.council/secretary
         target: /opt/data
         bind:
           create_host_path: false

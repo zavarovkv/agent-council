@@ -30,7 +30,7 @@ def main():
     for session_store in (
         home / "dashboard-sessions.sqlite3",
         home / "plugin-data/council-secretary/queue.sqlite3",
-        home / "profiles/secretary/secretary-history.sqlite3",
+        home / ".council/secretary/secretary-history.sqlite3",
     ):
         if session_store.exists():
             if session_store.is_symlink():

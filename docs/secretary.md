@@ -25,7 +25,7 @@ settings, not a repository-owner default.
    ```
 
    Preparation requires a verified numeric owner pin and an unused/managed
-   `profiles/secretary` directory. It generates a private machine key, enables the
+   `.council/secretary` directory. It generates a private machine key, enables the
    bundled plugin through Hermes' official CLI and copies only the public model
    choice into a new profile. Owner credentials, memory, sessions, skills and MCP
    configuration are never copied.
@@ -69,10 +69,11 @@ reasoning-only output are rejected. No agent executor is created. Chats have
 separate recent context. The API uses a dedicated random service key.
 
 The service environment is `/etc/agent-council/secretary.env`, root-only. Its
-persistent profile is `HERMES_DATA_DIR/profiles/secretary`; usual backups include
+persistent model home is `HERMES_DATA_DIR/.council/secretary`; usual backups include
 its separate model grant/history and exclude its software/caches. Backups stop
 both services for consistency; dashboard credential/access changes recreate only
-Hermes.
+Hermes. This directory is deliberately outside Hermes' agent-profile discovery:
+the secretary never registers an additional full-agent gateway or Telegram poller.
 
 A private persistent queue tracks replies. Generation resumes idempotently
 after restart. Ambiguous sends remain `uncertain` and never automatically replay,

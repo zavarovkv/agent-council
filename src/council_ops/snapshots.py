@@ -40,6 +40,7 @@ def disposable_path(relative):
     return bool(parts) and (
         parts[0] in DISPOSABLE
         or (len(parts) >= 3 and parts[0] == "profiles" and parts[2] in DISPOSABLE)
+        or (len(parts) >= 3 and parts[:2] == (".council", "secretary") and parts[2] in DISPOSABLE)
     )
 
 

@@ -188,7 +188,7 @@ def doctor(runtime):
     if companion:
         worker = json.loads(runtime.run(["docker", "inspect", companion]))[0]
         controls = worker["HostConfig"]
-        expected_profile = runtime.settings.data_dir / "profiles/secretary"
+        expected_profile = runtime.settings.data_dir / ".council/secretary"
         mounts = worker["Mounts"]
         if (
             len(mounts) != 1

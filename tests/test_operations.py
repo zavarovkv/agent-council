@@ -189,6 +189,7 @@ class OperationTests(unittest.TestCase):
             "logs/log",
             "backups/old",
             "profiles/dexter/cache/tmp",
+            ".council/secretary/tools/python",
         ):
             path = self.fixture.data / relative
             path.parent.mkdir(parents=True, exist_ok=True)
@@ -197,6 +198,7 @@ class OperationTests(unittest.TestCase):
             "skills/custom/tools/script.py",
             "profiles/dexter/memories/notes.md",
             "mcp-tokens/notion.json",
+            ".council/secretary/auth.json",
         ):
             path = self.fixture.data / relative
             path.parent.mkdir(parents=True, exist_ok=True)
@@ -208,7 +210,15 @@ class OperationTests(unittest.TestCase):
         _, manifest = load_manifest(backup)
         self.assertEqual(manifest["kind"], "portable-data")
         self.assertNotIn("image.tar", manifest["files"])
-        for relative in ("tools", "cache", "installs", "logs", "backups", "profiles/dexter/cache"):
+        for relative in (
+            "tools",
+            "cache",
+            "installs",
+            "logs",
+            "backups",
+            "profiles/dexter/cache",
+            ".council/secretary/tools",
+        ):
             self.assertFalse((backup / "hermes" / relative).exists())
         for relative in (
             "skills/custom/tools/script.py",
@@ -216,6 +226,9 @@ class OperationTests(unittest.TestCase):
             "mcp-tokens/notion.json",
         ):
             self.assertEqual((backup / "hermes" / relative).read_text(), "must survive")
+        self.assertEqual(
+            (backup / "hermes/.council/secretary/auth.json").read_text(), "must survive"
+        )
         self.assertTrue((backup / "hermes/.env").is_file())
         self.assertEqual(
             (backup / "workspace/cache/report.txt").read_text(), "user output, not a system cache"
