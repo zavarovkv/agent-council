@@ -48,6 +48,9 @@ def smoke(runtime, backup, *, image=None, prepare_copy=None, instruction_mode=No
             copy_state(backup / name, target, uid=uid, gid=gid)
         if prepare_copy is not None:
             prepare_copy(roots["hermes"])
+        from .instructions import installed_requirements, verify_capabilities
+
+        verify_capabilities(runtime, installed_requirements(roots["hermes"]), image=image)
         runtime.run(
             [
                 "docker",
@@ -227,13 +230,16 @@ def build(runtime):
 
 def deploy(runtime, *, instruction_source=None, instruction_revision=None):
     files = None
+    capabilities = []
     if instruction_source is not None or instruction_revision is not None:
         from .instructions import (
             checkout,
             collect,
             install_files,
             previous_files,
+            source_requirements,
             validate_existing,
+            verify_capabilities,
         )
 
         if instruction_source is None or instruction_revision is None:
@@ -241,6 +247,7 @@ def deploy(runtime, *, instruction_source=None, instruction_revision=None):
         instruction_source = instruction_source.absolute()
         checkout(runtime, instruction_source, instruction_revision)
         files = collect(instruction_source, runtime.settings.data_dir)
+        capabilities = source_requirements(instruction_source)
         validate_existing(runtime.settings.data_dir, files)
 
         def secretary(names):
@@ -259,20 +266,33 @@ def deploy(runtime, *, instruction_source=None, instruction_revision=None):
         ):
             raise OperationError("Apply the private secretary selector before a combined release.")
     revision, image = build(runtime)
+    if files is not None:
+        verify_capabilities(runtime, capabilities, image=image)
     backup = snapshot(runtime, restart=False)
     switched = False
     try:
         smoke(runtime, backup)  # Prove the previous image is usable before attempting an upgrade.
         uid, gid = identity(runtime.settings)
         prepare_copy = (
-            (lambda home: install_files(home, files, instruction_revision, uid, gid))
+            (
+                lambda home: install_files(
+                    home, files, instruction_revision, uid, gid, capabilities=capabilities
+                )
+            )
             if files is not None
             else None
         )
         smoke(runtime, backup, image=image, prepare_copy=prepare_copy)
         switched = True
         if files is not None:
-            install_files(runtime.settings.data_dir, files, instruction_revision, uid, gid)
+            install_files(
+                runtime.settings.data_dir,
+                files,
+                instruction_revision,
+                uid,
+                gid,
+                capabilities=capabilities,
+            )
         runtime.settings.select_image(image)
         runtime.activate_source(runtime.settings.repository / "compose.yaml")
         runtime.start()

@@ -22,7 +22,8 @@ from council_ops.instructions import (
     install_files,
     sync,
 )
-from council_ops.lifecycle import deploy
+from council_ops.lifecycle import deploy, smoke
+from council_ops.snapshots import snapshot
 from secretary_worker.instructions import configured_instructions
 
 REVISION = "d" * 40
@@ -117,6 +118,31 @@ class PrivateInstructionTests(unittest.TestCase):
         self.assertEqual(result["instructions_revision"], revision)
         self.assertEqual((self.home / "SOUL.md").read_text(), "Reviewed next identity")
         self.assertEqual(self.runtime.events.count("stop"), 1)
+
+    def test_required_image_capability_is_checked_before_instruction_downtime(self):
+        (self.source / "requires.json").write_text(
+            '{"schema":1,"capabilities":["research-filing-v1"]}'
+        )
+        with patch("council_ops.instructions.checkout"):
+            with self.assertRaisesRegex(OperationError, "required capabilities"):
+                apply(self.runtime, self.source, REVISION)
+        self.assertNotIn("stop", self.runtime.events)
+
+    def test_copied_profile_rejects_an_image_without_its_recorded_capabilities(self):
+        files = collect(self.source, self.home)
+        install_files(
+            self.home, files, REVISION, self.uid, self.gid, capabilities=["research-filing-v1"]
+        )
+        backup = snapshot(self.runtime)
+        self.runtime.events.clear()
+        with self.assertRaisesRegex(OperationError, "required capabilities"):
+            smoke(self.runtime, backup)
+        self.assertFalse(
+            any(
+                isinstance(event, tuple) and event[:2] == ("docker", "run")
+                for event in self.runtime.events
+            )
+        )
 
     def test_local_edits_are_preserved_and_can_be_adopted_only_as_the_reviewed_candidate(self):
         self.install()

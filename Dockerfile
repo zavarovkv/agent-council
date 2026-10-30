@@ -18,6 +18,7 @@ LABEL org.opencontainers.image.source="https://github.com/zavarovkv/agent-counci
 LABEL org.opencontainers.image.description="Hermes integration for Agent Council"
 LABEL org.opencontainers.image.revision="${COUNCIL_REVISION}"
 LABEL org.opencontainers.image.licenses="MIT"
+LABEL io.agent-council.capabilities="private-instructions-v1,research-filing-v1"
 
 COPY LICENSE /opt/agent-council/LICENSE
 COPY scripts/healthcheck.py scripts/verify-profile.py /opt/agent-council/
