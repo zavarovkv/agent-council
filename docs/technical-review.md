@@ -4,6 +4,9 @@ Scope: repository architecture, Docker isolation, deployment scripts, Telegram
 authorization, state persistence, recovery and open-source maintenance. This is
 not a complete audit of upstream Hermes, all dependencies or the host OS.
 
+See [the architecture review](architecture-review.md) for prioritized follow-up
+work, usability improvements and a scaling sequence.
+
 ## Findings and changes
 
 | Finding | Change |
