@@ -1,11 +1,106 @@
 """Read-only checks of the actual Docker, process and secret-file boundaries."""
 
 import json
+import os
+import re
 import sqlite3
 from contextlib import closing
+from datetime import UTC, datetime
 from pathlib import Path
 
 from .config import OperationError
+
+
+def unit_status(runtime, name):
+    try:
+        value = runtime.run(
+            [
+                "systemctl",
+                "show",
+                name,
+                "--property=ActiveState,UnitFileState,Result,ExecMainStatus",
+            ]
+        )
+        values = dict(line.split("=", 1) for line in value.splitlines() if "=" in line)
+        return {
+            key: text
+            for key, text in values.items()
+            if key in {"ActiveState", "UnitFileState", "Result", "ExecMainStatus"}
+            and re.fullmatch(r"[a-z0-9-]{1,40}", text)
+        }
+    except OperationError:
+        return {"available": False}
+
+
+def instruction_status(home):
+    from .instructions import MARKER, destination, digest, previous_files
+
+    path = home / MARKER
+    if not path.exists() and not path.is_symlink():
+        return {"configured": False}
+    try:
+        files = previous_files(home)
+        revision = json.loads(path.read_text())["revision"]
+        if not re.fullmatch(r"[a-f0-9]{40}", revision):
+            raise ValueError("Invalid revision")
+        changed = False
+        for name, expected in files.items():
+            item = destination(home, name)
+            if (
+                not item.is_file()
+                or item.stat().st_size > 1048576
+                or digest(item.read_bytes()) != expected
+            ):
+                changed = True
+        return {
+            "configured": True,
+            "available": True,
+            "revision": revision,
+            "files": len(files),
+            "local_changes": changed,
+        }
+    except (OperationError, OSError, ValueError, KeyError, TypeError):
+        return {"configured": True, "available": False}
+
+
+def backup_status(settings):
+    from .config import read_settings
+    from .restic import validate_r2
+
+    result = {"configured": False, "last_verified": None}
+    try:
+        for path in (
+            settings.env_file.with_name("backup.env"),
+            settings.env_file.with_name("backup-password"),
+        ):
+            metadata = path.lstat()
+            if (
+                path.is_symlink()
+                or not path.is_file()
+                or metadata.st_uid != os.geteuid()
+                or metadata.st_mode & 0o077
+            ):
+                raise ValueError("Invalid private backup file")
+        validate_r2(read_settings(settings.env_file.with_name("backup.env")))
+        if settings.env_file.with_name("backup-password").stat().st_size < 24:
+            raise ValueError("Invalid recovery password file")
+        result["configured"] = True
+        path = settings.env_file.with_name("last-cloud-backup.json")
+        if path.is_symlink():
+            raise ValueError("Invalid backup status file")
+        if path.is_file():
+            value = json.loads(path.read_text())
+            timestamp = datetime.fromisoformat(value["verified_at"])
+            if timestamp.tzinfo is None or not re.fullmatch(r"[a-f0-9]{64}", value["snapshot"]):
+                raise ValueError("Invalid recovery verification record")
+            result.update(
+                last_verified=timestamp.isoformat(),
+                snapshot=value["snapshot"],
+                age_seconds=max(0, int((datetime.now(UTC) - timestamp).total_seconds())),
+            )
+    except (OperationError, OSError, ValueError, KeyError, TypeError):
+        pass
+    return result
 
 
 def secretary_status(settings, inspected):
@@ -174,6 +269,11 @@ def doctor(runtime):
         secretary["worker_health"] = worker["State"].get("Health", {}).get("Status")
     elif secretary["enabled"]:
         secretary["worker_status"] = "missing"
+    backups = backup_status(runtime.settings)
+    backups["timer"] = unit_status(runtime, "agent-council-backup.timer")
+    instructions = instruction_status(runtime.settings.data_dir)
+    instructions["timer"] = unit_status(runtime, "agent-council-skills.timer")
+    instructions["service"] = unit_status(runtime, "agent-council-skills.service")
     return {
         "status": inspected["State"]["Status"],
         "health": inspected["State"].get("Health", {}).get("Status"),
@@ -182,4 +282,6 @@ def doctor(runtime):
         "mounts_verified": True,
         "non_root_gateway": inspected["State"]["Running"],
         "secretary": secretary,
+        "backups": backups,
+        "instructions": instructions,
     }
