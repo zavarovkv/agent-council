@@ -119,7 +119,9 @@ def doctor(runtime):
         raise OperationError(
             "Privileged containers and host/shared process namespaces are unsupported."
         )
-    if set(security.get("CapDrop") or []) != {"ALL"} or set(security.get("CapAdd") or []) != {
+    if set(security.get("CapDrop") or []) != {"ALL"} or {
+        name.removeprefix("CAP_") for name in security.get("CapAdd") or []
+    } != {
         "CHOWN",
         "DAC_OVERRIDE",
         "FOWNER",
