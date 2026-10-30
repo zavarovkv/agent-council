@@ -211,6 +211,19 @@ through a connected plugin in a development conversation does not authorize the
 server's Hermes runtime. Dexter returns local research artifacts to Qui-Gon;
 the coordinator reviews results and files them using its own cloud connection.
 
+Reviewed research reports belong in a dedicated child page of the configured
+Notion root. Set `knowledge_base.research` in the private workspace JSON to an
+object with `page_id`, `name` and `url` for that section. Each study gets its own
+dated child page with the brief, findings, sources, verification dates,
+limitations and task/run reference when available. Qui-Gon checks the saved
+page's parent and content and maintains a table on the research parent page
+with one row per report: date, subject, author, reviewer, task/run reference
+when available and page link. Preserve existing rows and read the index back;
+if only the index update fails, retry that step without creating another report.
+Task status stays on the task board; Drive stores supporting files. Missing
+access or a failed write must leave the local report intact and must not create
+duplicate sections or reports on retries.
+
 ## Dexter Jettster: internal competitor researcher
 
 The image includes the official `advanced-delegation` plugin at reviewed commit
