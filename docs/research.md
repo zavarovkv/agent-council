@@ -26,7 +26,8 @@ instructions to the released native-task workflow; public image defaults are in
 
 Inside the coordinator container, `hermes research-filing verify` checks the
 configured Notion destination/index through the granted native client without
-cloud writes or model calls.
+cloud writes or model calls. The first Notion operation initializes only that
+configured MCP server through native discovery; an empty flush opens no connection.
 
 To combine a code release and an already checked-out private instruction SHA in
 one stopped cutover, use `deploy --instructions-source /private/checkout

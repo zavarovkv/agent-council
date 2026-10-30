@@ -58,6 +58,16 @@ def destination(home):
     return page_id(knowledge.get("research", {}).get("page_id"))
 
 
+def notion_for(ctx):
+    home_for(ctx)
+    from tools.mcp_tool_discovery import discover_mcp_tools
+
+    # Plugin CLI commands do not run the agent's MCP startup. This native,
+    # idempotent path retains its trust/OAuth gates and starts only Notion.
+    discover_mcp_tools(allowed_mcp_names=["notion"])
+    return Notion(lambda name, args: ctx.call_mcp("notion", name, args, timeout=30))
+
+
 def native_task(ctx, task_id, run_id=None):
     from hermes_cli import kanban_db as kb
     from hermes_cli.kanban_db_connect import connect_closing
@@ -171,7 +181,7 @@ def process(ctx, store, record):
     native_task(ctx, record["task_id"], record["run_id"])
     if destination(home_for(ctx)) != record["parent"]:
         raise FilingError("destination_changed")
-    notion = Notion(lambda name, args: ctx.call_mcp("notion", name, args, timeout=30))
+    notion = notion_for(ctx)
     result = notion.file(store, record)
     comment = (
         f"Проверенный отчёт: {result['url']}\nCouncil filing: {record['id']} / {record['sha256']}"
@@ -260,7 +270,7 @@ def flush(ctx):
 
 def verify(ctx):
     home = home_for(ctx)
-    notion = Notion(lambda name, args: ctx.call_mcp("notion", name, args, timeout=30))
+    notion = notion_for(ctx)
     parent = notion.fetch(destination(home))
     return {
         "notion_ready": True,

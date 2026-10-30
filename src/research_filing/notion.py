@@ -34,13 +34,31 @@ def canonical(value):
 def document(value):
     if not isinstance(value, str) or len(value) > 65536:
         raise FilingError("unsupported_notion_response")
+    declared_id = None
+    try:
+        wrapped = json.loads(value)
+    except ValueError:
+        wrapped = None
+    if wrapped is not None:
+        if (
+            not isinstance(wrapped, dict)
+            or not isinstance(wrapped.get("metadata"), dict)
+            or wrapped["metadata"].get("type") != "page"
+            or not isinstance(wrapped.get("text"), str)
+        ):
+            raise FilingError("unsupported_notion_document")
+        declared_id = page_id(wrapped.get("url"))
+        value = wrapped["text"]
     root = re.search(r'<page\b[^>]*\burl="([^"]+)"', value)
     parent = re.search(r'<parent-page\b[^>]*\burl="([^"]+)"', value)
     content = re.search(r"<content>\s?(.*?)\s?</content>", value, re.S)
     if root is None or content is None:
         raise FilingError("unsupported_notion_document")
+    identifier = page_id(root[1])
+    if declared_id is not None and declared_id != identifier:
+        raise FilingError("notion_page_identity_mismatch")
     return {
-        "id": page_id(root[1]),
+        "id": identifier,
         "parent": page_id(parent[1]) if parent else None,
         "content": content[1],
     }
