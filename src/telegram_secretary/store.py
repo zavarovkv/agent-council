@@ -86,9 +86,29 @@ class Store:
                 ).fetchone()
             )
 
-    def submit(self, identifier, connection, chat, message, text, created, *, sender_username=""):
+    def submit(
+        self,
+        identifier,
+        connection,
+        chat,
+        message,
+        text,
+        created,
+        *,
+        sender_username="",
+        per_chat_limit=None,
+    ):
         with self.database() as db:
             db.execute("DELETE FROM jobs WHERE created < ?", (self.clock() - 14 * 86400,))
+            if (
+                per_chat_limit is not None
+                and db.execute(
+                    "SELECT count(*) FROM jobs WHERE connection=? AND chat=? AND created>?",
+                    (connection, chat, self.clock() - 3600),
+                ).fetchone()[0]
+                >= per_chat_limit
+            ):
+                return False
             # Bound private queue size and cost even while the worker is unavailable.
             if (
                 db.execute(
@@ -120,7 +140,7 @@ class Store:
                 (self.clock() - 23 * 3600,),
             )
             row = db.execute(
-                "SELECT * FROM jobs WHERE connection=? AND chat=? AND status='queued' ORDER BY created,id LIMIT 1",
+                "SELECT * FROM jobs WHERE connection=? AND chat=? AND status='queued' ORDER BY created,message,id LIMIT 1",
                 (connection, chat),
             ).fetchone()
             if row is None:
