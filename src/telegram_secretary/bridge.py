@@ -91,6 +91,7 @@ class Bridge:
         clock=time.time,
         contacts=frozenset(),
         spouse_username="",
+        capacity=None,
     ):
         self.application, self.owner, self.key, self.store = application, owner, key, store
         self.request, self.clock = request, clock
@@ -98,7 +99,7 @@ class Bridge:
         self.contacts = frozenset(contacts)
         self.spouse_username = normalize_username(spouse_username)
         self.tasks = {}
-        self.capacity = asyncio.Semaphore(2)
+        self.capacity = capacity if capacity is not None else asyncio.Semaphore(2)
 
     def verified(self, connection):
         rights = getattr(connection, "rights", None)
@@ -194,29 +195,13 @@ class Bridge:
                     if not await self.refresh(connection):
                         self.store.finish(job["id"], "cancelled")
                         continue
-                    payload = {
-                        "request_id": job["id"],
-                        "conversation": hashlib.sha256(f"{connection}:{chat}".encode()).hexdigest(),
-                        "text": job["text"],
-                        "audience": self.audience(chat, job["sender_username"]),
-                    }
-                    reply = await asyncio.to_thread(self.request, self.key, payload)
+                    reply = await self.generate_reply(job)
                     # Rights can be revoked, or a human may take over while the model is running.
                     if not await self.refresh(connection) or not self.store.reserve(job["id"]):
                         self.store.finish(job["id"], "cancelled")
                         continue
-                    from telegram import ReplyParameters
-
                     sent = True  # Delivery is ambiguous if the HTTP response is lost; do not retry.
-                    await self.application.bot.send_message(
-                        chat_id=chat,
-                        business_connection_id=connection,
-                        text=reply,
-                        parse_mode=None,
-                        reply_parameters=ReplyParameters(
-                            message_id=job["message"], allow_sending_without_reply=False
-                        ),
-                    )
+                    await self.send_reply(job, reply)
                     self.store.finish(job["id"], "sent")
                     try:
                         await asyncio.to_thread(self.acknowledge, self.key, job["id"])
@@ -233,6 +218,30 @@ class Bridge:
                 logger.warning("Secretary request failed; private provider/update details omitted.")
         self.tasks.pop((connection, chat), None)
 
+    async def generate_reply(self, job):
+        payload = {
+            "request_id": job["id"],
+            "conversation": hashlib.sha256(
+                f"{job['connection']}:{job['chat']}".encode()
+            ).hexdigest(),
+            "text": job["text"],
+            "audience": self.audience(job["chat"], job["sender_username"]),
+        }
+        return await asyncio.to_thread(self.request, self.key, payload)
+
+    async def send_reply(self, job, reply):
+        from telegram import ReplyParameters
+
+        await self.application.bot.send_message(
+            chat_id=job["chat"],
+            business_connection_id=job["connection"],
+            text=reply,
+            parse_mode=None,
+            reply_parameters=ReplyParameters(
+                message_id=job["message"], allow_sending_without_reply=False
+            ),
+        )
+
     def audience(self, chat, sender_username):
         if self.spouse_username and sender_username == self.spouse_username:
             return "spouse"
@@ -245,6 +254,8 @@ def attach(application, _adapter):
 
     if application.bot_data.get("council-secretary-registered"):
         return
+
+    capacity = asyncio.Semaphore(2)
 
     owner = os.environ.get("COUNCIL_SECRETARY_OWNER_ID", "")
     key = os.environ.get("COUNCIL_SECRETARY_KEY", "")
@@ -274,6 +285,7 @@ def attach(application, _adapter):
                 store,
                 contacts=contact_ids(os.environ.get("COUNCIL_SECRETARY_CONTACT_IDS", "")),
                 spouse_username=os.environ.get("COUNCIL_SECRETARY_SPOUSE_USERNAME", ""),
+                capacity=capacity,
             )
             asyncio.get_running_loop().create_task(bridge.recover())
         except Exception:
@@ -298,3 +310,6 @@ def attach(application, _adapter):
 
     application.add_handler(BusinessHandler(Update, dispatch), group=-1000)
     application.bot_data["council-secretary-registered"] = True
+    from .public import attach_public
+
+    attach_public(application, _adapter, enabled=enabled, key=key, capacity=capacity)

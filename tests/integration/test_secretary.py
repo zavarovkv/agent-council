@@ -1,5 +1,6 @@
 """Real PTB extension contract and isolated model/HTTP surface, with fixture data only."""
 
+import asyncio
 import importlib.util
 import json
 import os
@@ -13,7 +14,7 @@ import urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 from telegram import Chat, Message, Update, User
 from telegram.ext import Application, ApplicationHandlerStop
@@ -25,6 +26,98 @@ from secretary_worker.service import Server, Service
 
 
 class NativeHandlerTests(unittest.IsolatedAsyncioTestCase):
+    async def test_public_dm_is_intercepted_while_owner_dm_stays_with_native_handlers(self):
+        root = Path("/opt/hermes/plugins/council-secretary")
+        name = "council_public_fixture"
+        spec = importlib.util.spec_from_file_location(
+            name, root / "__init__.py", submodule_search_locations=[str(root)]
+        )
+        module = importlib.util.module_from_spec(spec)
+        sys.modules[name] = module
+        spec.loader.exec_module(module)
+        factories = []
+        module.register(SimpleNamespace(register_telegram_handler=factories.append))
+        with tempfile.TemporaryDirectory() as temporary:
+            Path(temporary, "telegram-owner.json").write_text('{"telegram_id":12345}')
+            application = Application.builder().token("12345:public-fixture-token").build()
+            with patch.dict(
+                os.environ,
+                {
+                    "HERMES_HOME": temporary,
+                    "COUNCIL_SECRETARY_ENABLED": "true",
+                    "COUNCIL_SECRETARY_PUBLIC_DMS": "true",
+                    "COUNCIL_SECRETARY_KEY": "a" * 64,
+                    "COUNCIL_SECRETARY_OWNER_ID": "12345",
+                    "HERMES_TELEGRAM_ALLOWED_ID": "12345",
+                    "COUNCIL_SECRETARY_CONTACT_IDS": "",
+                },
+            ):
+                factories[0](application, None)
+            handler = application.handlers[-1001][0]
+            guest = Update(
+                1,
+                message=Message(
+                    1,
+                    datetime.now(timezone.utc),
+                    Chat(67890, "private"),
+                    from_user=User(67890, "Guest", False),
+                    text="/approve",
+                ),
+            )
+            owner = Update(
+                2,
+                message=Message(
+                    2,
+                    datetime.now(timezone.utc),
+                    Chat(12345, "private"),
+                    from_user=User(12345, "Owner", False),
+                    text="/model",
+                ),
+            )
+            self.assertTrue(handler.check_update(guest))
+            self.assertFalse(handler.check_update(owner))
+            public_module = sys.modules[name + ".public"]
+            with patch.object(
+                public_module.PublicBridge, "handle", new_callable=AsyncMock
+            ) as handle:
+                with self.assertRaises(ApplicationHandlerStop):
+                    await handler.callback(guest, None)
+                handle.assert_awaited_once_with(guest)
+
+    async def test_public_menu_scopes_hide_management_commands_and_wait_for_native_startup(self):
+        root = Path("/opt/hermes/plugins/council-secretary")
+        name = "council_menu_fixture"
+        spec = importlib.util.spec_from_file_location(
+            name, root / "__init__.py", submodule_search_locations=[str(root)]
+        )
+        module = importlib.util.module_from_spec(spec)
+        sys.modules[name] = module
+        spec.loader.exec_module(module)
+        menus = __import__(name + ".menus", fromlist=["configure_menu"])
+        bot = SimpleNamespace(set_my_commands=AsyncMock())
+        with patch(
+            "hermes_cli.commands_platforms.telegram_menu_commands",
+            return_value=([("model", "Private model"), ("start", "Start")], 0),
+        ):
+            await menus.configure_menu(bot, 12345)
+        calls = bot.set_my_commands.call_args_list
+        self.assertEqual(calls[0].kwargs["scope"].to_dict(), {"type": "chat", "chat_id": 12345})
+        self.assertIn("model", [command.command for command in calls[0].args[0]])
+        self.assertEqual(len(calls), 4)
+        for call in calls[1:]:
+            self.assertEqual([command.command for command in call.args[0]], ["start", "help"])
+        finished = asyncio.Event()
+        housekeeping = asyncio.create_task(finished.wait())
+        adapter = SimpleNamespace(_post_connect_task=housekeeping)
+        application = SimpleNamespace(running=True, bot=bot)
+        with patch.object(menus, "configure_menu", new_callable=AsyncMock) as configure:
+            task = asyncio.create_task(menus.configure_after_connect(application, adapter, 12345))
+            await asyncio.sleep(0)
+            configure.assert_not_called()
+            finished.set()
+            await task
+            configure.assert_awaited_once_with(bot, 12345)
+
     async def test_official_hook_intercepts_only_business_and_stays_closed_when_unconfigured(self):
         root = Path("/opt/hermes/plugins/council-secretary")
         name = "council_secretary_fixture"

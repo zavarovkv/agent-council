@@ -1,11 +1,11 @@
 # Telegram secretary
 
-The same Telegram bot serves two distinct routes. Direct owner messages keep
-using the private Hermes agent. Messages received through the owner's Telegram
-Chat Automation connection go to a separate, tool-free secretary service.
+Direct owner messages keep using the private Hermes agent. Messages received
+through the owner's Telegram Chat Automation connection, and optional public
+bot DMs from other people, go to a separate, tool-free secretary service.
 They never enter the owner's agent session or command/tool dispatcher.
 
-The initial implementation handles **text in selected private chats**. Media,
+The implementation handles **text in private chats**. Media,
 groups/guest mode, calendar actions and cross-chat actions are not supported.
 The secretary answers general questions and clarifies requests; it cannot access
 private documents, execute commands or claim to notify the owner. Its prompt
@@ -50,6 +50,47 @@ settings, not a repository-owner default.
 Server deployment does not turn on Telegram permissions on your behalf. Model
 authorization and account connection remain explicit owner steps. HTTP health
 proves the worker is running, not that a provider grant or real chat is authorized.
+
+## Public conversations with the bot
+
+Chat Automation and direct messages to the bot are separate Telegram routes.
+To let other people talk to the bot itself, first complete secretary setup and
+its separate model login. Set this option in the private
+`/etc/agent-council/secretary.env` file, then deploy the reviewed release:
+
+```dotenv
+COUNCIL_SECRETARY_PUBLIC_DMS=true
+```
+
+It defaults to false. Do not remove the private agent's owner allowlist or set
+an allow-all flag. The native extension intercepts foreign private updates before
+Hermes' private commands, while the pinned owner's messages continue to use the
+private agent. Corrupted/missing owner settings or disabled public mode keep
+foreign messages closed. Foreign callbacks and inline queries cannot invoke
+private command handlers either.
+
+Public `/start` and `/help` give a local introduction; other slash commands do
+not execute agent administration. Ordinary questions use the isolated worker and
+the same spouse/contact/new-user skills. Media gets a text-only explanation.
+Replies come from the bot, anchored to the incoming message, and do not use the
+owner's business connection. No proactive messaging is enabled.
+
+The public command menu contains only `/start` and `/help`. Hermes' full menu is
+scoped to the pinned owner's private chat using the official Bot API. On startup
+the extension waits for pinned Hermes v0.22.5's deferred native menu registration
+before setting these scopes, with bounded retries. It does not modify adapter or
+SDK methods. Failed menu configuration logs only a generic error; the handler's
+access boundary remains in force. Telegram clients may need to reopen the chat
+to refresh a cached menu.
+
+The public queue is separate from business replies, stored in
+`plugin-data/council-secretary/public-queue.sqlite3`. It keeps the same deduplication,
+ambiguous-send policy and 14-day retention, plus a 30-message per-chat/hour queue
+limit and 200-message global/hour limit, including local commands. Worker limits
+remain 20 generated replies per conversation/hour and 100 globally/hour across
+both routes. Both queues share the two-call concurrency allowance and block
+deployment maintenance while replies are pending. Backups include and verify both
+queues. Public and business conversations have separate history contexts.
 
 ## Editing reply skills
 
