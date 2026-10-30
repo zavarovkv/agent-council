@@ -6,6 +6,19 @@ from pathlib import Path
 AUDIENCES = frozenset({"spouse", "contacts", "new-users"})
 
 
+def configured_instructions(home, environment):
+    source = environment.get("COUNCIL_SECRETARY_INSTRUCTIONS", "image")
+    if source == "image":
+        root = Path("/opt/agent-council/instructions/secretary")
+    elif source == "profile":
+        root = Path(home) / "instructions"
+    else:
+        raise ValueError("Invalid secretary instruction source.")
+    if root.resolve() != root:
+        raise ValueError("Refusing a symlinked instruction directory.")
+    return load_instructions(root)
+
+
 @dataclass(frozen=True)
 class Instructions:
     policy: str

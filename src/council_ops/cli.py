@@ -9,15 +9,27 @@ import tempfile
 from pathlib import Path
 
 from .config import OperationError, Settings
-from .doctor import doctor
+from .doctor import doctor, unit_status
 from .guard import ServiceGuard
 from .install import install, recover
+from .instructions import apply as apply_instructions
+from .instructions import export as export_instructions
+from .instructions import sync as sync_instructions
 from .lifecycle import deploy, restore, smoke
 from .restic import Restic, cloud_backup
 from .runtime import Runtime
 from .secretary import prepare as prepare_secretary
 from .setup import configure_backups
 from .snapshots import snapshot
+
+
+def pause_instruction_updates(runtime):
+    state = unit_status(runtime, "agent-council-skills.timer")
+    if state.get("ActiveState") == "active" or state.get("UnitFileState") in {
+        "enabled",
+        "enabled-runtime",
+    }:
+        runtime.run(["systemctl", "disable", "--now", "agent-council-skills.timer"])
 
 
 def parser():
@@ -34,6 +46,31 @@ def parser():
         default=os.environ.get("COUNCIL_BACKUP_DIR", "/var/backups/agent-council"),
     )
     commands = result.add_subparsers(dest="action", required=True)
+    instructions = commands.add_parser(
+        "apply-instructions", help="Install a reviewed private instruction checkout"
+    )
+    instructions.add_argument("source", type=Path)
+    instructions.add_argument("--revision", required=True, help="Full reviewed commit SHA")
+    instructions.add_argument(
+        "--fetch",
+        action="store_true",
+        help="Fetch and select this exact revision under the maintenance lock",
+    )
+    export = commands.add_parser(
+        "export-instructions", help="Stage runtime skill edits in a private checkout for review"
+    )
+    export.add_argument("source", type=Path)
+    export.add_argument("--revision", required=True)
+    export.add_argument(
+        "--include-skill",
+        action="append",
+        default=[],
+        help="Also export this relative main-profile skill directory",
+    )
+    sync = commands.add_parser(
+        "sync-instructions", help="Apply the private main branch through the guarded installer"
+    )
+    sync.add_argument("source", type=Path)
     secretary = commands.add_parser(
         "prepare-secretary", help="Prepare a separate tool-free Telegram secretary profile"
     )
@@ -116,10 +153,30 @@ def main(argv=None):
         runtime = Runtime(settings)
         runtime.preflight()
         runtime.guard = ServiceGuard(settings.env_file.with_name("protected-services.json"))
-        if arguments.action in ("backup", "deploy", "restore", "cloud-backup"):
+        if arguments.action in (
+            "backup",
+            "deploy",
+            "restore",
+            "cloud-backup",
+            "apply-instructions",
+            "sync-instructions",
+        ):
             doctor(runtime)
         if arguments.action == "doctor":
             result = doctor(runtime)
+        elif arguments.action == "apply-instructions":
+            result = apply_instructions(
+                runtime, arguments.source, arguments.revision, fetch=arguments.fetch
+            )
+        elif arguments.action == "export-instructions":
+            result = export_instructions(
+                runtime,
+                arguments.source,
+                arguments.revision,
+                include_skills=arguments.include_skill,
+            )
+        elif arguments.action == "sync-instructions":
+            result = sync_instructions(runtime, arguments.source)
         elif arguments.action == "prepare-secretary":
             doctor(runtime)
             result = prepare_secretary(
@@ -152,6 +209,7 @@ def main(argv=None):
                 raise OperationError(
                     "Restore requires --confirm; current directories will be retained."
                 )
+            pause_instruction_updates(runtime)
             result = {"retained": restore(runtime, arguments.backup)}
         elif arguments.action == "init-cloud-backups":
             Restic(runtime).initialize()

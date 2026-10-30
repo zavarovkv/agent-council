@@ -5,6 +5,7 @@ import os
 import re
 import shutil
 import tempfile
+from datetime import UTC, datetime
 from pathlib import Path
 from urllib.parse import urlsplit
 
@@ -186,6 +187,13 @@ def cloud_backup(runtime):
     manifest["offsite_verified"] = identifier
     atomic_write(backup / "manifest.json", (json.dumps(manifest, indent=2) + "\n").encode())
     prune_local(runtime.settings.backup_dir, keep=7)
+    atomic_write(
+        runtime.settings.env_file.with_name("last-cloud-backup.json"),
+        (
+            json.dumps({"snapshot": identifier, "verified_at": datetime.now(UTC).isoformat()})
+            + "\n"
+        ).encode(),
+    )
     return {"backup": str(backup), "cloud_snapshot": identifier, "recovery_verified": True}
 
 

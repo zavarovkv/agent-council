@@ -1,0 +1,16 @@
+[Unit]
+Description=Apply private Agent Council instructions after validation and checkpoint
+Wants=network-online.target
+After=network-online.target docker.service
+Requires=docker.service
+ConditionPathIsDirectory=/var/lib/agent-council/skills-source
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/agent-council
+ExecStart=/usr/bin/python3 /opt/agent-council/scripts/manage.py sync-instructions /var/lib/agent-council/skills-source
+UMask=0077
+Nice=10
+NoNewPrivileges=true
+PrivateTmp=true
+TimeoutStartSec=30min
