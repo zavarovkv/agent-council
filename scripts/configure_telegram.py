@@ -13,12 +13,12 @@ from pathlib import Path
 from urllib.parse import urlsplit
 
 try:
-    from .env_utils import parse_environment, write_environment
+    from .env_utils import operation_lock, parse_environment, write_environment
 except ImportError:
-    from env_utils import parse_environment, write_environment
+    from env_utils import operation_lock, parse_environment, write_environment
 
 
-def main():
+def configure():
     if os.geteuid() != 0:
         raise SystemExit("Run this script as root on the Hermes server.")
     target = Path("/etc/hermes/telegram.env")
@@ -44,6 +44,7 @@ def main():
             raise SystemExit("The deployment public URL must use HTTPS.")
     print("In @BotFather → your bot → Login Widget, register these Allowed URLs:")
     print(origin)
+    print(origin + "/login")
     print(origin + "/auth/callback")
     print("Use the Login Widget Client Secret, not the bot's Bot API token.")
     client_id = input("Telegram Login Client ID: ").strip()
@@ -75,6 +76,8 @@ def main():
         "HERMES_TELEGRAM_OWNER_USERNAME": owner_username,
         "HERMES_TELEGRAM_ALLOWED_ID": owner_id,
     }
+    previous_contents = target.read_bytes() if target.exists() else None
+    previous_marker = format_marker.read_bytes() if format_marker.exists() else None
     flags = os.O_CREAT | os.O_RDWR | getattr(os, "O_NOFOLLOW", 0)
     with os.fdopen(os.open(target.with_suffix(".env.lock"), flags, 0o600), "a") as lock:
         fcntl.flock(lock, fcntl.LOCK_EX)
@@ -89,6 +92,26 @@ def main():
         if docker_deployment:
             format_marker.write_text("raw\n", encoding="utf-8")
             format_marker.chmod(0o600)
+    try:
+        restart_and_verify(docker_deployment, origin)
+    except (subprocess.SubprocessError, SystemExit):
+        if previous_contents is None:
+            target.unlink(missing_ok=True)
+        else:
+            write_environment(target, existing, raw=raw_format)
+        if previous_marker is None:
+            format_marker.unlink(missing_ok=True)
+        else:
+            format_marker.write_bytes(previous_marker)
+        restart_and_verify(docker_deployment, origin)
+        raise SystemExit(
+            "Setup failed; previous credentials and owner settings were restored."
+        ) from None
+    print("Saved privately. Hermes restarted. Open " + origin)
+    print("Only the configured owner and explicitly invited Telegram IDs can sign in.")
+
+
+def restart_and_verify(docker_deployment, origin):
     if docker_deployment:
         subprocess.run(
             [
@@ -97,6 +120,10 @@ def main():
                 "up",
                 "-d",
                 "--force-recreate",
+                "--no-build",
+                "--no-deps",
+                "--pull",
+                "never",
                 "--wait",
                 "--wait-timeout",
                 "120",
@@ -131,8 +158,13 @@ def main():
         raise SystemExit(
             "Credentials saved, but Hermes did not become ready; public access remains closed."
         )
-    print("Saved privately. Hermes restarted. Open " + origin)
-    print("Only the configured owner and explicitly invited Telegram IDs can sign in.")
+
+
+def main():
+    if os.geteuid() != 0:
+        raise SystemExit("Run this script as root on the Hermes server.")
+    with operation_lock():
+        configure()
 
 
 if __name__ == "__main__":

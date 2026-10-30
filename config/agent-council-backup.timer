@@ -1,0 +1,10 @@
+[Unit]
+Description=Create and verify an encrypted Agent Council backup daily
+
+[Timer]
+OnCalendar=*-*-* 01:00:00 UTC
+RandomizedDelaySec=15m
+Persistent=true
+
+[Install]
+WantedBy=timers.target

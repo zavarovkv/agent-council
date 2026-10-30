@@ -10,7 +10,7 @@ ssh -T \
   -o ConnectTimeout=15 \
   -o ConnectionAttempts=1 \
   -o ServerAliveInterval=15 \
-  root@2.29.13.129 bash -s <<'REMOTE'
+  "${COUNCIL_SSH_HOST:-root@2.29.13.129}" bash -s <<'REMOTE'
 set -u
 
 section() {

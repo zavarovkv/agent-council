@@ -72,6 +72,14 @@ and test recovery. A container restart test is not disaster-recovery validation.
 Stop Hermes while copying SQLite files. Back up state before an image/schema
 upgrade; an older image may not understand a newer schema.
 
+Use the versioned operator commands in [deployment](docs/deployment.md) and
+[backup/recovery](docs/backups.md). Cloud copies contain selected persistent data
+encrypted by restic. R2 credentials and the separate recovery password are root-only
+and are never mounted into Hermes. The writer key can delete backups; encryption
+does not provide deletion protection. Keep the password outside the primary host
+and monitor failed backup units. Whole-bucket locks/lifecycle expiry are incompatible
+with an unmodified restic retention policy.
+
 Use the interactive setup command to rotate Telegram credentials. It preserves
 the configured owner restriction. To revoke a model account, use Hermes' account
 management commands and revoke the session at the provider when appropriate.

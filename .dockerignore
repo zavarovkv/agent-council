@@ -1,5 +1,6 @@
 **
 !Dockerfile
+!LICENSE
 !package.json
 !package-lock.json
 !src/
@@ -15,5 +16,7 @@
 !scripts/initialize-profile.sh
 !scripts/provision-researcher.py
 !scripts/configure-drive.py
+!scripts/healthcheck.py
+!scripts/verify-profile.py
 **/__pycache__/
 **/*.pyc

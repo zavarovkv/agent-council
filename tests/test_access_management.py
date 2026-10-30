@@ -33,6 +33,9 @@ class AccessManagementTests(unittest.TestCase):
     def command(self, *arguments, restart_results=(0,)):
         with (
             patch.object(telegram_access, "CONFIG", self.config),
+            patch.object(
+                telegram_access, "OPERATIONS_LOCK", self.config.parent / "operations.lock"
+            ),
             patch("os.geteuid", return_value=0),
             patch.object(sys, "argv", ["telegram_access.py", *arguments]),
             patch.object(telegram_access, "restart_hermes", side_effect=restart_results) as restart,

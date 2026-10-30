@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 # Execute on the server as root. Installs only the separate Hermes instance.
 set -euo pipefail
+# shellcheck source=scripts/legacy-guard.sh
+source "$(dirname "${BASH_SOURCE[0]}")/legacy-guard.sh"
 umask 077
 
 revision=bf0203a794a07aac3ff764972ab9087baa4e4f4e

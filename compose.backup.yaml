@@ -1,0 +1,46 @@
+name: agent-council-backup
+
+# Maintenance only. Agents never receive this service's credentials or mounts.
+services:
+  restic:
+    image: restic/restic:0.19.1@sha256:136600b6ff6843d61d355f7f71f460a166429f35de6fd11b568fece3c9a4d510
+    restart: "no"
+    user: "0:0"
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    cpus: "0.5"
+    mem_limit: 512m
+    pids_limit: 64
+    env_file:
+      - path: ${COUNCIL_BACKUP_ENV_FILE:?Set the root-only R2 env file}
+        format: raw
+    environment:
+      RESTIC_PASSWORD_FILE: /run/secrets/restic_password
+      RESTIC_CACHE_DIR: /cache
+    secrets:
+      - restic_password
+    volumes:
+      - type: bind
+        source: ${COUNCIL_SNAPSHOT_DIR:?Set the verified snapshot directory}
+        target: /snapshot
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ${COUNCIL_RESTORE_DIR:?Set a private empty restore staging directory}
+        target: /restore
+        bind:
+          create_host_path: false
+    tmpfs:
+      - /tmp:rw,nosuid,nodev,size=32m
+      - /cache:rw,nosuid,nodev,size=128m
+    logging:
+      driver: local
+      options:
+        max-size: 5m
+        max-file: "2"
+
+secrets:
+  restic_password:
+    file: ${COUNCIL_BACKUP_PASSWORD_FILE:?Set the root-only restic password file}

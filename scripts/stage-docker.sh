@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 # Start a copied profile on loopback:19119, leaving native Hermes running.
 set -euo pipefail
+# shellcheck source=scripts/legacy-guard.sh
+source "$(dirname "${BASH_SOURCE[0]}")/legacy-guard.sh"
 umask 077
 [[ $(id -u) == 0 ]]
 repository=/opt/agent-council

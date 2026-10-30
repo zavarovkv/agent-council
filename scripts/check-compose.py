@@ -25,6 +25,8 @@ def main():
             HERMES_AUTH_ENV_FILE=str(env_file),
             HERMES_PUBLIC_URL="https://council.example.com",
             COUNCIL_HERMES_IMAGE="agent-council-hermes:test",
+            HERMES_DATA_DIR=str(Path(directory) / "unused-data"),
+            HERMES_WORKSPACE_DIR=str(Path(directory) / "unused-workspace"),
         )
         # Exercise the original service's env_file directly. Compose versions
         # differ in their normalized `config` output, and that output also

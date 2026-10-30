@@ -1,0 +1,188 @@
+"""Invoke Docker with argument arrays and bounded, secret-free diagnostics."""
+
+import json
+import os
+import subprocess
+
+from .config import OperationError, atomic_write
+
+
+class Runtime:
+    def __init__(self, settings):
+        self.settings = settings
+        self.guard = None
+
+    def check_protected(self):
+        if self.guard is not None:
+            self.guard.check()
+
+    def preflight(self):
+        host = os.environ.get("DOCKER_HOST", "")
+        if host and not host.startswith("unix://"):
+            raise OperationError("Run operations against the local Docker daemon only.")
+        context = json.loads(self.run(["docker", "context", "inspect"]))[0]
+        if not context["Endpoints"]["docker"]["Host"].startswith("unix://"):
+            raise OperationError("Remote Docker contexts are not supported by host-side backups.")
+
+    def compose_source(self):
+        active = self.settings.env_file.with_name("active-compose.yaml")
+        if active.is_symlink():
+            raise OperationError("Refusing a symlinked active Compose source.")
+        return active if active.exists() else self.settings.repository / "compose.yaml"
+
+    def activate_source(self, source):
+        atomic_write(self.settings.env_file.with_name("active-compose.yaml"), source.read_bytes())
+
+    def adopt_release(self, revision):
+        import re
+
+        if not re.fullmatch(r"[0-9a-f]{40}", revision):
+            raise OperationError("A full deployed Git revision is required.")
+        active = self.settings.env_file.with_name("active-compose.yaml")
+        if active.exists():
+            raise OperationError("An active Compose source is already recorded.")
+        recorded = self.settings.env_file.with_name("revision").read_text().strip()
+        _, labels = self.image()
+        if (
+            recorded != revision
+            or labels.get("org.opencontainers.image.revision", revision) != revision
+        ):
+            raise OperationError("The requested revision differs from the deployed release record.")
+        source = self.run(["git", "show", revision + ":compose.yaml"])
+        atomic_write(active, (source + "\n").encode())
+
+    def require_idle(self):
+        if not self.inspect()["State"]["Running"]:
+            return
+        source = (
+            "import json; from gateway.status import read_runtime_status,runtime_status_is_stale; "
+            "s=read_runtime_status() or {}; "
+            "print(json.dumps({'fresh':not runtime_status_is_stale(s),"
+            "'agents':s.get('active_agents'),'work':bool(s.get('active_work'))}))"
+        )
+        status = json.loads(
+            self.compose(
+                "exec",
+                "-T",
+                "--user",
+                "hermes",
+                "hermes",
+                "/opt/hermes/.venv/bin/python",
+                "-c",
+                source,
+            )
+        )
+        if not status["fresh"] or status["agents"] != 0 or status["work"]:
+            raise OperationError(
+                "Hermes is busy or its status is stale; retry maintenance when idle."
+            )
+        # Inspect locally; never emit command lines, which may include private prompts.
+        processes = self.run(["docker", "top", self.container(), "-eo", "args"])
+        if any(
+            marker in processes
+            for marker in (
+                "hermes model",
+                "configure-drive.py",
+                "switch-telegram-bot.py",
+                "port=CALLBACK_PORT",
+            )
+        ):
+            raise OperationError("Finish interactive account setup before deployment maintenance.")
+
+    def run(self, arguments, *, timeout=180, interactive=False, environment=None):
+        try:
+            result = subprocess.run(
+                arguments,
+                cwd=self.settings.repository,
+                env=environment,
+                check=True,
+                timeout=timeout,
+                capture_output=not interactive,
+                text=True,
+            )
+            return result.stdout.strip() if result.stdout else ""
+        except (subprocess.SubprocessError, OSError) as error:
+            # Docker output can contain interpolated settings or credential-bearing URLs.
+            raise OperationError(
+                f"Command failed ({arguments[0]}, {type(error).__name__}); inspect private server diagnostics."
+            ) from None
+
+    def compose(self, *arguments, timeout=180, image=None):
+        if arguments and arguments[0] == "config" and arguments != ("config", "--quiet"):
+            raise OperationError("Resolved production Compose configuration must not be printed.")
+        environment = dict(os.environ)
+        # The env file is authoritative; a stray caller variable cannot redirect volumes or auth.
+        for key in list(environment):
+            if key.startswith(("HERMES_", "COUNCIL_", "COMPOSE_")):
+                environment.pop(key, None)
+        if image is not None:
+            environment["COUNCIL_HERMES_IMAGE"] = image
+        return self.run(
+            [
+                "docker",
+                "compose",
+                "--project-name",
+                "agent-council",
+                "--env-file",
+                str(self.settings.env_file),
+                "--project-directory",
+                str(self.settings.repository),
+                "-f",
+                str(self.compose_source()),
+                *arguments,
+            ],
+            timeout=timeout,
+            environment=environment,
+        )
+
+    def container(self):
+        identifiers = self.compose("ps", "--all", "--quiet", "hermes").splitlines()
+        if len(identifiers) != 1:
+            raise OperationError("Expected exactly one Hermes container.")
+        return identifiers[0]
+
+    def inspect(self):
+        return json.loads(self.run(["docker", "inspect", self.container()]))[0]
+
+    def image(self):
+        inspected = self.inspect()
+        identifier = inspected["Image"]
+        metadata = json.loads(self.run(["docker", "image", "inspect", identifier]))[0]
+        return identifier, metadata.get("Config", {}).get("Labels", {}) or {}
+
+    def stop(self):
+        self.compose("stop", "--timeout", "30", "hermes")
+
+    def start(self):
+        self.compose(
+            "up",
+            "-d",
+            "--no-build",
+            "--no-deps",
+            "--pull",
+            "never",
+            "--wait",
+            "--wait-timeout",
+            "150",
+            "hermes",
+        )
+
+    def ready(self):
+        self.compose(
+            "exec",
+            "-T",
+            "--user",
+            "hermes",
+            "hermes",
+            "hermes",
+            "gateway",
+            "ensure",
+            "--timeout",
+            "60",
+        )
+
+    def revision(self):
+        revision = self.run(["git", "rev-parse", "HEAD"])
+        if self.run(["git", "status", "--porcelain"]):
+            raise OperationError("Deploy only a clean Git checkout.")
+        return revision

@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 # Prepare the custom hostname without switching the existing Hermes URL.
 set -euo pipefail
+# shellcheck source=scripts/legacy-guard.sh
+source "$(dirname "${BASH_SOURCE[0]}")/legacy-guard.sh"
 umask 077
 
 assets=/opt/hermes-deploy/assets
