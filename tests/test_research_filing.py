@@ -1,4 +1,5 @@
 import hashlib
+import json
 import sys
 import tempfile
 import unittest
@@ -175,3 +176,19 @@ class FilingTests(unittest.TestCase):
         notion = Notion(lambda *_args: {"ok": True, "truncated": True, "result": "private"})
         with self.assertRaisesRegex(FilingError, "truncated"):
             notion.file(self.store, self.staged())
+
+    def test_native_notion_json_page_wrapper_is_read_without_losing_identity_or_content(self):
+        response = self.remote.call("notion-fetch", {"id": PARENT})
+        wrapped = {
+            "metadata": {"type": "page"},
+            "url": "https://www.notion.so/" + PARENT,
+            "text": response["result"],
+        }
+        notion = Notion(lambda *_args: {"ok": True, "result": json.dumps(wrapped)})
+        self.assertEqual(notion.fetch(PARENT)["content"], self.remote.parent)
+        wrapped["url"] = "https://www.notion.so/" + PAGE
+        with self.assertRaisesRegex(FilingError, "identity_mismatch"):
+            notion.fetch(PARENT)
+        wrapped["metadata"]["type"] = "database"
+        with self.assertRaisesRegex(FilingError, "unsupported_notion_document"):
+            notion.fetch(PARENT)

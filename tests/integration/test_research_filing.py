@@ -127,6 +127,43 @@ class ResearchFilingTests(unittest.TestCase):
             )
         self.assertEqual(result["error"], "coordinator_only")
 
+    def test_native_mcp_startup_and_envelope_verify_notion_without_cloud_writes(self):
+        from tools import mcp_tool_discovery
+
+        def call(server, tool, arguments, timeout):
+            discover.assert_called_once_with(allowed_mcp_names=["notion"])
+            inspect.signature(PluginContext.call_mcp).bind(
+                None, server, tool, arguments, timeout=timeout
+            )
+            self.assertEqual(
+                (server, tool, arguments), ("notion", "notion-fetch", {"id": "1" * 32})
+            )
+            page = {
+                "metadata": {"type": "page"},
+                "url": "https://www.notion.so/" + "1" * 32,
+                "text": '<page url="https://www.notion.so/'
+                + "1" * 32
+                + '"><content>| Исследование | Дата |\n| --- | --- |</content></page>',
+            }
+            return PluginContext._mcp_envelope(json.dumps({"result": json.dumps(page)}))
+
+        self.ctx.call_mcp = call
+        with patch.object(mcp_tool_discovery, "discover_mcp_tools") as discover:
+            self.assertEqual(
+                self.native.verify(self.ctx),
+                {"notion_ready": True, "index_available": True, "cloud_writes": False},
+            )
+        with patch.object(mcp_tool_discovery, "discover_mcp_tools") as discover:
+            self.assertEqual(self.native.flush(self.ctx)["completed"], 0)
+            discover.assert_not_called()
+        with (
+            patch.object(mcp_tool_discovery, "discover_mcp_tools") as discover,
+            patch("hermes_constants.get_hermes_home", return_value=self.home / "profiles/dexter"),
+        ):
+            with self.assertRaisesRegex(self.native.FilingError, "coordinator_only"):
+                self.native.verify(self.ctx)
+            discover.assert_not_called()
+
     def test_real_provisioner_and_native_cli_resume_an_empty_outbox_without_model_calls(self):
         (self.home / "config.yaml").write_text("{}")
         subprocess.run(
