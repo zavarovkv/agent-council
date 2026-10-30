@@ -71,6 +71,9 @@ cd /opt/agent-council
 python3 scripts/manage.py install
 ```
 
+`HERMES_ACCOUNT` defaults to `hermes`; another dedicated host account may be set
+explicitly with its matching UID/GID. The image's internal username stays `hermes`.
+
 This initializes a locked profile with **no default owner**. Configure Telegram
 and the model interactively. DNS, HTTPS and Nginx are separate host prerequisites:
 add only this application's virtual host, run `nginx -t`, then reload gracefully.

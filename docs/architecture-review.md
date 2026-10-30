@@ -117,10 +117,21 @@ send through an unreachable host's Telegram credential. See
 
 ### P1 — Rehearse recovery on a replacement host
 
+A disposable Linux CI host now rehearses a real source deployment, stopped
+portable checkpoint, removal of source containers/data and recovery into new
+paths under a different system UID. Both recovered services start without agent
+egress; HTTPS with a verified fixture CA proves the anonymous gate and a retained
+owner session. Managed private instructions and workspace artifacts survive.
+The rehearsal refuses a host containing an existing Council deployment.
+
 Actual R2 download and offline database checks are valuable evidence. A prepared
 replacement-host exercise must also prove account/UID setup, pinned image rebuild,
 Nginx/TLS provisioning, dashboard access and provider reauthorization when needed.
 Measure recovery time and define the tolerated data-loss window with the owner.
+
+The CI rehearsal uses fixture data and a fixture TLS proxy. Production DNS, public
+certificate issuance and real provider reauthorization still require a planned
+replacement-server exercise; it is not evidence of those external procedures.
 
 Use [`recover`](../src/council_ops/install.py) and the recorded revision. Confirm
 the restored private rules start without GitHub availability, recreate host-only

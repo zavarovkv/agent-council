@@ -99,6 +99,8 @@ class Settings:
                 or not 0 < int(values[name]) < 2**31
             ):
                 raise OperationError("Explicit non-root HERMES_UID and HERMES_GID are required.")
+        if not re.fullmatch(r"[a-z_][a-z0-9_-]{0,31}", values.get("HERMES_ACCOUNT", "hermes")):
+            raise OperationError("Use a dedicated system account name for HERMES_ACCOUNT.")
         url = urlsplit(values.get("HERMES_PUBLIC_URL", ""))
         if (
             url.scheme != "https"

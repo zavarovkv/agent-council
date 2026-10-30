@@ -8,7 +8,7 @@ import tempfile
 import uuid
 from pathlib import Path
 
-from .config import OperationError, atomic_write
+from .config import OperationError, atomic_write, read_settings
 from .snapshots import copy_state, load_manifest, snapshot
 
 
@@ -16,7 +16,7 @@ def identity(settings):
     return int(settings.values["HERMES_UID"]), int(settings.values["HERMES_GID"])
 
 
-def smoke(runtime, backup, *, image=None, prepare_copy=None):
+def smoke(runtime, backup, *, image=None, prepare_copy=None, instruction_mode=None):
     backup, manifest = load_manifest(backup)
     image = image or manifest["image_id"]
     if not re.fullmatch(r"sha256:[0-9a-f]{64}", manifest["image_id"]):
@@ -31,6 +31,13 @@ def smoke(runtime, backup, *, image=None, prepare_copy=None):
         runtime.run(["docker", "image", "load", "--input", str(backup / "image.tar")], timeout=900)
         runtime.run(["docker", "image", "inspect", image])
     settings = runtime.settings
+    mode = instruction_mode or (
+        read_settings(backup / "secretary.env").get("COUNCIL_SECRETARY_INSTRUCTIONS", "image")
+        if "secretary.env" in manifest["files"]
+        else "image"
+    )
+    if mode not in {"image", "profile"}:
+        raise OperationError("Invalid restored secretary instruction source.")
     uid, gid = identity(settings)
     with tempfile.TemporaryDirectory(
         prefix=".restore-check-", dir=settings.backup_dir
@@ -71,6 +78,8 @@ def smoke(runtime, backup, *, image=None, prepare_copy=None):
                 "PYTHONDONTWRITEBYTECODE=1",
                 "-e",
                 "HERMES_PUBLIC_URL=" + settings.values["HERMES_PUBLIC_URL"],
+                "-e",
+                "COUNCIL_VERIFY_SECRETARY_INSTRUCTIONS=" + mode,
                 "--mount",
                 f"type=bind,source={roots['hermes']},target=/opt/data",
                 "--mount",

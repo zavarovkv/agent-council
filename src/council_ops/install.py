@@ -12,14 +12,14 @@ from .snapshots import copy_state, load_manifest
 def check_new_host(runtime):
     settings = runtime.settings
     try:
-        account = pwd.getpwnam("hermes")
+        account = pwd.getpwnam(settings.values.get("HERMES_ACCOUNT", "hermes"))
     except KeyError:
         raise OperationError(
-            "Create a dedicated hermes host account and set its UID/GID first."
+            "Create the dedicated HERMES_ACCOUNT and set its UID/GID first."
         ) from None
     uid, gid = identity(settings)
     if (account.pw_uid, account.pw_gid) != (uid, gid):
-        raise OperationError("HERMES_UID/GID must match the dedicated hermes host account.")
+        raise OperationError("HERMES_UID/GID must match the dedicated host account.")
     for path in (settings.data_dir, settings.workspace_dir):
         if path.exists() and (not path.is_dir() or any(path.iterdir())):
             raise OperationError("Installation requires new or empty runtime directories.")

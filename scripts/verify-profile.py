@@ -54,13 +54,18 @@ def main():
     read_user_config_raw(home / "config.yaml")
     verify_managed_skills(home)
     private_instructions = home / ".council/secretary/instructions"
-    if private_instructions.exists() or private_instructions.is_symlink():
+    mode = os.environ.get("COUNCIL_VERIFY_SECRETARY_INSTRUCTIONS", "image")
+    if mode not in {"image", "profile"}:
+        raise ValueError("Invalid restored instruction source.")
+    if mode == "profile":
         sys.path.insert(0, "/opt/agent-council")
-        from secretary_worker.instructions import load_instructions
+        from secretary_worker.instructions import configured_instructions
 
         if private_instructions.resolve() != private_instructions:
             raise ValueError("Refusing a symlinked secretary instruction directory.")
-        load_instructions(private_instructions)
+        configured_instructions(
+            private_instructions.parent, {"COUNCIL_SECRETARY_INSTRUCTIONS": "profile"}
+        )
     for path in [home / "state.db", *sorted((home / "profiles").glob("*/state.db"))]:
         if not path.exists():
             continue

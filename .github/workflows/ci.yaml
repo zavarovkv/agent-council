@@ -53,6 +53,8 @@ jobs:
         run: make test-backups
       - name: Verify the isolated secretary service offline
         run: make test-secretary
+      - name: Rehearse recovery on this disposable replacement host
+        run: sudo env GITHUB_ACTIONS=true COUNCIL_RECOVERY_DRILL=fixture-only python3 scripts/check-recovery-host.py
       - run: npm ci --ignore-scripts --no-audit --no-fund
       - run: npx playwright install --with-deps chromium
       - name: Verify the official SDK popup and callback contract
