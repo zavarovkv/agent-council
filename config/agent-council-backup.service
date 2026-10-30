@@ -1,0 +1,23 @@
+[Unit]
+Description=Back up Agent Council to encrypted Cloudflare R2 storage and verify recovery
+Wants=network-online.target
+After=network-online.target docker.service
+Requires=docker.service
+ConditionPathExists=/etc/agent-council/backup.env
+ConditionPathExists=/etc/agent-council/backup-password
+StartLimitIntervalSec=2h
+StartLimitBurst=4
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/agent-council
+ExecStart=/usr/bin/python3 /opt/agent-council/scripts/manage.py cloud-backup
+UMask=0077
+Nice=10
+IOSchedulingClass=best-effort
+IOSchedulingPriority=7
+NoNewPrivileges=true
+PrivateTmp=true
+TimeoutStartSec=2h
+Restart=on-failure
+RestartSec=15m

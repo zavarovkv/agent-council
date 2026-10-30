@@ -13,8 +13,15 @@ RUN mkdir -p /vendor \
 
 FROM nousresearch/hermes-agent:v0.22.5@sha256:9c5561579f3ffdf333401797094ac3a743738d6c25d40f4331c7bf77b694238d
 
+ARG COUNCIL_REVISION=development
 LABEL org.opencontainers.image.source="https://github.com/zavarovkv/agent-council"
 LABEL org.opencontainers.image.description="Hermes integration for Agent Council"
+LABEL org.opencontainers.image.revision="${COUNCIL_REVISION}"
+LABEL org.opencontainers.image.licenses="MIT"
+
+COPY LICENSE /opt/agent-council/LICENSE
+COPY scripts/healthcheck.py scripts/verify-profile.py /opt/agent-council/
+RUN chmod 0444 /opt/agent-council/LICENSE /opt/agent-council/healthcheck.py /opt/agent-council/verify-profile.py
 
 COPY --from=web-assets /vendor/advanced-delegation/ /opt/hermes/plugins/advanced-delegation/
 COPY agents/ /opt/agent-council/agents/

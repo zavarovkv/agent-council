@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 # One-time switch of the existing Docker deployment to council.zavarov.com.
 set -euo pipefail
+# shellcheck source=scripts/legacy-guard.sh
+source "$(dirname "${BASH_SOURCE[0]}")/legacy-guard.sh"
 umask 077
 [[ $(id -u) == 0 ]]
 repository=/opt/agent-council

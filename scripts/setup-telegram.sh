@@ -5,4 +5,4 @@ exec ssh -t \
   -i "${COUNCIL_SSH_KEY:-$HOME/.ssh/agent_council_ed25519}" \
   -o IdentitiesOnly=yes -o ConnectTimeout=15 \
   "${COUNCIL_SSH_HOST:-root@2.29.13.129}" \
-  'python3 /opt/hermes/extensions/configure-telegram.py'
+  'python3 /opt/agent-council/scripts/configure_telegram.py'

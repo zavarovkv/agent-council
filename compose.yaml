@@ -24,8 +24,16 @@ services:
     ports:
       - "127.0.0.1:${HERMES_HTTP_PORT:-9119}:9119"
     volumes:
-      - ${HERMES_DATA_DIR:-./.docker-data/hermes}:/opt/data
-      - ${HERMES_WORKSPACE_DIR:-./.docker-data/workspace}:/workspace
+      - type: bind
+        source: ${HERMES_DATA_DIR:?Set an absolute data path outside the checkout}
+        target: /opt/data
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ${HERMES_WORKSPACE_DIR:?Set an absolute workspace path outside the checkout}
+        target: /workspace
+        bind:
+          create_host_path: false
     networks:
       hermes:
         ipv4_address: 172.30.90.2
@@ -45,18 +53,11 @@ services:
     healthcheck:
       test:
         - CMD
-        - python3
-        - -c
-        - >-
-          import json,os,subprocess,urllib.request,urllib.parse;
-          host=urllib.parse.urlsplit(os.environ['HERMES_PUBLIC_URL']).netloc;
-          req=urllib.request.Request('http://127.0.0.1:9119/api/status',headers={'Host':host});
-          data=json.load(urllib.request.urlopen(req,timeout=4));
-          assert data.get('auth_required') is True and data.get('auth_providers')==['telegram-owner'];
-          assert subprocess.check_output(['/command/s6-svstat','-o','up','/run/service/gateway-default'],timeout=2).strip()==b'true'
+        - /opt/hermes/.venv/bin/python
+        - /opt/agent-council/healthcheck.py
       start_period: 60s
       interval: 15s
-      timeout: 8s
+      timeout: 12s
       retries: 4
 
   certbot:

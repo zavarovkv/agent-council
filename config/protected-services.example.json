@@ -1,0 +1,11 @@
+{
+  "services": [
+    {
+      "unit": "existing-application.service",
+      "url": "https://existing.example.com/",
+      "sha256": {
+        "/etc/nginx/sites-available/existing-application": "REPLACE_WITH_EXPECTED_SHA256"
+      }
+    }
+  ]
+}

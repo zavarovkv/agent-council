@@ -33,6 +33,8 @@ def main():
             HERMES_PUBLIC_URL="https://fixture.example.test",
             HERMES_UID="10000",
             HERMES_GID="10000",
+            HERMES_DATA_DIR=str(temporary / "unused-data"),
+            HERMES_WORKSPACE_DIR=str(temporary / "unused-workspace"),
             COUNCIL_HERMES_IMAGE=os.environ.get(
                 "COUNCIL_RUNTIME_TEST_IMAGE", "agent-council-hermes:test"
             ),

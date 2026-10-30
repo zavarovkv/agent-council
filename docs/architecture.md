@@ -15,6 +15,11 @@ flowchart LR
     GitHub --> Checkout[Root-owned deployment checkout]
     Checkout --> Image[Digest-pinned image + owner policy]
     Image --> Hermes
+    Operator[Root-only operator CLI] --> Snapshot[Consistent private restore point]
+    State --> Snapshot
+    Workspace --> Snapshot
+    Snapshot --> Restic[Maintenance-only restic container]
+    Restic --> R2[Private encrypted R2 repository]
 ```
 
 The existing TravelLine process, virtual environment and Nginx virtual host
@@ -34,6 +39,19 @@ Model credentials and user state belong to the private data volume. They do
 not belong in an image, a source checkout or GitHub Actions. The deployment
 environment determines the public URL; no repository account is implicitly
 granted access to a new installation.
+
+`src/council_ops/` is the host-side operations layer. It is not installed in the
+agent container. It serializes maintenance, observes protected services, builds
+Git-revision images before downtime, checks a restored profile without network
+access and rolls data back together with the image after a failed upgrade.
+The active Compose source is recorded outside the checkout so a Git update
+cannot silently change the previous release's restart/rollback configuration.
+
+A separate pinned restic maintenance container encrypts backups before upload
+to a private R2 bucket. Agents receive neither R2 credentials, recovery password,
+host configuration nor backup directories. Recovery is checked by downloading a
+snapshot and opening its session databases in an offline, non-root container
+before retention removes older backups. See [backup and recovery](backups.md).
 
 Generic OIDC and an optional shared identity service are proposed in
 [authentication-options.md](authentication-options.md). They are not yet part

@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- License Agent Council under MIT; preserve third-party licenses.
+- Add versioned install, deployment, consistent backup and image/data rollback commands.
+- Track the active Compose source outside Git and use Git-revision image tags with OCI labels.
+- Add encrypted, data-only Cloudflare R2 backups with verified recovery and opt-in daily scheduling.
+- Exclude regenerable tools, environments, caches and logs from cloud backups.
+- Require external runtime directories and strengthen read-only gateway/auth readiness checks.
+- Serialize account/access changes with maintenance and restore credentials after failed setup.
+
 - Align header sign-in actions to the right with Beauty.css 0.4.0's `beauty-nav-end` helper, without local styling overrides.
 
 - Use the official Telegram Login SDK with a browser-bound, single-use server nonce and existing Hermes sessions.

@@ -1,4 +1,4 @@
-.PHONY: test test-integration test-browser lint format inspect
+.PHONY: test test-integration test-backups test-browser lint format inspect
 
 PYTHON ?= python3
 RUFF ?= ruff
@@ -17,6 +17,9 @@ test-browser:
 	mkdir -p .browser-fixture
 	docker run --rm --network none --read-only --user 10000:10000 --entrypoint /opt/hermes/.venv/bin/python -e PYTHONDONTWRITEBYTECODE=1 -v "$(CURDIR)/tests/integration:/tests:ro" --workdir /opt/hermes agent-council-hermes:test /tests/render_login_fixture.py > .browser-fixture/login.html
 	npx playwright test
+
+test-backups:
+	$(PYTHON) scripts/check-backups.py
 
 lint:
 	$(RUFF) check src tests scripts/*.py

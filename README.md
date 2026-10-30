@@ -11,6 +11,7 @@ The project is in early development. Its first integration is a self-hosted
 - Telegram sign-in for an owner and explicitly invited collaborators.
 - ChatGPT / Codex account setup through Hermes.
 - A login page built with [Beauty.css](https://github.com/zavarovkv/beauty-css).
+- Consistent restore points, deployment rollback and encrypted Cloudflare R2 backup tooling.
 
 Collaborators share one runtime and the same permissions. Per-user roles and
 isolation between untrusted users are not implemented yet.
@@ -19,7 +20,7 @@ isolation between untrusted users are not implemented yet.
 
 Follow the [deployment guide](docs/deployment.md) for Docker configuration,
 Telegram sign-in, model setup, updates and backups. It documents the current
-Ubuntu deployment and its server-specific scripts.
+Ubuntu deployment and its server-specific scripts. See [backup and recovery](docs/backups.md) for R2 setup.
 
 Credentials and live agent data stay outside Git and the Docker image.
 
@@ -48,5 +49,4 @@ live deployment checks.
 
 ## License
 
-A project license has not been selected yet. Public source availability alone
-does not grant an open-source license. Dependencies retain their own licenses.
+[MIT](LICENSE). Dependencies retain their own licenses.

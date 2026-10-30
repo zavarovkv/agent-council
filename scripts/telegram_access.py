@@ -8,7 +8,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-from env_utils import parse_environment, write_environment
+from env_utils import OPERATIONS_LOCK, operation_lock, parse_environment, write_environment
 
 CONFIG = Path("/etc/hermes/telegram.env")
 COMPOSE = "/opt/agent-council/scripts/compose-server.sh"
@@ -47,6 +47,10 @@ def restart_hermes():
             "up",
             "-d",
             "--force-recreate",
+            "--no-build",
+            "--no-deps",
+            "--pull",
+            "never",
             "--wait",
             "--wait-timeout",
             "120",
@@ -71,7 +75,10 @@ def main():
     if not marker.exists() or marker.read_text(encoding="utf-8").strip() != "raw":
         parser.error("Upgrade the deployment and run migrate-auth-environment.py first.")
     flags = os.O_CREAT | os.O_RDWR | getattr(os, "O_NOFOLLOW", 0)
-    with os.fdopen(os.open(CONFIG.with_suffix(".env.lock"), flags, 0o600), "a") as lock:
+    with (
+        operation_lock(OPERATIONS_LOCK),
+        os.fdopen(os.open(CONFIG.with_suffix(".env.lock"), flags, 0o600), "a") as lock,
+    ):
         fcntl.flock(lock, fcntl.LOCK_EX)
         previous = parse_environment(CONFIG.read_text(encoding="utf-8"), raw=True)
         if arguments.action == "list":

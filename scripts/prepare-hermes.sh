@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 # Run on the server after uploading this repository to /opt/hermes-deploy/assets.
 set -euo pipefail
+# shellcheck source=scripts/legacy-guard.sh
+source "$(dirname "${BASH_SOURCE[0]}")/legacy-guard.sh"
 umask 077
 
 assets=/opt/hermes-deploy/assets

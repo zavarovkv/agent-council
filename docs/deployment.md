@@ -19,12 +19,21 @@ Compose runs `gateway run` with `HERMES_DASHBOARD=1`. The upstream s6 supervisor
 manages both the model/messaging gateway and the dashboard in the same container.
 A dashboard-only command does not register gateway services and cannot execute
 model requests. No host systemd service or detached shell process is needed.
-The health check requires the protected dashboard and a live supervised gateway.
+The read-only health check requires a protected private API, the closed Telegram
+provider, a supervised gateway and fresh runtime state. It never starts or
+repairs processes as a side effect.
+
+The official image needs a root s6 bootstrap and writable container filesystem
+to configure UID/GID and tools. This is a reviewed upstream exception: do not add
+`user: hermes` or `read_only: true` without a compatible bootstrap. The actual
+gateway runs as the dedicated Hermes user. Maintenance verifier/restic containers
+have read-only roots.
 
 | Item | Server location |
 | --- | --- |
 | Deployment checkout | `/opt/agent-council` |
 | Compose settings | `/etc/agent-council/compose.env` |
+| Active Compose source / revision | `/etc/agent-council/active-compose.yaml`, `revision` |
 | Telegram Client ID / Secret | `/etc/hermes/telegram.env`, root-only |
 | Sessions, memory, skills, model login | `/var/lib/agent-council/hermes` → `/opt/data` |
 | Agent workspace | `/var/lib/agent-council/workspace` → `/workspace` |
@@ -32,6 +41,8 @@ The health check requires the protected dashboard and a live supervised gateway.
 | Separate HTTPS certificates | `/etc/hermes/letsencrypt` |
 | Native profile backup | `/opt/hermes-deploy/docker-migration/hermes-native-before-docker.tar` |
 | Retained native profile | `/var/lib/hermes/.hermes` |
+| Restore points | `/var/backups/agent-council/` |
+| R2 keys / recovery password | `/etc/agent-council/backup.env`, `backup-password`, root-only |
 
 GitHub stores source, templates and commit history. Credentials and live data
 stay outside the checkout. Container recreation preserves the bind-mounted
@@ -44,12 +55,30 @@ to the custom domain.
 
 ## Initial migration
 
+For a **new** Linux host, install Docker and Python, clone this repository to
+`/opt/agent-council`, create a dedicated system account named `hermes` and copy
+`config/docker.env.example` to `/etc/agent-council/compose.env` with mode 0600.
+Set the public HTTPS origin, real host UID/GID (`id hermes`) and dedicated absolute
+data/workspace paths outside the checkout. Run as root:
+
+```bash
+cd /opt/agent-council
+python3 scripts/manage.py install
+```
+
+This initializes a locked profile with **no default owner**. Configure Telegram
+and the model interactively. DNS, HTTPS and Nginx are separate host prerequisites:
+add only this application's virtual host, run `nginx -t`, then reload gracefully.
+The templates document the current server and need review for another hostname.
+Compose's dedicated `172.30.90.0/24` subnet must not overlap host/VPN networks.
+
 These scripts target the current Ubuntu server and are one-time operational
-tools, not a generic installer or an update command:
+tools, not a generic installer or an update command. Historical migration scripts
+require the explicit `COUNCIL_RUN_LEGACY_MIGRATION=true` opt-in:
 
 1. `scripts/install-docker.sh` installs Docker from its signed official apt
    repository without upgrading unrelated packages.
-2. Build with `bash scripts/compose-server.sh build` from the server checkout.
+2. Build a reviewed historical release in its original migration context.
 3. `scripts/stage-docker.sh` starts a copied profile on `127.0.0.1:19119`.
 4. `scripts/migrate-to-docker.sh` stops only native Hermes, takes a consistent
    profile/workspace backup, starts Compose on `127.0.0.1:9119`, verifies data
@@ -345,16 +374,38 @@ After reviewing and testing an update:
 
 ```bash
 git pull --ff-only
-bash scripts/compose-server.sh build
-bash scripts/compose-server.sh up -d --wait
+sudo python3 scripts/manage.py doctor
+sudo python3 scripts/manage.py deploy
 ```
 
-Back up the data directory, workspace and root-only configuration before
-upgrades. Stop only Hermes while copying its data for consistent SQLite
-backups, then start it again. Keep backups outside the checkout. To roll back
-the initial migration, stop Compose and enable/start `hermes-dashboard.service`.
-Back up any new Docker state before rollback to preserve post-cutover logins
-and sessions.
+`deploy` requires a clean checkout, builds/reuses a Git-SHA-tagged image before
+stopping anything, checks idle Hermes, takes a consistent local checkpoint and
+tests both old and candidate images against copied state without network access.
+A failed upgrade restores the old data, image, authentication and Compose source
+together. Displaced directories are retained. Existing SHA tags are reused,
+not overwritten; OCI labels record revision and license.
+
+Before the first managed update of an older deployment, record its exact
+currently deployed full Git revision:
+
+```bash
+sudo python3 scripts/manage.py adopt-release --revision FULL_DEPLOYED_COMMIT_SHA
+```
+
+It validates the existing deployment record/image label and saves that release's
+Compose source without restarting. It refuses to replace an existing active
+source. Do not infer the deployed revision from an updated checkout.
+
+See [backup and recovery](backups.md) for rollback and encrypted R2 setup. The
+old native profile remains a manual migration recovery point; it does not contain
+state accumulated after Docker cutover.
+
+Optionally install root-owned `/etc/agent-council/protected-services.json` from
+`config/protected-services.example.json`. The controller compares unrelated
+services' process IDs, explicit configuration hashes and verified HTTPS responses
+before/after maintenance; it never controls them. This deployment protects
+TravelLine. Access/credential setup and managed maintenance share a lock; finish
+interactive model/OAuth setup before updating.
 
 When upgrading from the initial quoted authentication env file, first run
 `python3 scripts/migrate-auth-environment.py` as root on the server, **before**

@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 # Cut over only after the independently running Docker candidate is healthy.
 set -euo pipefail
+# shellcheck source=scripts/legacy-guard.sh
+source "$(dirname "${BASH_SOURCE[0]}")/legacy-guard.sh"
 umask 077
 [[ $(id -u) == 0 ]]
 repository=/opt/agent-council
