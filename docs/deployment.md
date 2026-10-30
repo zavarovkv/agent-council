@@ -53,6 +53,11 @@ Hermes is available at **https://council.zavarov.com/** through Cloudflare,
 with a separate origin certificate. The initial `sslip.io` hostname redirects
 to the custom domain.
 
+After reviewing the hostname-specific Council route, apply its template with
+`sudo python3 scripts/manage.py configure-route`. It validates Nginx, checks the
+protected service and reloads gracefully; failures restore only Council's route.
+Origin transport failures return a non-cached 503 with `Retry-After: 30`.
+
 ## Initial migration
 
 For a **new** Linux host, install Docker and Python, clone this repository to

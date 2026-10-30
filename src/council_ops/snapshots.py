@@ -6,6 +6,8 @@ import os
 import shutil
 import stat
 import tempfile
+import time
+from contextlib import nullcontext
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -72,7 +74,7 @@ def tree_fingerprint(root):
     return result
 
 
-def copy_state(source, target, *, uid=None, gid=None, portable=False):
+def copy_state(source, target, *, uid=None, gid=None, portable=False, deadline=None):
     if source.is_symlink() or not source.is_dir() or target.exists() or target.is_symlink():
         raise OperationError("Copy state only between a regular source and a new destination.")
 
@@ -88,7 +90,12 @@ def copy_state(source, target, *, uid=None, gid=None, portable=False):
                 ignored.append(name)  # Gateway sockets are ephemeral, not persistent state.
         return ignored
 
-    shutil.copytree(source, target, symlinks=True, ignore=ignore_special)
+    def copy_file(source_file, target_file):
+        if deadline is not None and time.monotonic() >= deadline:
+            raise OperationError("Snapshot freeze budget exceeded; checkpoint discarded.")
+        return shutil.copy2(source_file, target_file)
+
+    shutil.copytree(source, target, symlinks=True, ignore=ignore_special, copy_function=copy_file)
     target.chmod(0o700)
     if uid is not None:
         for parent, directories, files in os.walk(target, followlinks=False):
@@ -166,30 +173,29 @@ def snapshot(runtime, *, include_image=False, restart=True, portable=False):
         (backup / "image.tar").chmod(0o600)
         files["image.tar"] = checksum(backup / "image.tar")
     complete = False
-    restarted = False
+    stopped = False
     try:
-        if running:
+        if running and not restart:
+            stopped = True
             runtime.stop()
-        for source, target in (
-            (settings.env_file, "compose.env"),
-            (settings.auth_file, "auth.env"),
-            (runtime.compose_source(), "compose.yaml"),
-        ):
-            if source.is_symlink() or not source.is_file():
-                raise OperationError("Refusing a missing or symlinked host configuration.")
-            atomic_write(backup / target, source.read_bytes())
-        if settings.secretary_file.exists():
-            atomic_write(backup / "secretary.env", settings.secretary_file.read_bytes())
-            files["secretary.env"] = checksum(backup / "secretary.env")
-        copy_state(settings.data_dir, backup / "hermes", portable=portable)
-        copy_state(settings.workspace_dir, backup / "workspace")
-        # Daily backups restart before hashing/upload; a deployment freezes its
-        # rollback point until the candidate has been checked and started.
+        # Routine snapshots freeze all writers rather than recreating gateways.
+        # Code cutovers retain the stopped, consistent rollback point as before.
+        with runtime.frozen() if running and restart else nullcontext(None) as deadline:
+            for source, target in (
+                (settings.env_file, "compose.env"),
+                (settings.auth_file, "auth.env"),
+                (runtime.compose_source(), "compose.yaml"),
+            ):
+                if source.is_symlink() or not source.is_file():
+                    raise OperationError("Refusing a missing or symlinked host configuration.")
+                atomic_write(backup / target, source.read_bytes())
+            if settings.secretary_file.exists():
+                atomic_write(backup / "secretary.env", settings.secretary_file.read_bytes())
+                files["secretary.env"] = checksum(backup / "secretary.env")
+            copy_state(settings.data_dir, backup / "hermes", portable=portable, deadline=deadline)
+            copy_state(settings.workspace_dir, backup / "workspace", deadline=deadline)
         if running and restart:
-            runtime.start()
-            runtime.ready()
             runtime.check_protected()
-            restarted = True
         for name in ("compose.env", "auth.env", "compose.yaml"):
             files[name] = checksum(backup / name)
         manifest = {
@@ -212,7 +218,7 @@ def snapshot(runtime, *, include_image=False, restart=True, portable=False):
         atomic_write(backup / "manifest.json", (json.dumps(manifest, indent=2) + "\n").encode())
         complete = True
     finally:
-        if running and not restarted and (restart or not complete):
+        if stopped and not complete:
             runtime.start()
             runtime.ready()
             runtime.check_protected()
