@@ -37,5 +37,5 @@ Check the staged diff before pushing. Disclose security issues through the
 private process in [SECURITY.md](SECURITY.md), not a public issue.
 
 Maintainers review and merge pull requests after CI passes. Contributors must
-have the right to submit their changes. Before external code contributions
-are accepted, the repository's license must be selected and published.
+have the right to submit their changes. Contributions use the repository's
+[MIT license](LICENSE); preserve third-party notices where applicable.
