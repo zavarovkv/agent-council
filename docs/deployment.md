@@ -120,7 +120,10 @@ The current deployment uses `@zavarov`; a new installation has **no default
 owner**. Hermes verifies the OIDC signature, issuer, audience and expiry before the owner policy pins the
 numeric Telegram ID. Later logins require that ID even after a username change
 or reassignment. Corrupted identity state denies access. Alternative dashboard
-providers are disabled. Until configured, the dashboard remains locked.
+providers are disabled. Until configured, the dashboard remains locked. Verified
+explicit-ID logins create the same pin as username enrollment. If an existing pin
+disagrees with a newly configured ID, login stays closed: reconcile ownership
+deliberately with a private backup rather than deleting the pin to reopen enrollment.
 
 ### Add or remove people
 
@@ -214,6 +217,9 @@ Google consent URL and approve access. The callback closes after completion or
 five minutes. Grants persist privately as `google_token.json`, in the format
 consumed by Hermes' Google Workspace tools. Verification refreshes the grant,
 reads the selected folder and checks that it permits new files, without writes.
+Both setup and verification hold the shared maintenance lock, since refreshing
+can update the saved grant. The callback uses the `agent-council_hermes` bridge;
+the secretary's additional network does not change its destination.
 
 The Drive scope grants access across the consenting account's Drive, even though
 CouncilBase is the chosen filing destination. Google shows this scope for the
@@ -258,7 +264,10 @@ duplicate sections or reports on retries.
 The image includes the official `advanced-delegation` plugin at reviewed commit
 `e404b6816b20237a82f6fbe2749b5a576cf75dba`, verified by archive checksum.
 It is opt-in; building the image does not create agents or change routing.
-Versioned role instructions live in `agents/dexter/`. Mutable profiles, reports,
+Versioned role instructions live in `instructions/dexter/`; the coordinator's
+skill is in `instructions/assistant/skills/competitor-research/`. See the
+[instruction index](../instructions/README.md) for editing and update behavior.
+Mutable profiles, reports,
 credentials and memory remain in the persistent data volume.
 
 After configuring the coordinator's Codex account, stop its gateway, provision
@@ -384,6 +393,12 @@ tests both old and candidate images against copied state without network access.
 A failed upgrade restores the old data, image, authentication and Compose source
 together. Displaced directories are retained. Existing SHA tags are reused,
 not overwritten; OCI labels record revision and license.
+
+`doctor` inspects actual mounts, capabilities, resource limits, runtime user and
+private settings. When the secretary is enabled it also reports worker health,
+policy validity and queue counts by state. It omits identities, messages and
+credentials. An optional route fault is reported for repair; a healthy process
+alone does not prove a model grant is still authorized.
 
 Before the first managed update of an older deployment, record its exact
 currently deployed full Git revision:

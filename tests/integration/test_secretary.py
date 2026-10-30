@@ -11,16 +11,16 @@ import threading
 import unittest
 import urllib.error
 import urllib.request
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
 from telegram import Chat, Message, Update, User
-from telegram.ext import Application, ApplicationHandlerStop
+from telegram.ext import Application, ApplicationHandlerStop, TypeHandler
 
 sys.path.insert(0, "/opt/agent-council")
-from secretary_worker.instructions import load_skills
+from secretary_worker.instructions import load_instructions
 from secretary_worker.model import generate
 from secretary_worker.service import Server, Service
 
@@ -58,7 +58,7 @@ class NativeHandlerTests(unittest.IsolatedAsyncioTestCase):
                 1,
                 message=Message(
                     1,
-                    datetime.now(timezone.utc),
+                    datetime.now(UTC),
                     Chat(67890, "private"),
                     from_user=User(67890, "Guest", False),
                     text="/approve",
@@ -68,7 +68,7 @@ class NativeHandlerTests(unittest.IsolatedAsyncioTestCase):
                 2,
                 message=Message(
                     2,
-                    datetime.now(timezone.utc),
+                    datetime.now(UTC),
                     Chat(12345, "private"),
                     from_user=User(12345, "Owner", False),
                     text="/model",
@@ -83,6 +83,16 @@ class NativeHandlerTests(unittest.IsolatedAsyncioTestCase):
                 with self.assertRaises(ApplicationHandlerStop):
                     await handler.callback(guest, None)
                 handle.assert_awaited_once_with(guest)
+                handle.reset_mock()
+                private_agent = AsyncMock()
+                application.add_handler(TypeHandler(Update, private_agent), group=0)
+                # The real SDK dispatcher runs offline; token initialization is not part of this fixture.
+                application._initialized = True
+                await application.process_update(guest)
+                handle.assert_awaited_once_with(guest)
+                private_agent.assert_not_called()
+                await application.process_update(owner)
+                private_agent.assert_awaited_once()
 
     async def test_public_menu_scopes_hide_management_commands_and_wait_for_native_startup(self):
         root = Path("/opt/hermes/plugins/council-secretary")
@@ -140,7 +150,7 @@ class NativeHandlerTests(unittest.IsolatedAsyncioTestCase):
         handler = application.handlers[-1000][0]
         message = Message(
             message_id=1,
-            date=datetime.now(timezone.utc),
+            date=datetime.now(UTC),
             chat=Chat(111, "private"),
             from_user=User(222, "Fixture", False),
             text="/model",
@@ -247,9 +257,13 @@ class WorkerModelTests(unittest.TestCase):
     def test_real_http_requires_machine_auth_and_refuses_caller_tools(self):
         with tempfile.TemporaryDirectory() as temporary:
             key = "a" * 64
-            skills = load_skills("/opt/agent-council/agents/secretary")
+            instructions = load_instructions("/opt/agent-council/instructions/secretary")
             service = Service(
-                temporary, key, skills=skills, generate=lambda _messages: "Fixture reply"
+                temporary,
+                key,
+                skills=instructions.skills,
+                prompt=instructions.policy,
+                generate=lambda _messages: "Fixture reply",
             )
             server = Server(("127.0.0.1", 0), service)
             thread = threading.Thread(target=server.serve_forever, daemon=True)

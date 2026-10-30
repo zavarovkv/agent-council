@@ -7,8 +7,9 @@ import json
 import os
 import re
 import tempfile
+from collections.abc import Mapping
 from pathlib import Path
-from typing import Any, Mapping
+from typing import Any
 
 
 class OwnerDenied(ValueError):
@@ -56,31 +57,41 @@ class OwnerPolicy:
 
     def authorize(self, claims: Mapping[str, Any]) -> int:
         account_id = telegram_id(claims.get("id"))
-        if account_id in self.additional_ids:
+        if account_id in self.additional_ids and account_id != self.account_id:
             # Invited users never bootstrap or replace the owner's pinned ID.
             return account_id
         if self.account_id is not None:
             if account_id != self.account_id:
                 raise OwnerDenied("This Telegram account is not allowed.")
-            return account_id
+        try:
+            return self._authorize_owner(account_id, claims)
+        except OSError as exc:
+            raise OwnerDenied("The owner identity file needs operator attention.") from exc
 
+    def _authorize_owner(self, account_id, claims):
         self.pin_path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
         lock_path = self.pin_path.with_suffix(".lock")
         flags = os.O_CREAT | os.O_RDWR | getattr(os, "O_NOFOLLOW", 0)
         with os.fdopen(os.open(lock_path, flags, 0o600), "a", encoding="utf-8") as lock:
             fcntl.flock(lock, fcntl.LOCK_EX)
+            if self.pin_path.is_symlink():
+                raise OwnerDenied("The owner identity file needs operator attention.")
             if self.pin_path.exists():
                 try:
                     data = json.loads(self.pin_path.read_text(encoding="utf-8"))
                     owner_id = telegram_id(data["telegram_id"])
                 except (OSError, ValueError, TypeError, KeyError) as exc:
                     raise OwnerDenied("The owner identity file needs operator attention.") from exc
+                if self.account_id is not None and self.account_id != owner_id:
+                    raise OwnerDenied("Configured and pinned owner IDs differ.")
                 if account_id != owner_id:
                     raise OwnerDenied("This Telegram account is not allowed.")
                 return account_id
 
             username = claims.get("preferred_username")
-            if not isinstance(username, str) or username.removeprefix("@").lower() != self.username:
+            if self.account_id is None and (
+                not isinstance(username, str) or username.removeprefix("@").lower() != self.username
+            ):
                 raise OwnerDenied("This Telegram account is not allowed.")
 
             temporary = None
@@ -100,6 +111,11 @@ class OwnerPolicy:
                     output.flush()
                     os.fsync(output.fileno())
                 os.replace(temporary, self.pin_path)
+                directory = os.open(self.pin_path.parent, os.O_RDONLY)
+                try:
+                    os.fsync(directory)
+                finally:
+                    os.close(directory)
             finally:
                 if temporary is not None:
                     temporary.unlink(missing_ok=True)

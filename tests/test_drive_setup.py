@@ -110,6 +110,21 @@ class DriveSetupTests(unittest.TestCase):
                     self.assertEqual(run.call_args_list[0].kwargs["input"], raw)
                     for call in run.call_args_list:
                         self.assertNotIn("not-a-real-secret", " ".join(call.args[0]))
+                        self.assertIn(
+                            "flock -n /etc/agent-council/operations.lock", call.args[0][-1]
+                        )
+
+    def test_callback_selects_hermes_network_when_the_secretary_network_is_also_present(self):
+        address = setup.callback_address(
+            {
+                "agent-council_secretary": {"IPAddress": "172.31.0.3"},
+                "agent-council_hermes": {"IPAddress": "172.30.90.2"},
+            }
+        )
+        self.assertEqual(str(address), "172.30.90.2")
+        for networks in ({}, {"agent-council_hermes": {"IPAddress": "8.8.8.8"}}):
+            with self.subTest(networks=networks), self.assertRaises(ValueError):
+                setup.callback_address(networks)
 
 
 if __name__ == "__main__":

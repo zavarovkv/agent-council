@@ -56,6 +56,29 @@ class SessionStoreTests(unittest.TestCase):
         self.path.write_bytes(b"corrupt")
         with self.assertRaises(sessions.SessionStoreError):
             self.store.lookup(token)
-        for days in (0, 91):
+        for days in (0, 91, True, 1.5, "30"):
             with self.assertRaises(ValueError):
                 sessions.SessionStore(self.path, "client", days=days)
+
+    def test_lookup_and_revocation_never_follow_an_existing_or_broken_symlink(self):
+        token, _ = self.store.issue(self.claims)
+        original = self.path.with_name("original.sqlite3")
+        self.path.rename(original)
+        for target in (original, self.path.with_name("missing")):
+            self.path.symlink_to(target)
+            for operation in (self.store.lookup, self.store.revoke):
+                with (
+                    self.subTest(target=target, operation=operation),
+                    self.assertRaises(sessions.SessionStoreError),
+                ):
+                    operation(token)
+            self.path.unlink()
+        self.assertIsNotNone(
+            sessions.SessionStore(original, "client", clock=lambda: self.now).lookup(token)
+        )
+
+    def test_session_lookup_rejects_world_readable_state(self):
+        token, _ = self.store.issue(self.claims)
+        self.path.chmod(0o644)
+        with self.assertRaises(sessions.SessionStoreError):
+            self.store.lookup(token)

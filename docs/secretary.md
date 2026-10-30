@@ -94,14 +94,17 @@ queues. Public and business conversations have separate history contexts.
 
 ## Editing reply skills
 
-The three editable reply scenarios live in this repository, in priority order:
+The [instruction index](../instructions/README.md) links all versioned roles.
+Secretary-wide rules live in
+[`instructions/secretary/POLICY.md`](../instructions/secretary/POLICY.md).
+The three editable reply scenarios are selected in priority order:
 
-- [`agents/secretary/spouse/SKILL.md`](../agents/secretary/spouse/SKILL.md):
+- [`instructions/secretary/skills/spouse/SKILL.md`](../instructions/secretary/skills/spouse/SKILL.md):
   warm, informal replies for the spouse conversation style.
 
-- [`agents/secretary/contacts/SKILL.md`](../agents/secretary/contacts/SKILL.md):
+- [`instructions/secretary/skills/contacts/SKILL.md`](../instructions/secretary/skills/contacts/SKILL.md):
   warmer, concise replies to explicitly listed contacts.
-- [`agents/secretary/new-users/SKILL.md`](../agents/secretary/new-users/SKILL.md):
+- [`instructions/secretary/skills/new-users/SKILL.md`](../instructions/secretary/skills/new-users/SKILL.md):
   the default introduction and request-clarification scenario for everyone else.
 
 Edit the Markdown below the YAML front matter, commit the change and deploy that
@@ -154,10 +157,11 @@ asking the model. All scenarios have the same tool-free permissions; contact
 membership and spouse style grant no private-agent, document or administrative access. Changing
 someone's category starts a separate history context. Existing pre-scenario
 history is retained under normal retention, but is not reused in these contexts.
-The common safety/identity constraints remain in
-`src/secretary_worker/service.py`; the editable files control conversation style
-and clarification, not execution permissions. No private facts or credentials
-belong in any skill.
+The common safety/identity instructions are loaded from `POLICY.md`; the server
+adds the configured owner and assistant names. Execution permissions remain
+enforced in code and container configuration independently of editable text.
+Missing or invalid instructions prevent worker startup. No private facts or
+credentials belong in any skill.
 
 ## Isolation and delivery
 

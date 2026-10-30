@@ -308,6 +308,15 @@ class OperationTests(unittest.TestCase):
         self.assertIn("a" * 64, private_key.read_text())
         self.assertEqual(read_settings(self.fixture.env)["COUNCIL_SECRETARY_ENABLED"], "true")
 
+    def test_restore_without_a_secretary_does_not_inherit_newer_machine_credentials(self):
+        runtime = FakeRuntime(self.fixture.settings())
+        backup = snapshot(runtime)
+        private_key = runtime.settings.secretary_file
+        private_key.write_text("COUNCIL_SECRETARY_KEY=fixture-newer-key\n")
+        restore(runtime, backup)
+        self.assertFalse(private_key.exists())
+        self.assertEqual(read_settings(self.fixture.env)["COUNCIL_SECRETARY_ENABLED"], "false")
+
     def test_compose_cannot_dump_secrets_or_inherit_a_foreign_volume(self):
         runtime = Runtime(self.fixture.settings())
         with self.assertRaises(OperationError):

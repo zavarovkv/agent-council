@@ -2,7 +2,7 @@
 
 ## Project Structure & Module Organization
 
-Agent Council is a platform for managing, coordinating and monitoring AI agents. Its first integration is an isolated Docker Compose deployment of Hermes alongside TravelLine Dashboard. `src/telegram_auth/` contains owner-only Telegram OIDC authorization, `agents/` contains versioned role instructions, `tests/` contains authorization and opt-in HTTPS tests, `config/` contains infrastructure templates, and `scripts/` contains deployment and account setup commands. `README.md` is the project overview; `docs/deployment.md` covers Docker operations, `docs/development.md` covers development checks, and `docs/native-deployment.md` records the previous native setup and rollback.
+Agent Council is a platform for managing, coordinating and monitoring AI agents. Its first integration is an isolated Docker Compose deployment of Hermes alongside TravelLine Dashboard. `src/telegram_auth/` contains Telegram dashboard authorization, `src/telegram_secretary/` contains native Telegram routing and delivery, `src/secretary_worker/` contains the isolated tool-free responder, and `src/council_ops/` contains host operations. `instructions/README.md` indexes versioned role instructions and reply skills; keep private/generated profile skills outside Git. `tests/` contains unit and opt-in integration tests, `config/` contains infrastructure templates, and `scripts/` contains deployment and account setup commands. `README.md` is the project overview; `docs/deployment.md` covers Docker operations, `docs/development.md` covers development checks, and `docs/native-deployment.md` records the previous native setup and rollback.
 
 ## Build, Test, and Development Commands
 

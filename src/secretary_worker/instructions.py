@@ -1,8 +1,25 @@
 """Load operator-authored reply skills shipped in the reviewed image."""
 
+from dataclasses import dataclass
 from pathlib import Path
 
 AUDIENCES = frozenset({"spouse", "contacts", "new-users"})
+
+
+@dataclass(frozen=True)
+class Instructions:
+    policy: str
+    skills: dict[str, str]
+
+
+def load_instructions(root):
+    path = Path(root) / "POLICY.md"
+    if path.is_symlink():
+        raise ValueError("Refusing a symlinked secretary policy.")
+    policy = path.read_text(encoding="utf-8").strip()
+    if not 0 < len(policy) <= 16000:
+        raise ValueError("A nonempty secretary policy is required.")
+    return Instructions(policy, load_skills(Path(root) / "skills"))
 
 
 def load_skills(root):

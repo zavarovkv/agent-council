@@ -8,8 +8,8 @@
 !assets/
 !assets/login/
 !assets/login/**
-!agents/
-!agents/**
+!instructions/
+!instructions/**
 !scripts/
 !scripts/install-login-theme.py
 !scripts/initialize-profile.py

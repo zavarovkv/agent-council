@@ -62,8 +62,22 @@ class TelegramOwnerTests(unittest.TestCase):
     def test_explicit_account_id_does_not_depend_on_username(self):
         policy = OwnerPolicy(self.pin, "", "12345")
         self.assertEqual(policy.authorize({"id": "12345"}), 12345)
+        self.assertEqual(json.loads(self.pin.read_text())["telegram_id"], 12345)
         with self.assertRaises(OwnerDenied):
             policy.authorize({"id": 99999, "preferred_username": "zavarov"})
+
+    def test_explicit_owner_cannot_bypass_a_different_or_corrupt_existing_pin(self):
+        policy = OwnerPolicy(self.pin, "", "12345")
+        for content in ('{"telegram_id":99999}', "{broken"):
+            self.pin.write_text(content)
+            with self.assertRaises(OwnerDenied):
+                policy.authorize({"id": 12345})
+
+    def test_broken_pin_symlink_cannot_reopen_username_enrollment(self):
+        self.pin.symlink_to(Path(self.directory.name) / "missing")
+        with self.assertRaises(OwnerDenied):
+            self.policy.authorize({"id": 12345, "preferred_username": "zavarov"})
+        self.assertTrue(self.pin.is_symlink())
 
     def test_concurrent_logins_publish_one_complete_pin(self):
         claims = {"id": 12345, "preferred_username": "zavarov"}

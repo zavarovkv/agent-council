@@ -44,6 +44,7 @@ live deployment checks.
 
 ## Documentation
 
+- [Agent instructions and skills](instructions/README.md)
 - [Architecture](docs/architecture.md)
 - [Deployment](docs/deployment.md)
 - [Contributing](CONTRIBUTING.md)

@@ -79,7 +79,7 @@ class ResearcherTests(unittest.TestCase):
                 installer.atomic_private_write(path, json.dumps(content).encode())
 
             def install():
-                return installer.provision(home, ROOT / "agents", read, write, create)
+                return installer.provision(home, ROOT / "instructions", read, write, create)
 
             profile = install()
             report = profile / "research" / "report.md"
@@ -108,11 +108,11 @@ class ResearcherTests(unittest.TestCase):
             profile.mkdir(parents=True)
             coordinator = {"model": {"provider": "openai-codex", "default": "test"}}
             with self.assertRaisesRegex(ValueError, "not managed"):
-                installer.provision(home, ROOT / "agents", lambda p: coordinator, None, None)
+                installer.provision(home, ROOT / "instructions", lambda p: coordinator, None, None)
             profile.rmdir()
             profile.symlink_to(home, target_is_directory=True)
             with self.assertRaisesRegex(ValueError, "symlink"):
-                installer.provision(home, ROOT / "agents", lambda p: coordinator, None, None)
+                installer.provision(home, ROOT / "instructions", lambda p: coordinator, None, None)
 
 
 if __name__ == "__main__":
