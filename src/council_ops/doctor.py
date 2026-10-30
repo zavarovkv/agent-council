@@ -4,6 +4,7 @@ import json
 import os
 import re
 import sqlite3
+import time
 from contextlib import closing
 from datetime import UTC, datetime
 from pathlib import Path
@@ -133,13 +134,69 @@ def secretary_status(settings, inspected):
                 if db.execute("PRAGMA quick_check").fetchall() != [("ok",)]:
                     raise ValueError("Invalid queue")
                 states = dict(db.execute("SELECT status,count(*) FROM jobs GROUP BY status"))
+                oldest = db.execute(
+                    "SELECT min(created) FROM jobs WHERE status IN ('queued','working','sending')"
+                ).fetchone()[0]
             allowed = {"queued", "working", "sending", "sent", "failed", "cancelled", "uncertain"}
             if not set(states) <= allowed:
                 raise ValueError("Invalid queue state")
-            queues[route] = {"enabled": True, "available": True, "counts": states}
+            queues[route] = {
+                "enabled": True,
+                "available": True,
+                "counts": states,
+                "oldest_pending_age_seconds": max(0, int(time.time() - oldest))
+                if oldest is not None
+                else 0,
+            }
         except (OSError, sqlite3.Error, ValueError):
             queues[route] = {"enabled": True, "available": False}
     return {"enabled": True, "policy_valid": policy.enabled, "queues": queues}
+
+
+def generation_status(home):
+    """Read aggregate reservations/outcomes without loading message bodies."""
+    path = home / ".council/secretary/secretary-history.sqlite3"
+    if not path.exists() and not path.is_symlink():
+        return {"available": False}
+    try:
+        if path.resolve() != path or not path.is_file():
+            raise ValueError("Invalid history path")
+        with closing(sqlite3.connect(path.as_uri() + "?mode=ro", uri=True)) as db:
+            tables = {
+                row[0] for row in db.execute("SELECT name FROM sqlite_master WHERE type='table'")
+            }
+            if "generation_events" not in tables:
+                return {"available": False}
+            counts = dict(
+                db.execute(
+                    "SELECT route,count(*) FROM turns WHERE created>? GROUP BY route",
+                    (time.time() - 3600,),
+                )
+            )
+            outcomes = {}
+            for route in ("business", "public"):
+                row = db.execute(
+                    "SELECT outcome,created FROM generation_events WHERE route=? ORDER BY created DESC,rowid DESC LIMIT 1",
+                    (route,),
+                ).fetchone()
+                if row and row[0] in {
+                    "ok",
+                    "provider_auth",
+                    "provider_quota",
+                    "provider_timeout",
+                    "model_unavailable",
+                    "invalid_reply",
+                }:
+                    outcomes[route] = {"outcome": row[0], "at": row[1]}
+        return {
+            "available": True,
+            "reserved_last_hour": {
+                route: int(counts.get(route, 0)) for route in ("business", "public")
+            },
+            "last_outcomes": outcomes,
+        }
+    except (ValueError, OSError, sqlite3.Error):
+        return {"available": False}
 
 
 def doctor(runtime):
@@ -264,6 +321,8 @@ def doctor(runtime):
         if metadata.st_uid != 0 or metadata.st_mode & 0o077:
             raise OperationError("The secretary machine key must remain root-only.")
     secretary = secretary_status(runtime.settings, inspected)
+    if secretary["enabled"]:
+        secretary["generation"] = generation_status(runtime.settings.data_dir)
     if companion:
         secretary["worker_status"] = worker["State"]["Status"]
         secretary["worker_health"] = worker["State"].get("Health", {}).get("Status")
@@ -271,6 +330,7 @@ def doctor(runtime):
         secretary["worker_status"] = "missing"
     backups = backup_status(runtime.settings)
     backups["timer"] = unit_status(runtime, "agent-council-backup.timer")
+    backups["service"] = unit_status(runtime, "agent-council-backup.service")
     instructions = instruction_status(runtime.settings.data_dir)
     rejected = runtime.settings.env_file.with_name("instructions-update-failure.json")
     if rejected.is_file() and not rejected.is_symlink():

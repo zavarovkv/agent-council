@@ -103,16 +103,17 @@ budgets to the owner. Provider-account quotas are still shared upstream.
 
 ### P1 — Deliver failure and stale-backup alerts
 
-Timers, exit codes and `doctor` provide local evidence. An operator still needs
-an alert when credentials expire, a backup becomes stale, instruction activation
-fails or the host becomes unreachable. The current backup unit retries, but no
-external notification destination is configured.
+Implemented: a host monitor sends incident/recovery notifications only to the
+root-pinned owner's numeric Telegram ID, using the bot's existing private token.
+It deduplicates persistent incidents, skips active maintenance and checks services,
+queues, safe provider outcomes, backup age/units, instruction drift/rejection and
+disk space. Failed notification delivery retains the episode for retry.
 
-Add one approved operator destination and an external reachability check. Dedup
-alerts by failure/revision and keep messages free of private content. Monitor
-backup verification age, failed update revision, queue age, disk space and
-provider-auth failures. A staged failure should produce one useful alert and a
-recovery notification, without leaking credentials or opening application APIs.
+A separate scheduled GitHub workflow checks public HTTPS and auth boundaries
+without any deployment secrets. It reports through GitHub's notification system;
+owner account notification preferences remain a required setup step. It cannot
+send through an unreachable host's Telegram credential. See
+[monitoring](monitoring.md) for setup, limits and verification.
 
 ### P1 — Rehearse recovery on a replacement host
 

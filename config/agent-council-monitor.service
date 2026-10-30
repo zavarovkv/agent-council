@@ -1,0 +1,14 @@
+[Unit]
+Description=Check Agent Council services and notify only its pinned owner
+Wants=network-online.target
+After=network-online.target
+ConditionPathExists=/etc/agent-council/monitor.json
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/agent-council
+ExecStart=/usr/bin/python3 /opt/agent-council/scripts/manage.py monitor
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+TimeoutStartSec=2min

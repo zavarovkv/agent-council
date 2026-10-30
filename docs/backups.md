@@ -68,9 +68,10 @@ systemctl list-timers agent-council-backup.timer
 The timer runs daily at 01:00 UTC, with up to 15 minutes of jitter, and catches
 missed runs. It retries failures, including a busy profile. Check
 `systemctl status agent-council-backup.service` and
-`journalctl -u agent-council-backup.service`. No external alert destination is
-configured; connect failures to your monitoring before relying on unattended
-backups. GitHub Actions receives no deployment or storage credentials.
+`journalctl -u agent-council-backup.service`. Enable the pinned-owner host
+[monitor](monitoring.md) for failures and stale verified copies. The independent
+GitHub HTTPS check detects host/edge outages. GitHub Actions receives no deployment
+or storage credentials.
 
 ## Consistency and retention
 
