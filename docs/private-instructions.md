@@ -26,6 +26,20 @@ Artifacts must be regular UTF-8 files, with no symlinks or hidden resources,
 at most 1 MiB per file and 8 MiB/1,024 files per bundle. Common credential
 patterns are rejected as a guardrail, not a complete secret-detection guarantee.
 Keep credentials, configuration, databases, conversations and memory outside Git.
+
+When a skill needs a newly released application capability, add an optional
+root `requires.json`, for example:
+
+```json
+{"schema":1,"capabilities":["research-filing-v1"]}
+```
+
+The installer checks the running image's advertised capabilities before downtime
+and records them with the installed revision. Copied-profile verification also
+rejects incompatible images during upgrade/restore. A combined `deploy
+--instructions-source PATH --instructions-revision FULL_SHA` checks the candidate
+image and activates code plus matching rules in one rollback-protected cutover.
+This manifest describes required code, never credentials or extra agent grants.
 Keep third-party notices for modified upstream skills. Unchanged upstream skills
 remain supplied by the pinned Hermes release.
 

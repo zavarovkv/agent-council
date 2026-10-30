@@ -81,6 +81,7 @@ def main():
         home / "plugin-data/council-secretary/queue.sqlite3",
         home / "plugin-data/council-secretary/public-queue.sqlite3",
         home / ".council/secretary/secretary-history.sqlite3",
+        home / ".council/research-filing/outbox.sqlite3",
     ):
         if session_store.exists():
             if session_store.is_symlink():

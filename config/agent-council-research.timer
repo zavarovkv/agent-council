@@ -1,0 +1,11 @@
+[Unit]
+Description=Resume queued Agent Council research filing every five minutes
+
+[Timer]
+OnBootSec=5min
+OnUnitActiveSec=5min
+RandomizedDelaySec=45s
+Unit=agent-council-research.service
+
+[Install]
+WantedBy=timers.target

@@ -17,6 +17,7 @@ from .snapshots import snapshot
 MARKER = ".council/instructions.json"
 FAILURE = "instructions-update-failure.json"
 ROLE = re.compile(r"[a-z][a-z0-9_-]{0,63}\Z")
+CAPABILITY_LABEL = "io.agent-council.capabilities"
 CREDENTIAL = re.compile(
     r"gh[pousr]_[A-Za-z0-9]{30,}|github_pat_[A-Za-z0-9_]{30,}|"
     r"sk-(?:proj-)?[A-Za-z0-9_-]{30,}|GOCSPX-[A-Za-z0-9_-]{15,}|"
@@ -163,7 +164,59 @@ def validate_existing(home, files):
     return previous
 
 
-def install_files(home, files, revision, uid, gid):
+def validated_capabilities(value):
+    if (
+        not isinstance(value, list)
+        or len(value) > 20
+        or any(not isinstance(item, str) or not ROLE.fullmatch(item) for item in value)
+    ):
+        raise OperationError("Invalid instruction capability requirements.")
+    return sorted(set(value))
+
+
+def source_requirements(source):
+    path = source / "requires.json"
+    if not path.exists() and not path.is_symlink():
+        return []
+    if path.resolve() != path or not path.is_file() or path.stat().st_size > 4096:
+        raise OperationError("Invalid instruction compatibility manifest.")
+    value = json.loads(path.read_text())
+    if (
+        not isinstance(value, dict)
+        or set(value) != {"schema", "capabilities"}
+        or value["schema"] != 1
+    ):
+        raise OperationError("Unsupported instruction compatibility manifest.")
+    return validated_capabilities(value["capabilities"])
+
+
+def installed_requirements(home):
+    path = home / MARKER
+    if not path.exists():
+        return []
+    previous_files(home)
+    return validated_capabilities(json.loads(path.read_text()).get("required_capabilities", []))
+
+
+def verify_capabilities(runtime, required, *, image=None):
+    if not required:
+        return
+    labels = (
+        runtime.image()[1]
+        if image is None
+        else json.loads(runtime.run(["docker", "image", "inspect", image]))[0]
+        .get("Config", {})
+        .get("Labels", {})
+        or {}
+    )
+    available = set(labels.get(CAPABILITY_LABEL, "").split(","))
+    if not set(required) <= available:
+        raise OperationError(
+            "Deploy an image providing the private instructions' required capabilities first."
+        )
+
+
+def install_files(home, files, revision, uid, gid, *, capabilities=()):
     previous = validate_existing(home, files)
     for name, artifact in files.items():
         path = destination(home, name)
@@ -187,6 +240,7 @@ def install_files(home, files, revision, uid, gid):
                 {
                     "schema": 1,
                     "revision": revision,
+                    "required_capabilities": list(capabilities),
                     "files": {
                         name: digest(artifact.data) for name, artifact in sorted(files.items())
                     },
@@ -293,6 +347,8 @@ def apply(runtime, source, revision, *, fetch=False):
     source = source.absolute()
     checkout(runtime, source, revision, fetch=fetch)
     files = collect(source, runtime.settings.data_dir)
+    capabilities = source_requirements(source)
+    verify_capabilities(runtime, capabilities)
     validate_existing(runtime.settings.data_dir, files)
     checkout(runtime, source, revision)
     marker = runtime.settings.data_dir / MARKER
@@ -355,8 +411,12 @@ def apply(runtime, source, revision, *, fetch=False):
         )
         if selector_matches and same_files and same_modes:
             value = json.loads(marker.read_text())
-            if value.get("revision") != revision:
+            if (
+                value.get("revision") != revision
+                or value.get("required_capabilities", []) != capabilities
+            ):
                 value["revision"] = revision
+                value["required_capabilities"] = capabilities
                 atomic_write(marker, (json.dumps(value, indent=2) + "\n").encode())
                 uid, gid = identity(runtime.settings)
                 os.chown(marker, uid, gid)
@@ -373,11 +433,15 @@ def apply(runtime, source, revision, *, fetch=False):
         smoke(
             runtime,
             backup,
-            prepare_copy=lambda home: install_files(home, files, revision, uid, gid),
+            prepare_copy=lambda home: install_files(
+                home, files, revision, uid, gid, capabilities=capabilities
+            ),
             instruction_mode="profile" if has_secretary else "image",
         )
         changed = True
-        install_files(runtime.settings.data_dir, files, revision, uid, gid)
+        install_files(
+            runtime.settings.data_dir, files, revision, uid, gid, capabilities=capabilities
+        )
         if has_secretary or had_secretary:
             values = read_settings(runtime.settings.secretary_file)
             values["COUNCIL_SECRETARY_INSTRUCTIONS"] = "profile" if has_secretary else "image"

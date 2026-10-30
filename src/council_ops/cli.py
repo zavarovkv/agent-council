@@ -18,6 +18,8 @@ from .instructions import sync as sync_instructions
 from .lifecycle import deploy, restore, smoke
 from .monitoring import configure as configure_monitoring
 from .monitoring import poll as monitor
+from .research import configure as configure_research
+from .research import flush as flush_research
 from .restic import Restic, cloud_backup
 from .routing import configure as configure_route
 from .runtime import Runtime
@@ -85,6 +87,10 @@ def parser():
     secretary.add_argument("--assistant-name", default="Ассистент")
     commands.add_parser("doctor", help="Read safe configuration, isolation and service status")
     commands.add_parser(
+        "configure-research", help="Prepare coordinator-only Kanban and Notion filing"
+    )
+    commands.add_parser("flush-research", help="Resume queued research filing without model calls")
+    commands.add_parser(
         "configure-monitoring", help="Pin operational notifications to the verified owner"
     )
     monitoring = commands.add_parser(
@@ -118,8 +124,12 @@ def parser():
     commands.add_parser(
         "configure-backups", help="Enter R2 credentials and recovery password in a private terminal"
     )
-    commands.add_parser(
+    deployment = commands.add_parser(
         "deploy", help="Build the clean checkout, test a copied profile and switch Hermes"
+    )
+    deployment.add_argument("--instructions-source", type=Path)
+    deployment.add_argument(
+        "--instructions-revision", help="Full reviewed private SHA; checkout must already match"
     )
     recovery = commands.add_parser(
         "restore", help="Restore this deployment, retaining displaced directories"
@@ -184,6 +194,10 @@ def main(argv=None):
             result = configure_route(runtime)
         elif arguments.action == "configure-monitoring":
             result = configure_monitoring(runtime)
+        elif arguments.action == "configure-research":
+            result = configure_research(runtime)
+        elif arguments.action == "flush-research":
+            result = flush_research(runtime)
         elif arguments.action == "apply-instructions":
             result = apply_instructions(
                 runtime, arguments.source, arguments.revision, fetch=arguments.fetch
@@ -223,7 +237,11 @@ def main(argv=None):
             manifest = smoke(runtime, arguments.backup)
             result = {"verified": True, "image": manifest["image_id"], "external_network": False}
         elif arguments.action == "deploy":
-            result = deploy(runtime)
+            result = deploy(
+                runtime,
+                instruction_source=arguments.instructions_source,
+                instruction_revision=arguments.instructions_revision,
+            )
         elif arguments.action == "restore":
             if not arguments.confirm:
                 raise OperationError(

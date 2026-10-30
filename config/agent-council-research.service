@@ -1,0 +1,14 @@
+[Unit]
+Description=Resume verified research filing through native Kanban and Notion
+After=docker.service network-online.target
+Requires=docker.service
+ConditionPathExists=/etc/agent-council/research.json
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/agent-council
+ExecStart=/usr/bin/python3 /opt/agent-council/scripts/manage.py flush-research
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+TimeoutStartSec=6min

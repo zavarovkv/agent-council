@@ -75,4 +75,7 @@ See the [architecture review and priorities](docs/architecture-review.md) for
 operational follow-up, and [monitoring](docs/monitoring.md) for owner alerts and
 independent HTTPS checks.
 
+[Research workflow](docs/research.md) connects native task/run tracking to reviewed
+Notion reports and their parent-page index.
+
 [MIT](LICENSE). Dependencies retain their own licenses.

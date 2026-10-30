@@ -12,7 +12,7 @@ from contextlib import contextmanager
 from telegram_secretary.policy import pinned_owner
 
 from .config import OperationError, atomic_write
-from .doctor import backup_status, doctor, instruction_status
+from .doctor import backup_status, doctor, instruction_status, research_status
 from .runtime import Runtime
 
 LABELS = {
@@ -26,6 +26,7 @@ LABELS = {
     "backup": "Нет свежей проверенной резервной копии R2 или отключено расписание.",
     "instructions": "Обновление инструкций остановлено, отклонено или требует сверки файлов.",
     "disk": "На сервере осталось мало свободного места.",
+    "research": "Сохранение исследований требует внимания: очередь задерживается или автоматизация недоступна.",
 }
 NAMES = {
     "deployment": "Проверка развёртывания",
@@ -38,6 +39,7 @@ NAMES = {
     "backup": "Резервные копии R2",
     "instructions": "Обновление инструкций",
     "disk": "Свободное место",
+    "research": "Сохранение исследований",
 }
 
 
@@ -101,6 +103,7 @@ def configure(runtime):
         "owner_id": owner,
         "watch_backups": backup_status(settings)["configured"],
         "watch_instructions": instruction_status(settings.data_dir)["configured"],
+        "watch_research": research_status(settings)["configured"],
     }
     path = settings.env_file.with_name("monitor.json")
     if path.exists() and private_json(path).get("owner_id") != owner:
@@ -193,6 +196,13 @@ def issues(report, configuration, *, free_bytes, total_bytes):
         result["instructions"] = instructions.get("rejected_revision", "conflict_or_disabled")
     if free_bytes < max(1024**3, total_bytes // 20):
         result["disk"] = "low"
+    research = report.get("research", {})
+    if configuration.get("watch_research") and (
+        not research.get("available")
+        or research.get("oldest_pending_age_seconds", 0) > 1800
+        or research.get("timer", {}).get("ActiveState") != "active"
+    ):
+        result["research"] = "filing_delayed_or_disabled"
     return result
 
 
