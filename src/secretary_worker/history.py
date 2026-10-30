@@ -5,6 +5,8 @@ import time
 from contextlib import contextmanager
 from pathlib import Path
 
+HOURLY_LIMITS = {"business": 60, "public": 40}
+
 
 class History:
     def __init__(self, home, *, clock=time.time):
@@ -22,6 +24,11 @@ class History:
                 );
                 CREATE INDEX IF NOT EXISTS turns_conversation ON turns(conversation,created);
             """)
+            # Older reservations conservatively consume the public budget. Never
+            # infer a privileged route from user text or a mutable username.
+            if "route" not in {row[1] for row in db.execute("PRAGMA table_info(turns)")}:
+                db.execute("ALTER TABLE turns ADD COLUMN route TEXT NOT NULL DEFAULT 'public'")
+            db.execute("CREATE INDEX IF NOT EXISTS turns_route ON turns(route,created)")
             db.execute("DELETE FROM turns WHERE created < ?", (clock() - 14 * 86400,))
         self.path.chmod(0o600)
 
@@ -41,11 +48,11 @@ class History:
             now = self.clock()
             db.execute("DELETE FROM turns WHERE created < ?", (now - 14 * 86400,))
             previous = db.execute(
-                "SELECT conversation,question,answer FROM turns WHERE request_id=?",
+                "SELECT conversation,question,answer,route FROM turns WHERE request_id=?",
                 (request.identifier,),
             ).fetchone()
             if previous:
-                if previous[:2] != (request.context, request.text):
+                if previous[:2] != (request.context, request.text) or previous[3] != request.route:
                     raise ValueError("Request identity conflict.")
                 if previous[2] is None:
                     raise BlockingIOError("Request already in progress or interrupted.")
@@ -61,9 +68,10 @@ class History:
                 (request.context, now - 3600),
             ).fetchone()[0]
             total = db.execute(
-                "SELECT count(*) FROM turns WHERE created>?", (now - 3600,)
+                "SELECT count(*) FROM turns WHERE route=? AND created>?",
+                (request.route, now - 3600),
             ).fetchone()[0]
-            if recent >= 20 or total >= 100:
+            if recent >= 20 or total >= HOURLY_LIMITS[request.route]:
                 raise BlockingIOError("Hourly reply limit reached.")
             history = db.execute(
                 "SELECT question,answer FROM turns WHERE conversation=? AND delivered=1 "
@@ -71,8 +79,9 @@ class History:
                 (request.context,),
             ).fetchall()[::-1]
             db.execute(
-                "INSERT INTO turns(request_id,conversation,question,answer,created) VALUES (?,?,?,?,?)",
-                (request.identifier, request.context, request.text, None, now),
+                "INSERT INTO turns(request_id,conversation,question,answer,created,route) "
+                "VALUES (?,?,?,?,?,?)",
+                (request.identifier, request.context, request.text, None, now, request.route),
             )
         return None, history
 

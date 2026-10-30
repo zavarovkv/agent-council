@@ -9,6 +9,8 @@ PUBLIC_CONNECTION = "public-bot-dm"
 
 
 class PublicBridge(Delivery):
+    route = "public"
+
     def __init__(self, *args, greeting, **kwargs):
         super().__init__(*args, **kwargs)
         self.greeting = greeting

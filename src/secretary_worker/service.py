@@ -11,7 +11,7 @@ from pathlib import Path
 from .history import History
 from .http import Server
 from .instructions import AUDIENCES, configured_instructions
-from .protocol import ReplyRequest, request_id
+from .protocol import ROUTES, ReplyRequest, request_id
 
 
 class Service:
@@ -29,7 +29,7 @@ class Service:
         self.key, self.skills, self.prompt = key, dict(skills), prompt
         self.generate = generate or model_generate
         self.history = History(home, clock=clock)
-        self.capacity = threading.BoundedSemaphore(2)
+        self.capacity = {route: threading.BoundedSemaphore(1) for route in ROUTES}
 
     def authorized(self, authorization):
         return isinstance(authorization, str) and hmac.compare_digest(
@@ -38,7 +38,8 @@ class Service:
 
     def reply(self, payload):
         request = ReplyRequest.parse(payload)
-        if not self.capacity.acquire(blocking=False):
+        capacity = self.capacity[request.route]
+        if not capacity.acquire(blocking=False):
             raise BlockingIOError("Service capacity reached.")
         try:
             cached, history = self.history.begin(request)
@@ -64,7 +65,7 @@ class Service:
             self.history.complete(request.identifier, answer)
             return answer
         finally:
-            self.capacity.release()
+            capacity.release()
 
     def acknowledge(self, payload):
         self.history.acknowledge(request_id(payload))

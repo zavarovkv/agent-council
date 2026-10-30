@@ -87,8 +87,11 @@ The public queue is separate from business replies, stored in
 `plugin-data/council-secretary/public-queue.sqlite3`. It keeps the same deduplication,
 ambiguous-send policy and 14-day retention, plus a 30-message per-chat/hour queue
 limit and 200-message global/hour limit, including local commands. Worker limits
-remain 20 generated replies per conversation/hour and 100 globally/hour across
-both routes. Both queues share the two-call concurrency allowance and block
+remain 20 generated replies per conversation/hour, with independent hourly
+budgets of 60 business replies and 40 public replies. Each route has one reserved
+generation slot in both the gateway and worker; public traffic cannot consume
+the business slot or budget. The authenticated gateway selects the route from
+the verified transport, never message text or usernames. Both queues block
 deployment maintenance while replies are pending. Backups include and verify both
 queues. Public and business conversations have separate history contexts.
 
@@ -199,8 +202,9 @@ message cancels pending versions. A manual owner reply cancels pending replies
 and gives the human a five-minute quiet window. Telegram pause/revocation blocks
 sending; an already in-flight send cannot be recalled.
 
-Limits: two model calls concurrently, 20 requests per conversation/hour and 100
-globally/hour. Input is limited to 6,000 characters; replies to 3,000. History is
+Limits: one model call per route concurrently, 20 requests per conversation/hour,
+60 business replies/hour and 40 public replies/hour. Input is limited to 6,000
+characters; replies to 3,000. History is
 pruned after 14 days on startup/new requests, with eight delivered turns used as
 context. Stored backups follow their separate retention policy. This is not
 a general public agent sandbox: it has no tools or private knowledge integrations.

@@ -32,12 +32,10 @@ def attach(application, adapter):
     if application.bot_data.get("council-secretary-registered"):
         return
     settings = Settings.load(os.environ)
-    capacity = asyncio.Semaphore(2)
     bridges = {"business": None, "public": None}
     options = {
         "contacts": settings.contacts,
         "spouse_username": settings.spouse_username,
-        "capacity": capacity,
     }
     if settings.error:
         logger.error("Invalid secretary policy; external updates remain closed.")
@@ -48,7 +46,9 @@ def attach(application, adapter):
         if not active:
             continue
         try:
-            extra = {}
+            # One independent generation slot per route: public traffic cannot
+            # queue ahead of or occupy the business route's reserved capacity.
+            extra = {"capacity": asyncio.Semaphore(1)}
             if route == "public":
                 extra["greeting"] = (
                     f"Я {settings.assistant_name}, цифровой помощник {settings.owner_name}. "

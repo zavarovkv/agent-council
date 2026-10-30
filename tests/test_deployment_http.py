@@ -56,6 +56,7 @@ class DeploymentHTTPTests(unittest.TestCase):
         data = json.loads(body)
         self.assertIs(data["auth_required"], True)
         self.assertEqual(data["auth_providers"], ["telegram-owner"])
+        self.assertEqual(set(data), {"auth_required", "auth_providers", "auth_flows"})
 
     def test_setup_login_page_is_served_as_html(self):
         status, body, headers = self.request("/auth/login?provider=telegram-owner&next=%2F")

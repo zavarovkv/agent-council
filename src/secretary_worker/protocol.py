@@ -7,6 +7,7 @@ from dataclasses import dataclass, field
 from .instructions import AUDIENCES
 
 IDENTIFIER = re.compile(r"[a-f0-9]{64}\Z")
+ROUTES = frozenset({"business", "public"})
 
 
 def request_id(payload):
@@ -26,26 +27,36 @@ class ReplyRequest:
     conversation: str
     text: str = field(repr=False)
     audience: str
+    route: str = "public"
 
     @classmethod
     def parse(cls, payload):
         fields = {"request_id", "conversation", "text"}
-        if not isinstance(payload, dict) or set(payload) not in (fields, fields | {"audience"}):
+        if (
+            not isinstance(payload, dict)
+            or not fields.issubset(payload)
+            or set(payload) - fields - {"audience", "route"}
+        ):
             raise ValueError("Unexpected request fields.")
         identifier, conversation, text = (
             payload[name] for name in ("request_id", "conversation", "text")
         )
         audience = payload.get("audience", "new-users")
+        route = payload.get("route", "public")
         if (
-            not all(isinstance(value, str) for value in (identifier, conversation, text, audience))
+            not all(
+                isinstance(value, str)
+                for value in (identifier, conversation, text, audience, route)
+            )
             or not IDENTIFIER.fullmatch(identifier)
             or not IDENTIFIER.fullmatch(conversation)
             or not text.strip()
             or len(text) > 6000
             or audience not in AUDIENCES
+            or route not in ROUTES
         ):
             raise ValueError("Invalid or oversized request.")
-        return cls(identifier, conversation, text, audience)
+        return cls(identifier, conversation, text, audience, route)
 
     @property
     def context(self):
