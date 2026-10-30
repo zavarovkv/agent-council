@@ -23,6 +23,10 @@ class History:
                     delivered INTEGER NOT NULL DEFAULT 0
                 );
                 CREATE INDEX IF NOT EXISTS turns_conversation ON turns(conversation,created);
+                CREATE TABLE IF NOT EXISTS generation_events (
+                    request_id TEXT PRIMARY KEY, route TEXT NOT NULL,
+                    outcome TEXT NOT NULL, created REAL NOT NULL
+                );
             """)
             # Older reservations conservatively consume the public budget. Never
             # infer a privileged route from user text or a mutable username.
@@ -30,6 +34,7 @@ class History:
                 db.execute("ALTER TABLE turns ADD COLUMN route TEXT NOT NULL DEFAULT 'public'")
             db.execute("CREATE INDEX IF NOT EXISTS turns_route ON turns(route,created)")
             db.execute("DELETE FROM turns WHERE created < ?", (clock() - 14 * 86400,))
+            db.execute("DELETE FROM generation_events WHERE created < ?", (clock() - 14 * 86400,))
         self.path.chmod(0o600)
 
     @contextmanager
@@ -47,6 +52,7 @@ class History:
             db.execute("BEGIN IMMEDIATE")
             now = self.clock()
             db.execute("DELETE FROM turns WHERE created < ?", (now - 14 * 86400,))
+            db.execute("DELETE FROM generation_events WHERE created < ?", (now - 14 * 86400,))
             previous = db.execute(
                 "SELECT conversation,question,answer,route FROM turns WHERE request_id=?",
                 (request.identifier,),
@@ -88,6 +94,26 @@ class History:
     def complete(self, identifier, answer):
         with self.database() as db:
             db.execute("UPDATE turns SET answer=? WHERE request_id=?", (answer, identifier))
+            self._event(db, identifier, "ok")
+
+    def failed(self, identifier, outcome):
+        if outcome not in {
+            "provider_auth",
+            "provider_quota",
+            "provider_timeout",
+            "model_unavailable",
+            "invalid_reply",
+        }:
+            raise ValueError("Invalid diagnostic category")
+        with self.database() as db:
+            self._event(db, identifier, outcome)
+
+    def _event(self, db, identifier, outcome):
+        db.execute(
+            "INSERT OR REPLACE INTO generation_events(request_id,route,outcome,created) "
+            "SELECT request_id,route,?,? FROM turns WHERE request_id=?",
+            (outcome, self.clock(), identifier),
+        )
 
     def acknowledge(self, identifier):
         with self.database() as db:

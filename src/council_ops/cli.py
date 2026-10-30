@@ -16,6 +16,8 @@ from .instructions import apply as apply_instructions
 from .instructions import export as export_instructions
 from .instructions import sync as sync_instructions
 from .lifecycle import deploy, restore, smoke
+from .monitoring import configure as configure_monitoring
+from .monitoring import poll as monitor
 from .restic import Restic, cloud_backup
 from .routing import configure as configure_route
 from .runtime import Runtime
@@ -82,6 +84,13 @@ def parser():
     )
     secretary.add_argument("--assistant-name", default="Ассистент")
     commands.add_parser("doctor", help="Read safe configuration, isolation and service status")
+    commands.add_parser(
+        "configure-monitoring", help="Pin operational notifications to the verified owner"
+    )
+    monitoring = commands.add_parser(
+        "monitor", help="Check services and send deduplicated owner alerts"
+    )
+    monitoring.add_argument("--test-notification", action="store_true")
     commands.add_parser(
         "configure-route", help="Validate and gracefully apply Council's Nginx route"
     )
@@ -150,6 +159,9 @@ def main(argv=None):
     settings = Settings.load(arguments.repository, arguments.env_file, arguments.backup_dir)
     if os.geteuid() != 0:
         raise OperationError("Run deployment operations as root on the Docker host.")
+    if arguments.action == "monitor":
+        print(json.dumps(monitor(settings, test=arguments.test_notification)))
+        return
     lock_path = settings.env_file.with_name("operations.lock")
     flags = os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW
     with os.fdopen(os.open(lock_path, flags, 0o600), "a") as lock:
@@ -170,6 +182,8 @@ def main(argv=None):
             result = doctor(runtime)
         elif arguments.action == "configure-route":
             result = configure_route(runtime)
+        elif arguments.action == "configure-monitoring":
+            result = configure_monitoring(runtime)
         elif arguments.action == "apply-instructions":
             result = apply_instructions(
                 runtime, arguments.source, arguments.revision, fetch=arguments.fetch

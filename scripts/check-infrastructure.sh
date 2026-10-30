@@ -16,4 +16,4 @@ curl -fsSL --retry 2 --max-time 90 \
 printf '8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8  %s/actionlint.tar.gz\n' "$tools_dir" | sha256sum -c -
 tar -xf "$tools_dir/actionlint.tar.gz" -C "$tools_dir"
 "$tools_dir/shellcheck-v0.11.0/shellcheck" "$repository"/scripts/*.sh
-"$tools_dir/actionlint" -shellcheck="$tools_dir/shellcheck-v0.11.0/shellcheck" "$repository/.github/workflows/ci.yaml"
+"$tools_dir/actionlint" -shellcheck="$tools_dir/shellcheck-v0.11.0/shellcheck" "$repository"/.github/workflows/*.yaml

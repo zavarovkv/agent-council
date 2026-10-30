@@ -44,7 +44,11 @@ class DeploymentHTTPTests(unittest.TestCase):
     def request(self, path, headers=None):
         connection = self.connection()
         try:
-            connection.request("GET", self.url.path + path, headers=headers or {})
+            connection.request(
+                "GET",
+                self.url.path + path,
+                headers={"User-Agent": "AgentCouncilHealth/1.0", **(headers or {})},
+            )
             response = connection.getresponse()
             return response.status, response.read(), response.headers
         finally:

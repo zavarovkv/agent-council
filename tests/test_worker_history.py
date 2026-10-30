@@ -142,3 +142,22 @@ class HistoryTests(unittest.TestCase):
         self.assertFalse(self.calls)
         with self.assertRaises(ValueError):
             service.reply({**payload(1), "route": "business"})
+
+    def test_provider_outcomes_are_durable_and_do_not_contain_exception_or_message_text(self):
+        class AuthenticationError(Exception):
+            status_code = 401
+
+        def failed(_messages):
+            raise AuthenticationError("private provider response and credential")
+
+        service = self.service(failed)
+        with self.assertRaises(RuntimeError):
+            service.reply({**payload(1, "private message"), "route": "business"})
+        service.generate = lambda _messages: "Fixture answer"
+        service.reply({**payload(2), "route": "business"})
+        with sqlite3.connect(Path(self.home) / "secretary-history.sqlite3") as db:
+            events = db.execute(
+                "SELECT route,outcome FROM generation_events ORDER BY rowid"
+            ).fetchall()
+        self.assertEqual(events, [("business", "provider_auth"), ("business", "ok")])
+        self.assertNotIn("private", str(events))

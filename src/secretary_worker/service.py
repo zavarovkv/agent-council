@@ -58,9 +58,21 @@ class Service:
             messages.append({"role": "user", "content": request.text})
             try:
                 answer = self.generate(messages)
-            except Exception:
+            except Exception as error:
+                status = getattr(error, "status_code", None)
+                category = (
+                    "provider_auth"
+                    if status in (401, 403)
+                    else "provider_quota"
+                    if status == 429
+                    else "provider_timeout"
+                    if isinstance(error, TimeoutError)
+                    else "model_unavailable"
+                )
+                self.history.failed(request.identifier, category)
                 raise RuntimeError("Model unavailable; private diagnostics omitted.") from None
             if not isinstance(answer, str) or not answer.strip() or len(answer) > 3000:
+                self.history.failed(request.identifier, "invalid_reply")
                 raise RuntimeError("Invalid final reply.")
             self.history.complete(request.identifier, answer)
             return answer

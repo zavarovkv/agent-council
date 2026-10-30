@@ -1,0 +1,12 @@
+[Unit]
+Description=Check Agent Council health every five minutes
+
+[Timer]
+OnBootSec=5min
+OnUnitActiveSec=5min
+RandomizedDelaySec=30s
+Persistent=true
+Unit=agent-council-monitor.service
+
+[Install]
+WantedBy=timers.target

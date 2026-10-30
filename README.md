@@ -72,6 +72,7 @@ and the Telegram login flow in a browser using fixture data. See
 [technical review](docs/technical-review.md).
 
 See the [architecture review and priorities](docs/architecture-review.md) for
-operational improvements and the scaling roadmap.
+operational follow-up, and [monitoring](docs/monitoring.md) for owner alerts and
+independent HTTPS checks.
 
 [MIT](LICENSE). Dependencies retain their own licenses.
