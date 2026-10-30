@@ -10,6 +10,7 @@ The project is in early development, built around
 - Delegates competitor research to a specialist profile, with the assistant
   reviewing and returning its results.
 - Supports ChatGPT / Codex model login and explicit Notion / Google Drive setup.
+- Connects to Linear through its official OAuth-backed MCP integration.
 - Provides an optional Telegram secretary for selected account chats and public
   bot conversations, with separate reply styles for spouse, contacts and new users.
 - Includes Docker deployment, persistent storage, verified rollback and encrypted
@@ -77,5 +78,7 @@ independent HTTPS checks.
 
 [Research workflow](docs/research.md) connects native task/run tracking to reviewed
 Notion reports and their parent-page index.
+
+[Linear setup](docs/linear.md) connects the personal assistant to issues and projects.
 
 [MIT](LICENSE). Dependencies retain their own licenses.
