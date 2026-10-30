@@ -62,6 +62,21 @@ exposure and image/data rollback. See [technical review](technical-review.md).
 
 ## Prioritized follow-up work
 
+### P1 — Shorten and explain maintenance windows
+
+A user-facing 502 was observed during this maintenance. Deployment, private
+instruction activation and consistent snapshots currently stop owned services;
+profile copying, verification and gateway startup make repeated operations
+noticeable in the web UI. This is an observed usability/availability issue.
+
+Coalesce maintenance steps, validate staged instruction bundles before downtime
+and separate style/skill activation from code-image deployment. Use atomic bundle
+selection and a tested reader reload where native contracts permit it. Investigate
+coordinated online SQLite/file backups before reducing stop-the-world snapshots;
+consistency must remain explicit. Add a maintenance response with Retry-After on
+the Council route and measure an availability budget. Preserve the single Telegram
+poller and image/data rollback when designing any overlapping cutover.
+
 ### P1 — Protect business replies from public traffic
 
 Both transports share two generation slots and the worker's global hourly
