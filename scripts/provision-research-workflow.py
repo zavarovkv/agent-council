@@ -28,15 +28,18 @@ def main():
         raise ValueError("A regular coordinator configuration is required.")
     yaml = YAML()
     config = yaml.load(path.read_text()) or {}
-    entry = (
-        config.setdefault("plugins", {})
-        .setdefault("entries", {})
-        .setdefault("council-research", {})
-    )
+    plugins = config.setdefault("plugins", {})
+    if "council-research" in (plugins.get("disabled") or []):
+        raise ValueError("The research plugin is explicitly disabled; reconcile that policy first.")
+    enabled = plugins.setdefault("enabled", [])
+    if not isinstance(enabled, list):
+        raise ValueError("plugins.enabled must be a list.")
+    if "council-research" not in enabled:
+        enabled.append("council-research")
+    entry = plugins.setdefault("entries", {}).setdefault("council-research", {})
     settings = entry.setdefault("settings", {})
     if settings.get("board", "research") != "research":
         raise ValueError("Reconcile the existing research board before reconfiguration.")
-    entry["enabled"] = True
     settings.update(enabled=True, board="research")
     allowlist = entry.setdefault("mcp_allowlist", [])
     if not isinstance(allowlist, list):

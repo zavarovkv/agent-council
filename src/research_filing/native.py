@@ -12,7 +12,7 @@ from contextlib import contextmanager
 from datetime import UTC, datetime
 from pathlib import Path
 
-from .notion import Notion, page_id
+from .notion import Notion, compatible_table, page_id
 from .store import FilingError, Store
 
 
@@ -255,4 +255,15 @@ def flush(ctx):
         "completed": completed,
         "pending_or_conflicted": pending,
         "checked_at": int(time.time()),
+    }
+
+
+def verify(ctx):
+    home = home_for(ctx)
+    notion = Notion(lambda name, args: ctx.call_mcp("notion", name, args, timeout=30))
+    parent = notion.fetch(destination(home))
+    return {
+        "notion_ready": True,
+        "index_available": compatible_table(parent["content"]) is not None,
+        "cloud_writes": False,
     }

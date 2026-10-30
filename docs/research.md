@@ -24,6 +24,10 @@ does not contain or import this plugin. Update the private coordinator/researche
 instructions to the released native-task workflow; public image defaults are in
 [`instructions/`](../instructions/README.md).
 
+Inside the coordinator container, `hermes research-filing verify` checks the
+configured Notion destination/index through the granted native client without
+cloud writes or model calls.
+
 To combine a code release and an already checked-out private instruction SHA in
 one stopped cutover, use `deploy --instructions-source /private/checkout
 --instructions-revision FULL_SHA`. Both copies are tested before live files are

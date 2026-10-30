@@ -2,7 +2,7 @@
 
 import json
 
-from .native import execute, flush, home_for
+from .native import execute, flush, home_for, verify
 from .store import FilingError
 
 
@@ -42,10 +42,14 @@ def register(ctx):
     )
 
     def setup(parser):
-        parser.add_argument("action", choices=["flush"])
+        parser.add_argument("action", choices=["flush", "verify"])
 
-    def cli(_args):
-        print(json.dumps(flush(ctx)))
+    def cli(args):
+        try:
+            print(json.dumps(verify(ctx) if args.action == "verify" else flush(ctx)))
+        except FilingError as error:
+            print(json.dumps({"ready": False, "error": str(error)}))
+            raise SystemExit(1) from None
 
     ctx.register_cli_command(
         name="research-filing",
