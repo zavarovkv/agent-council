@@ -158,6 +158,21 @@ origin from validated configuration. Several setup commands and unit templates
 still document this specific Ubuntu host. Add a fixture installation with
 non-default names/paths before calling the installer generic.
 
+### P2 — Minimize anonymous status responses
+
+An unauthenticated request through the public Cloudflare hostname returned HTTP
+200 from `/api/status` with `profiles`, `memory`, `disk`, `install_id` and
+`gateway_platforms` fields. Private configuration/session APIs still reject
+anonymous requests; this finding concerns unnecessary operational metadata,
+rather than demonstrated credential or conversation disclosure.
+
+Keep only an explicit allowlist of login-bootstrap fields public. Require a
+verified operator session for detailed diagnostics, with a separate container
+health contract if needed. Preserve the Telegram login/bootstrap flow and test
+the anonymous response schema through both the origin and the edge. The current
+live check verifies the enabled auth provider but does not reject extra status
+fields, so it needs a schema-boundary assertion when this is implemented.
+
 ### P2 — Add structured diagnostics and release discipline
 
 Keep generic public errors, and record internal failure categories, run/request
