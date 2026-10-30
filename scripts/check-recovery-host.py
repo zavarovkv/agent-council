@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Rehearse real recovery on a disposable CI host; refuse an existing deployment."""
 
+import contextlib
 import hashlib
 import http.client
 import json
@@ -19,7 +20,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from council_ops.config import Settings, atomic_write
+from council_ops.config import OperationError, Settings, atomic_write
 from council_ops.install import recover
 from council_ops.runtime import Runtime
 from council_ops.snapshots import snapshot
@@ -188,6 +189,7 @@ def main():
             source_runtime.ready()
             backup = snapshot(source_runtime, restart=False, portable=True)
             source_runtime.compose("down", "--volumes", "--remove-orphans")
+            source_runtime = None
             shutil.rmtree(source.data_dir)
             shutil.rmtree(source.workspace_dir)
             source.auth_file.unlink()
@@ -200,14 +202,22 @@ def main():
                 target.workspace_dir / "report.md"
             ).read_bytes() == b"Fixture recovery artifact\n"
 
+            # Internal bridges deliberately omit host NAT publishing. The fixture
+            # TLS proxy uses the private bridge; routing is tested separately.
+            addresses = [
+                value["IPAddress"]
+                for value in restored_runtime.inspect()["NetworkSettings"]["Networks"].values()
+                if value.get("IPAddress") == "172.30.90.2"
+            ]
+            assert len(addresses) == 1
+            backend = addresses[0]
+
             class Proxy(BaseHTTPRequestHandler):
                 def log_message(self, *_args):
                     pass
 
                 def do_GET(self):
-                    connection = http.client.HTTPConnection(
-                        "127.0.0.1", int(target.values["HERMES_HTTP_PORT"]), timeout=10
-                    )
+                    connection = http.client.HTTPConnection(backend, 9119, timeout=10)
                     try:
                         headers = {"Host": f"localhost:{tls_port}", "X-Forwarded-Proto": "https"}
                         if self.headers.get("Cookie"):
@@ -295,7 +305,8 @@ def main():
         finally:
             for runtime in (restored_runtime, source_runtime):
                 if runtime is not None:
-                    runtime.compose("down", "--volumes", "--remove-orphans")
+                    with contextlib.suppress(OperationError):
+                        runtime.compose("down", "--volumes", "--remove-orphans")
 
 
 if __name__ == "__main__":
