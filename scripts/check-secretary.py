@@ -84,6 +84,15 @@ def main():
                 "exec",
                 "-T",
                 "secretary",
+                "/opt/hermes/.venv/bin/hermes",
+                "plugins",
+                "enable",
+                "council-secretary",
+            )
+            run(
+                "exec",
+                "-T",
+                "secretary",
                 "/opt/hermes/.venv/bin/python",
                 "-c",
                 "import json,urllib.request,urllib.error; "

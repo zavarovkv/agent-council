@@ -6,7 +6,7 @@ if [[ ${1:-} == secretary && $# == 1 ]]; then
     -i "${COUNCIL_SSH_KEY:-$HOME/.ssh/agent_council_ed25519}" \
     -o IdentitiesOnly=yes -o ConnectTimeout=15 \
     "${COUNCIL_SSH_HOST:-root@2.29.13.129}" \
-    'exec flock -n /etc/agent-council/operations.lock bash /opt/agent-council/scripts/compose-server.sh exec --user hermes secretary hermes model'
+    'exec flock -n /etc/agent-council/operations.lock bash /opt/agent-council/scripts/compose-server.sh exec secretary /opt/hermes/.venv/bin/hermes model'
 fi
 if [[ $# != 0 ]]; then printf 'Usage: setup-model.sh [secretary]\n' >&2; exit 2; fi
 exec ssh -t \

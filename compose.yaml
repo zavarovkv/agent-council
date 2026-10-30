@@ -81,6 +81,8 @@ services:
     environment:
       HERMES_HOME: /opt/data
       HOME: /opt/data/home
+      USER: hermes
+      LOGNAME: hermes
       XDG_CACHE_HOME: /tmp/cache
       PYTHONDONTWRITEBYTECODE: "1"
       PYTHONUNBUFFERED: "1"
