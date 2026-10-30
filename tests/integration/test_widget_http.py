@@ -10,12 +10,12 @@ from unittest.mock import Mock, patch
 
 import jwt
 from cryptography.hazmat.primitives.asymmetric import rsa
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.testclient import TestClient
 from hermes_cli.dashboard_auth.middleware import gated_auth_middleware
 from hermes_cli.dashboard_auth.registry import register_global_provider, unregister_global_provider
 from hermes_cli.dashboard_auth.routes import router as auth_router
-from plugins.dashboard_auth.telegram_owner import register, widget
+from plugins.dashboard_auth.telegram_owner import register, status, widget
 from plugins.dashboard_auth.telegram_owner.challenges import ChallengeStore
 
 
@@ -56,6 +56,19 @@ class WidgetHTTPTests(unittest.TestCase):
         @app.get("/api/protected")
         def protected():
             return {"authorized": True}
+
+        @app.get("/api/status")
+        async def status_fixture(request: Request):
+            public = await status.anonymous_status(
+                request,
+                {
+                    "auth_required": True,
+                    "auth_providers": ["telegram-owner"],
+                    "auth_flows": ["cookie", "native_pkce"],
+                    "future_private_field": "private",
+                },
+            )
+            return public if public is not None else status.response({"profiles": ["private"]})
 
         self.client = TestClient(app, base_url=environment["HERMES_PUBLIC_URL"])
         self.addCleanup(self.client.close)
@@ -117,6 +130,44 @@ class WidgetHTTPTests(unittest.TestCase):
         for flag in ("HttpOnly", "Secure", "SameSite=lax", "Path=/"):
             self.assertIn(flag, cookie)
         self.assertEqual(self.client.get("/api/protected").status_code, 200)
+
+    def test_detailed_status_requires_a_verified_session_and_is_never_cached(self):
+        for headers in ({}, {"Authorization": "Bearer invalid", "X-Forwarded-User": "owner"}):
+            response = self.client.get("/api/status?profile=not-a-real-profile", headers=headers)
+            self.assertEqual(response.status_code, 200)
+            self.assertEqual(set(response.json()), status.BOOTSTRAP_FIELDS)
+            self.assertEqual(response.headers["Cache-Control"], "no-store")
+        self.complete(self.token(self.challenge()))
+        detailed = self.client.get("/api/status")
+        self.assertEqual(detailed.json(), {"profiles": ["private"]})
+        self.assertEqual(detailed.headers["Cache-Control"], "no-store")
+        self.assertEqual(detailed.headers["Vary"], "Cookie, Authorization")
+        self.provider.session_store.clock = lambda: time.time() + 31 * 86400
+        self.assertEqual(set(self.client.get("/api/status").json()), status.BOOTSTRAP_FIELDS)
+
+    def test_native_status_handler_short_circuits_before_profile_lookup(self):
+        from hermes_cli.web_routers.status import router
+
+        app = FastAPI()
+        app.include_router(router)
+        with (
+            patch(
+                "hermes_cli.web_routers.status._auth_gate_status",
+                return_value={
+                    "auth_required": True,
+                    "auth_providers": ["telegram-owner"],
+                    "auth_flows": ["cookie"],
+                },
+            ),
+            patch(
+                "hermes_cli.web_routers.status._resolve_profile_dir",
+                side_effect=AssertionError("No anonymous profile lookup"),
+            ),
+        ):
+            with TestClient(app) as client:
+                response = client.get("/api/status?profile=private")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(set(response.json()), status.BOOTSTRAP_FIELDS)
 
     def test_session_outlives_telegram_token_and_survives_provider_restart(self):
         token = self.token(self.challenge())

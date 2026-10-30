@@ -1,4 +1,5 @@
 import hashlib
+import sqlite3
 import sys
 import tempfile
 import threading
@@ -81,3 +82,63 @@ class HistoryTests(unittest.TestCase):
             with self.subTest(value=invalid), self.assertRaises(ValueError):
                 ReplyRequest.parse(invalid)
         self.assertNotIn("private phrase", repr(ReplyRequest.parse(payload(1, "private phrase"))))
+
+    def test_slow_public_generation_cannot_occupy_the_reserved_business_slot(self):
+        started, release = threading.Event(), threading.Event()
+
+        def delayed(messages):
+            if messages[-1]["content"] == "slow public":
+                started.set()
+                if not release.wait(timeout=5):
+                    raise TimeoutError("Fixture did not release generation")
+            return "Fixture answer"
+
+        service = self.service(delayed)
+        with ThreadPoolExecutor(max_workers=1) as pool:
+            pending = pool.submit(service.reply, {**payload(1, "slow public"), "route": "public"})
+            try:
+                self.assertTrue(started.wait(timeout=2))
+                with self.assertRaises(BlockingIOError):
+                    service.reply({**payload(2), "route": "public"})
+                self.assertEqual(
+                    service.reply({**payload(3), "route": "business"}), "Fixture answer"
+                )
+            finally:
+                release.set()
+            self.assertEqual(pending.result(timeout=2), "Fixture answer")
+
+    def test_public_spend_limit_reserves_business_budget_across_restarts(self):
+        service = self.service()
+        for number in range(40):
+            service.reply(
+                {
+                    **payload(number),
+                    "conversation": hashlib.sha256(str(number).encode()).hexdigest(),
+                }
+            )
+        restarted = self.service()
+        with self.assertRaises(BlockingIOError):
+            restarted.reply({**payload(100), "conversation": "d" * 64})
+        self.assertEqual(restarted.reply({**payload(101), "route": "business"}), "Fixture answer")
+        with self.assertRaises(ValueError):
+            restarted.reply({**payload(101), "route": "public"})
+        with self.assertRaises(ValueError):
+            restarted.reply({**payload(102), "route": "owner"})
+
+    def test_legacy_history_is_preserved_and_cannot_claim_business_budget(self):
+        path = Path(self.home) / "secretary-history.sqlite3"
+        request = ReplyRequest.parse(payload(1))
+        with sqlite3.connect(path) as db:
+            db.execute(
+                "CREATE TABLE turns (request_id TEXT PRIMARY KEY, conversation TEXT, "
+                "question TEXT, answer TEXT, created REAL, delivered INTEGER)"
+            )
+            db.execute(
+                "INSERT INTO turns VALUES (?,?,?,?,?,?)",
+                (request.identifier, request.context, request.text, "Existing answer", 1000, 1),
+            )
+        service = self.service()
+        self.assertEqual(service.reply(payload(1)), "Existing answer")
+        self.assertFalse(self.calls)
+        with self.assertRaises(ValueError):
+            service.reply({**payload(1), "route": "business"})

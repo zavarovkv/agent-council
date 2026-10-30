@@ -8,6 +8,38 @@ from pathlib import Path
 
 UPSTREAM_SHA256 = "bdd4cadc0b4725b7f133fe4a897e0b6a6c5620f4349614f2c9505e32d07a738d"
 UPSTREAM_ROUTES_SHA256 = "b88945b2586de1288875ba1da6d8923d07bf34c1c97b16861e42e7d9633fdd08"
+UPSTREAM_STATUS_SHA256 = "91d723e7db56ae3c22c4b98eb964e01ea9e2d11d6e209f612d891a951068449b"
+
+
+def install_status(path: Path) -> None:
+    original = path.read_bytes()
+    if hashlib.sha256(original).hexdigest() != UPSTREAM_STATUS_SHA256:
+        raise SystemExit("Hermes status handler changed; review diagnostic privacy compatibility.")
+    source = original.decode("utf-8")
+    node = next(
+        node
+        for node in ast.parse(source).body
+        if isinstance(node, ast.AsyncFunctionDef) and node.name == "get_status"
+    )
+    segment = ast.get_source_segment(source, node)
+    updated = segment.replace(
+        "async def get_status(profile: Optional[str] = None):",
+        "async def get_status(request: Request, profile: Optional[str] = None):",
+    )
+    lines = updated.splitlines(keepends=True)
+    lines[node.body[0].end_lineno - node.lineno + 1 : node.body[0].end_lineno - node.lineno + 1] = [
+        "    from plugins.dashboard_auth.telegram_owner.status import anonymous_status, response\n",
+        "    public = await anonymous_status(request, _auth_gate_status())\n",
+        "    if public is not None:\n",
+        "        return public\n",
+    ]
+    updated = "".join(lines)
+    if updated.count("        return status") != 1 or updated == segment:
+        raise SystemExit("Expected status privacy hooks were not found.")
+    updated = updated.replace("        return status", "        return response(status)")
+    source = source.replace(segment, updated, 1)
+    compile(source, str(path), "exec")
+    path.write_text(source, encoding="utf-8")
 
 
 def install(renderer: Path, assets: Path) -> None:
@@ -69,6 +101,7 @@ def install(renderer: Path, assets: Path) -> None:
     )
     compile(updated_routes, str(routes), "exec")
     routes.write_text(updated_routes, encoding="utf-8")
+    install_status(renderer.parents[1] / "web_routers/status.py")
     print("Council theme and official Telegram Login bridge installed.")
 
 

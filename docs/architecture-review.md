@@ -79,19 +79,21 @@ poller and image/data rollback when designing any overlapping cutover.
 
 ### P1 — Protect business replies from public traffic
 
-Both transports share two generation slots and the worker's global hourly
-budget. A large amount of valid public traffic can delay selected account chats
-or exhaust their shared budget. This is an availability risk inferred from
+Implemented: both the gateway and worker reserve one generation slot per route;
+hourly budgets are 60 business and 40 public replies. The gateway selects a fixed
+route from verified transport metadata. Persisted reservations keep the route
+and reject identity reuse across routes. Tests hold a slow public call, verify
+business progress and check budget isolation across a worker restart.
+
+Previously both transports shared two slots and a global hourly budget, creating
+an availability risk inferred from
 [`plugin.py`](../src/telegram_secretary/plugin.py),
 [`delivery.py`](../src/telegram_secretary/delivery.py) and
 [`history.py`](../src/secretary_worker/history.py); no production attack is asserted.
 
-Add trusted route classification to the fixed RPC contract, reserved business
-capacity/budgets and fair scheduling across chats. Preserve per-chat ordering,
-deduplication and the uncertain-send policy. Verify with a fake slow provider:
-public saturation must leave bounded business capacity, and cancellation must
-continue to prevent unnecessary model calls. Record input/output usage when the
-provider supplies it, and expose route budgets to the owner.
+Per-chat ordering, deduplication, cancellation and uncertain-send handling remain
+unchanged. Further work: record provider usage when supplied and expose route
+budgets to the owner. Provider-account quotas are still shared upstream.
 
 ### P1 — Deliver failure and stale-backup alerts
 
@@ -166,12 +168,12 @@ An unauthenticated request through the public Cloudflare hostname returned HTTP
 anonymous requests; this finding concerns unnecessary operational metadata,
 rather than demonstrated credential or conversation disclosure.
 
-Keep only an explicit allowlist of login-bootstrap fields public. Require a
-verified operator session for detailed diagnostics, with a separate container
-health contract if needed. Preserve the Telegram login/bootstrap flow and test
-the anonymous response schema through both the origin and the edge. The current
-live check verifies the enabled auth provider but does not reject extra status
-fields, so it needs a schema-boundary assertion when this is implemented.
+Implemented: only `auth_required`, `auth_providers` and `auth_flows` are public.
+A verified, currently authorized Telegram session is required before detailed
+status/profile lookup. Both response shapes use `no-store` and vary on Cookie
+and Authorization. Native safe-mode/health checks retain the bootstrap fields.
+Tests cover signed login, invalid and expired sessions, early profile lookup
+rejection and the exact anonymous schema. Live checks enforce that schema.
 
 ### P2 — Add structured diagnostics and release discipline
 

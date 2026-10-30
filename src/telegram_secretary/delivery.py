@@ -20,6 +20,8 @@ class Reply:
 
 
 class Delivery(ABC):
+    route = "business"
+
     def __init__(
         self,
         application,
@@ -40,7 +42,7 @@ class Delivery(ABC):
         self.contacts = frozenset(contacts)
         self.spouse_username = normalize_username(spouse_username)
         self.tasks = {}
-        self.capacity = capacity if capacity is not None else asyncio.Semaphore(2)
+        self.capacity = capacity if capacity is not None else asyncio.Semaphore(1)
 
     def kick(self, connection, chat):
         identity = (connection, chat)
@@ -106,6 +108,7 @@ class Delivery(ABC):
             ).hexdigest(),
             "text": job["text"],
             "audience": self.audience(job["chat"], job["sender_username"]),
+            "route": self.route,
         }
         return Reply(await asyncio.to_thread(self.request, self.key, payload), requires_ack=True)
 

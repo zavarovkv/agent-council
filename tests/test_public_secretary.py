@@ -75,6 +75,7 @@ class PublicTests(unittest.IsolatedAsyncioTestCase):
         await self.settle()
         self.assertEqual(len(self.requests), 1)
         self.assertEqual(self.requests[0]["audience"], "new-users")
+        self.assertEqual(self.requests[0]["route"], "public")
         sent = self.bot.send_message.call_args.kwargs
         self.assertNotIn("business_connection_id", sent)
         self.assertEqual(sent["chat_id"], 67890)
