@@ -19,6 +19,7 @@ from telegram import Chat, Message, Update, User
 from telegram.ext import Application, ApplicationHandlerStop
 
 sys.path.insert(0, "/opt/agent-council")
+from secretary_worker.instructions import load_skills
 from secretary_worker.model import generate
 from secretary_worker.service import Server, Service
 
@@ -78,6 +79,22 @@ class NativeHandlerTests(unittest.IsolatedAsyncioTestCase):
                 factories[0](closed, None)
             with self.assertRaises(ApplicationHandlerStop):
                 await closed.handlers[-1000][0].callback(business, None)
+            queue.unlink()
+            invalid_contacts = Application.builder().token("12345:fixture-token").build()
+            with patch.dict(
+                os.environ,
+                {
+                    "COUNCIL_SECRETARY_ENABLED": "true",
+                    "COUNCIL_SECRETARY_KEY": "a" * 64,
+                    "COUNCIL_SECRETARY_OWNER_ID": "12345",
+                    "COUNCIL_SECRETARY_CONTACT_IDS": "@not-a-numeric-id",
+                    "HERMES_TELEGRAM_ALLOWED_ID": "12345",
+                    "HERMES_HOME": temporary,
+                },
+            ):
+                factories[0](invalid_contacts, None)
+            with self.assertRaises(ApplicationHandlerStop):
+                await invalid_contacts.handlers[-1000][0].callback(business, None)
 
 
 class WorkerModelTests(unittest.TestCase):
@@ -137,7 +154,10 @@ class WorkerModelTests(unittest.TestCase):
     def test_real_http_requires_machine_auth_and_refuses_caller_tools(self):
         with tempfile.TemporaryDirectory() as temporary:
             key = "a" * 64
-            service = Service(temporary, key, generate=lambda _messages: "Fixture reply")
+            skills = load_skills("/opt/agent-council/agents/secretary")
+            service = Service(
+                temporary, key, skills=skills, generate=lambda _messages: "Fixture reply"
+            )
             server = Server(("127.0.0.1", 0), service)
             thread = threading.Thread(target=server.serve_forever, daemon=True)
             thread.start()

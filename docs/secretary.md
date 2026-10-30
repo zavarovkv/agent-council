@@ -51,6 +51,57 @@ Server deployment does not turn on Telegram permissions on your behalf. Model
 authorization and account connection remain explicit owner steps. HTTP health
 proves the worker is running, not that a provider grant or real chat is authorized.
 
+## Editing reply skills
+
+The two editable reply scenarios live in this repository:
+
+- [`agents/secretary/contacts/SKILL.md`](../agents/secretary/contacts/SKILL.md):
+  warmer, concise replies to explicitly listed contacts.
+- [`agents/secretary/new-users/SKILL.md`](../agents/secretary/new-users/SKILL.md):
+  the default introduction and request-clarification scenario for everyone else.
+
+Edit the Markdown below the YAML front matter, commit the change and deploy that
+release using `sudo python3 scripts/manage.py deploy` on the Docker host. Docker
+ships both files in the image; the worker loads them on startup. Editing a file
+in GitHub alone does not change the running release. Do not edit files inside a
+running container: those changes are lost on recreation. The secretary does not
+use the owner's full Hermes skill loader or execute skill code.
+
+The [Bot API User](https://core.telegram.org/bots/api#user) and
+[BusinessConnection](https://core.telegram.org/bots/api#businessconnection) objects
+do not expose whether the other person is in the owner's address book. Telegram's
+Chat Automation contact filters select which chats reach the bot, but do not label
+each incoming message with a contact category. Therefore this release uses an
+**explicit secretary contact list**, not automatic address-book synchronization.
+It never infers contact status from a username, a claim in a message, or an
+earlier conversation. Everyone outside the list keeps the new-user scenario,
+including returning correspondents.
+
+On the Docker host, run `sudoedit /etc/agent-council/secretary.env` and add or edit
+this line using actual numeric Telegram user IDs, without spaces:
+
+```dotenv
+COUNCIL_SECRETARY_CONTACT_IDS=111111111,222222222
+```
+
+An absent/empty value means no contacts. Keep this private list out of Git. Leave
+the key, owner ID and other settings intact. Run `sudo python3 scripts/manage.py
+deploy` from the server checkout to recreate the two Council services with the
+updated environment; the existing image is reused for an unchanged Git revision.
+This operation preserves model authorization and stored data and creates a
+consistent rollback point. A malformed list keeps business updates closed rather
+than guessing which scenario to use.
+
+Only the verified bridge chooses the scenario. A recipient cannot change it by
+asking the model. Both scenarios have the same tool-free permissions; contact
+membership grants no private-agent, document or administrative access. Changing
+someone's category starts a separate history context. Existing pre-scenario
+history is retained under normal retention, but is not reused in these contexts.
+The common safety/identity constraints remain in
+`src/secretary_worker/service.py`; the editable files control conversation style
+and clarification, not execution permissions. No private facts or credentials
+belong in either skill.
+
 ## Isolation and delivery
 
 The plugin uses Hermes' official `register_telegram_handler` extension point.
@@ -63,8 +114,9 @@ ordinary bot message or another chat.
 
 The worker is non-root, with a read-only root, no capabilities, resource limits,
 no published ports, no Telegram token and only its own profile mounted. It receives
-a fixed schema with an opaque conversation ID and text. Callers cannot choose
-prompts, models or tools. Model requests have no tools; returned tool calls and
+a fixed schema with an opaque conversation ID, text and a validated scenario
+selected by the trusted bridge. Callers cannot supply prompts, models or tools.
+Model requests have no tools; returned tool calls and
 reasoning-only output are rejected. No agent executor is created. Chats have
 separate recent context. The API uses a dedicated random service key.
 
