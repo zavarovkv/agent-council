@@ -51,6 +51,7 @@ class Service:
                 );
                 CREATE INDEX IF NOT EXISTS turns_conversation ON turns(conversation,created);
             """)
+            db.execute("DELETE FROM turns WHERE created < ?", (clock() - 14 * 86400,))
         self.path.chmod(0o600)
 
     @contextmanager

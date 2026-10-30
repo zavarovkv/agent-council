@@ -73,8 +73,18 @@ class Store:
                     (connection, chat, message),
                 )
 
+    def allowed(self, connection, chat):
+        with self.database() as db:
+            return bool(
+                db.execute(
+                    "SELECT 1 FROM connections WHERE id=? AND enabled=1 AND NOT EXISTS (SELECT 1 FROM pauses WHERE connection=? AND chat=? AND until>?)",
+                    (connection, connection, chat, self.clock()),
+                ).fetchone()
+            )
+
     def submit(self, identifier, connection, chat, message, text, created):
         with self.database() as db:
+            db.execute("DELETE FROM jobs WHERE created < ?", (self.clock() - 14 * 86400,))
             # Bound private queue size and cost even while the worker is unavailable.
             if (
                 db.execute(
@@ -101,6 +111,10 @@ class Store:
     def claim(self, connection, chat):
         with self.database() as db:
             db.execute("BEGIN IMMEDIATE")
+            db.execute(
+                "UPDATE jobs SET status='cancelled' WHERE status='queued' AND created<=?",
+                (self.clock() - 23 * 3600,),
+            )
             row = db.execute(
                 "SELECT * FROM jobs WHERE connection=? AND chat=? AND status='queued' ORDER BY created,id LIMIT 1",
                 (connection, chat),

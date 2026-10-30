@@ -125,6 +125,8 @@ class Bridge:
             return
         if not await self.refresh(identifier):
             return
+        if not self.store.allowed(identifier, chat):
+            return
         identity = hashlib.sha256(
             f"{identifier}:{chat}:{message.message_id}:{update.update_id}".encode()
         ).hexdigest()

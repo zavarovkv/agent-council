@@ -124,6 +124,15 @@ class WorkerModelTests(unittest.TestCase):
                     ):
                         with self.assertRaises(ValueError):
                             generate([{"role": "user", "content": "hello"}])
+                for response in (
+                    {"content": "Final answer"},
+                    SimpleNamespace(content="Final answer"),
+                    "Final answer",
+                ):
+                    with patch("agent.auxiliary_client.call_llm", return_value=response):
+                        self.assertEqual(
+                            generate([{"role": "user", "content": "hello"}]), "Final answer"
+                        )
 
     def test_real_http_requires_machine_auth_and_refuses_caller_tools(self):
         with tempfile.TemporaryDirectory() as temporary:

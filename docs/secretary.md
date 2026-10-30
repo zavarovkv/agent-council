@@ -84,7 +84,8 @@ sending; an already in-flight send cannot be recalled.
 
 Limits: two model calls concurrently, 20 requests per conversation/hour and 100
 globally/hour. Input is limited to 6,000 characters; replies to 3,000. History is
-retained for up to 14 days, with eight answered turns used as context. This is not
+pruned after 14 days on startup/new requests, with eight delivered turns used as
+context. Stored backups follow their separate retention policy. This is not
 a general public agent sandbox: it has no tools or private knowledge integrations.
 
 See [Telegram Chat Automation](https://telegram.org/blog/ai-bot-revolution-11-new-features#chat-automation-in-profiles)

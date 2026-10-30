@@ -238,3 +238,10 @@ class BridgeTests(unittest.IsolatedAsyncioTestCase):
         await self.bridge.handle(self.update())
         await self.settle()
         self.assertEqual(self.bot.send_message.call_count, 1)
+
+    async def test_human_quiet_window_prevents_new_model_calls(self):
+        await self.bridge.handle(self.update(owner=True))
+        await self.bridge.handle(self.update())
+        await self.settle()
+        self.assertFalse(self.requests)
+        self.bot.send_message.assert_not_called()

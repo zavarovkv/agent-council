@@ -29,10 +29,18 @@ def generate(messages):
     if isinstance(response, str):
         text = response
     else:
-        choices = response.get("choices", []) if isinstance(response, dict) else response.choices
-        message = (
-            choices[0].get("message", {}) if isinstance(choices[0], dict) else choices[0].message
+        choices = (
+            response.get("choices")
+            if isinstance(response, dict)
+            else getattr(response, "choices", None)
         )
+        message = response
+        if choices:
+            message = (
+                choices[0].get("message", {})
+                if isinstance(choices[0], dict)
+                else choices[0].message
+            )
         if isinstance(message, dict):
             if message.get("tool_calls"):
                 raise ValueError("Tool calls are unsupported.")
@@ -40,7 +48,7 @@ def generate(messages):
         else:
             if getattr(message, "tool_calls", None):
                 raise ValueError("Tool calls are unsupported.")
-            text = message.content
+            text = getattr(message, "content", "")
     if not isinstance(text, str) or not text.strip():
         raise ValueError("The model returned no final reply.")
     return text.strip()[:3000]
