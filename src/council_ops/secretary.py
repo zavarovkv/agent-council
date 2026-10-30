@@ -9,7 +9,16 @@ from .config import OperationError, atomic_write, read_settings
 from .lifecycle import identity
 
 
-def prepare(runtime):
+def prepare(runtime, *, owner_name, assistant_name):
+    for value in (owner_name, assistant_name):
+        if (
+            not 1 <= len(value) <= 100
+            or value != value.strip()
+            or any(ord(c) < 32 or c in "\"'`$" for c in value)
+        ):
+            raise OperationError(
+                "Use a short literal display name without control/quoting characters."
+            )
     settings = runtime.settings
     runtime.require_idle()
     # Deploy the compatible image first, so a rollback never needs an absent plugin.
@@ -48,9 +57,17 @@ def prepare(runtime):
                 "Existing secretary identity/key differs; handle rotation explicitly."
             )
     else:
+        values = {
+            "COUNCIL_SECRETARY_OWNER_ID": str(owner),
+            "COUNCIL_SECRETARY_KEY": secrets.token_hex(32),
+        }
+    values.update(
+        COUNCIL_SECRETARY_OWNER_NAME=owner_name, COUNCIL_SECRETARY_ASSISTANT_NAME=assistant_name
+    )
+    if values:
         atomic_write(
             settings.secretary_file,
-            f"COUNCIL_SECRETARY_OWNER_ID={owner}\nCOUNCIL_SECRETARY_KEY={secrets.token_hex(32)}\n".encode(),
+            "".join(f"{key}={value}\n" for key, value in values.items()).encode(),
         )
     uid, gid = identity(settings)
     profile.mkdir(mode=0o700, parents=True, exist_ok=True)

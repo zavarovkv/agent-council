@@ -9,7 +9,8 @@ The initial implementation handles **text in selected private chats**. Media,
 groups/guest mode, calendar actions and cross-chat actions are not supported.
 The secretary answers general questions and clarifies requests; it cannot access
 private documents, execute commands or claim to notify the owner. Its prompt
-identifies it as Konstantin's digital assistant.
+identifies it as the configured owner's digital assistant. Names are deployment
+settings, not a repository-owner default.
 
 ## Setup
 
@@ -19,7 +20,7 @@ identifies it as Konstantin's digital assistant.
 2. On the Docker host run:
 
    ```bash
-   sudo python3 scripts/manage.py prepare-secretary
+   sudo python3 scripts/manage.py prepare-secretary --owner-name "Your name" --assistant-name "Assistant name"
    sudo python3 scripts/manage.py deploy
    ```
 

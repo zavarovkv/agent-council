@@ -33,9 +33,15 @@ def parser():
         default=os.environ.get("COUNCIL_BACKUP_DIR", "/var/backups/agent-council"),
     )
     commands = result.add_subparsers(dest="action", required=True)
-    commands.add_parser(
+    secretary = commands.add_parser(
         "prepare-secretary", help="Prepare a separate tool-free Telegram secretary profile"
     )
+    secretary.add_argument(
+        "--owner-name",
+        required=True,
+        help="Explicit account-owner display name; no implicit repository owner",
+    )
+    secretary.add_argument("--assistant-name", default="Ассистент")
     commands.add_parser("doctor", help="Read safe configuration, isolation and service status")
     commands.add_parser(
         "install", help="Initialize a new loopback-only deployment with no default owner"
@@ -246,7 +252,9 @@ def main(argv=None):
             result = doctor(runtime)
         elif arguments.action == "prepare-secretary":
             doctor(runtime)
-            result = prepare_secretary(runtime)
+            result = prepare_secretary(
+                runtime, owner_name=arguments.owner_name, assistant_name=arguments.assistant_name
+            )
         elif arguments.action == "install":
             result = install(runtime)
         elif arguments.action == "recover":
