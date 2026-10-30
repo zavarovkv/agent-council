@@ -45,6 +45,11 @@ def parser():
     backup.add_argument(
         "--include-image", action="store_true", help="Include the exact image for offline recovery"
     )
+    backup.add_argument(
+        "--portable",
+        action="store_true",
+        help="Copy persistent data only, using the cloud exclusion policy",
+    )
     verify = commands.add_parser(
         "verify-backup", help="Restore a copy and verify it in an offline container"
     )
@@ -206,7 +211,13 @@ def main(argv=None):
             runtime.adopt_release(arguments.revision)
             result = {"adopted_revision": arguments.revision, "service_restarted": False}
         elif arguments.action == "backup":
-            result = {"backup": str(snapshot(runtime, include_image=arguments.include_image))}
+            result = {
+                "backup": str(
+                    snapshot(
+                        runtime, include_image=arguments.include_image, portable=arguments.portable
+                    )
+                )
+            }
         elif arguments.action == "verify-backup":
             manifest = smoke(runtime, arguments.backup)
             result = {"verified": True, "image": manifest["image_id"], "external_network": False}

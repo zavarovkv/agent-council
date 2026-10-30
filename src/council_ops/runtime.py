@@ -77,7 +77,7 @@ class Runtime:
                 "Hermes is busy or its status is stale; retry maintenance when idle."
             )
         # Inspect locally; never emit command lines, which may include private prompts.
-        processes = self.run(["docker", "top", self.container(), "-eo", "args"])
+        processes = self.run(["docker", "top", self.container(), "-eo", "pid,args"])
         if any(
             marker in processes
             for marker in (
