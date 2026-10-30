@@ -139,6 +139,8 @@ def restore(runtime, backup, *, require_idle=True):
         atomic_write(settings.auth_file, (backup / "auth.env").read_bytes())
         if "secretary.env" in manifest["files"]:
             atomic_write(settings.secretary_file, (backup / "secretary.env").read_bytes())
+        else:
+            settings.secretary_file.unlink(missing_ok=True)
         runtime.start()
         runtime.ready()
         runtime.check_protected()

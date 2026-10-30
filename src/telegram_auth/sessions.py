@@ -28,7 +28,7 @@ class StoredSession:
 
 class SessionStore:
     def __init__(self, path, audience, *, days=30, clock=time.time):
-        if not 1 <= days <= 90:
+        if type(days) is not int or not 1 <= days <= 90:
             raise ValueError("Session lifetime must be 1–90 days.")
         self.path = path
         self.audience = audience
@@ -76,7 +76,7 @@ class SessionStore:
         if digest is None:
             return None
         try:
-            if not self.path.exists():
+            if not self._existing():
                 return None
             with closing(sqlite3.connect(self.path.as_uri() + "?mode=ro", uri=True)) as db:
                 row = db.execute(
@@ -97,7 +97,7 @@ class SessionStore:
         if digest is None:
             return
         try:
-            if not self.path.exists():
+            if not self._existing():
                 return
             with closing(sqlite3.connect(self.path, timeout=5)) as db, db:
                 db.execute(
@@ -105,3 +105,17 @@ class SessionStore:
                 )
         except (OSError, sqlite3.Error) as exc:
             raise SessionStoreError("Session store unavailable.") from exc
+
+    def _existing(self):
+        """Apply the same file boundary to reads/revocation as to session creation."""
+        try:
+            metadata = self.path.lstat()
+        except FileNotFoundError:
+            return False
+        if (
+            not stat.S_ISREG(metadata.st_mode)
+            or metadata.st_uid != os.getuid()
+            or metadata.st_mode & 0o077
+        ):
+            raise OSError("Unexpected session store type, owner or permissions.")
+        return True

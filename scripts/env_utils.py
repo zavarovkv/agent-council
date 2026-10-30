@@ -5,9 +5,9 @@ import json
 import os
 import re
 import tempfile
+from collections.abc import Mapping
 from contextlib import contextmanager
 from pathlib import Path
-from typing import Mapping
 
 OPERATIONS_LOCK = Path("/etc/agent-council/operations.lock")
 
@@ -33,7 +33,7 @@ def parse_environment(text: str, *, raw: bool) -> dict:
         if not line.strip() or line.lstrip().startswith("#"):
             continue
         key, separator, value = line.partition("=")
-        if not separator or not re.fullmatch(r"[A-Z][A-Z0-9_]*", key):
+        if not separator or not re.fullmatch(r"[A-Z][A-Z0-9_]*", key) or key in values:
             raise ValueError("Invalid authentication environment file.")
         if not raw and value.startswith('"'):
             value = json.loads(value)

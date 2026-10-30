@@ -3,6 +3,7 @@
 
 import argparse
 import ipaddress
+import json
 import os
 import shlex
 import subprocess
@@ -35,6 +36,9 @@ def remote_command(action):
     source = Path(__file__).with_name("configure-drive.py").read_text()
     return shlex.join(
         [
+            "flock",
+            "-n",
+            "/etc/agent-council/operations.lock",
             "docker",
             "exec",
             "-i",
@@ -48,6 +52,14 @@ def remote_command(action):
             action,
         ]
     )
+
+
+def callback_address(networks):
+    network = networks.get("agent-council_hermes", {})
+    address = ipaddress.ip_address(network.get("IPAddress", ""))
+    if address.version != 4 or not address.is_private:
+        raise ValueError("Expected the private Hermes bridge address.")
+    return address
 
 
 def main():
@@ -86,19 +98,14 @@ def main():
             "docker",
             "inspect",
             "--format",
-            "{{range .NetworkSettings.Networks}}{{.IPAddress}} {{end}}",
+            "{{json .NetworkSettings.Networks}}",
             CONTAINER,
         ]
     )
     result = subprocess.run(
         ssh_options() + ["-T", host, inspect], capture_output=True, text=True, check=True
     )
-    addresses = result.stdout.split()
-    if len(addresses) != 1:
-        raise ValueError("Expected one isolated Docker network.")
-    address = ipaddress.ip_address(addresses[0])
-    if address.version != 4 or not address.is_private:
-        raise ValueError("Expected a private Docker bridge address.")
+    address = callback_address(json.loads(result.stdout))
     forward = f"127.0.0.1:{PORT}:{address}:{PORT}"
     subprocess.run(
         ssh_options()

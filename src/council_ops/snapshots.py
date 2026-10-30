@@ -6,7 +6,7 @@ import os
 import shutil
 import stat
 import tempfile
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 from .config import OperationError, atomic_write
@@ -156,7 +156,7 @@ def snapshot(runtime, *, include_image=False, restart=True, portable=False):
         image_size = json.loads(runtime.run(["docker", "image", "inspect", image]))[0]["Size"]
     if shutil.disk_usage(settings.backup_dir).free < size * 2 + image_size * 2 + 512 * 1024**2:
         raise OperationError("Insufficient free space for a snapshot and recovery verification.")
-    stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    stamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
     backup = Path(tempfile.mkdtemp(prefix=f"backup-{stamp}-", dir=settings.backup_dir))
     files = {}
     if include_image:
@@ -197,7 +197,7 @@ def snapshot(runtime, *, include_image=False, restart=True, portable=False):
             "schema": 1,
             "kind": "portable-data" if portable else "full-local-checkpoint",
             "excluded_profile_entries": sorted(DISPOSABLE) if portable else [],
-            "created_at": datetime.now(timezone.utc).isoformat(),
+            "created_at": datetime.now(UTC).isoformat(),
             "image_id": image,
             "running_services": running_services,
             "revision": labels.get("org.opencontainers.image.revision")

@@ -18,6 +18,23 @@ except ImportError:
     from env_utils import operation_lock, parse_environment, write_environment
 
 
+def deployment_origin(path):
+    values = parse_environment(path.read_text(encoding="utf-8"), raw=True)
+    origin = values.get("HERMES_PUBLIC_URL", "").rstrip("/")
+    parsed = urlsplit(origin)
+    if (
+        parsed.scheme != "https"
+        or not parsed.hostname
+        or parsed.username
+        or parsed.password
+        or parsed.path
+        or parsed.query
+        or parsed.fragment
+    ):
+        raise SystemExit("Configure an explicit HTTPS public origin in compose.env first.")
+    return origin
+
+
 def configure():
     if os.geteuid() != 0:
         raise SystemExit("Run this script as root on the Hermes server.")
@@ -37,11 +54,7 @@ def configure():
         deployment_kind.exists() and deployment_kind.read_text(encoding="utf-8").strip() == "docker"
     )
     if docker_deployment:
-        for line in Path("/etc/agent-council/compose.env").read_text(encoding="utf-8").splitlines():
-            if line.startswith("HERMES_PUBLIC_URL="):
-                origin = line.split("=", 1)[1].strip().rstrip("/")
-        if urlsplit(origin).scheme != "https" or not urlsplit(origin).hostname:
-            raise SystemExit("The deployment public URL must use HTTPS.")
+        origin = deployment_origin(Path("/etc/agent-council/compose.env"))
     print("In @BotFather → your bot → Login Widget, register these Allowed URLs:")
     print(origin)
     print(origin + "/login")

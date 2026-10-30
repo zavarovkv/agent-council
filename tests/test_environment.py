@@ -32,6 +32,11 @@ class EnvironmentTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             render_environment({"BAD=KEY": "value"}, raw=True)
 
+    def test_duplicate_keys_cannot_select_different_owner_or_secret_values(self):
+        for raw in (True, False):
+            with self.subTest(raw=raw), self.assertRaises(ValueError):
+                parse_environment("OWNER=123\nOWNER=456\n", raw=raw)
+
     def test_atomic_replacement_is_private(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "telegram.env"
