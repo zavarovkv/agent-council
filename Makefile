@@ -1,4 +1,4 @@
-.PHONY: test test-integration test-backups test-secretary test-browser lint format inspect
+.PHONY: test test-integration test-backups test-secretary test-browser test-nginx lint format inspect
 
 PYTHON ?= python3
 RUFF ?= ruff
@@ -23,6 +23,9 @@ test-backups:
 
 test-secretary:
 	$(PYTHON) scripts/check-secretary.py
+
+test-nginx:
+	$(PYTHON) scripts/check-nginx.py
 
 lint:
 	$(RUFF) check src tests scripts/*.py

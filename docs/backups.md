@@ -74,11 +74,19 @@ backups. GitHub Actions receives no deployment or storage credentials.
 
 ## Consistency and retention
 
-Hermes and its optional secretary stop while profiles/workspace are copied. A known
-active agent/model/OAuth setup blocks maintenance. Use a quiet window: there is
-brief dashboard/Telegram downtime, and a message racing the idle check can be
-interrupted by graceful shutdown. A distributed drain/queue is not implemented.
-Hashing, uploads and recovery checks happen after Hermes restarts. Exclusions
+Routine snapshots briefly freeze both owned containers while profiles/workspace
+are copied. They resume the same processes, preserving live sessions and avoiding
+gateway/poller startup. A known active agent/model/OAuth setup blocks maintenance.
+Copying has a 20-second freeze budget; an independent systemd watchdog resumes the
+containers after 45 seconds if the CLI dies. A failed/over-budget copy receives no
+manifest. This requires a Linux Docker host with systemd. Large state may need a
+planned stopped snapshot instead; do not increase the freeze budget blindly.
+
+Deployment/restore and instruction cutovers still stop owned services to preserve
+their rollback boundary. The Council route returns a non-cached 503 with
+`Retry-After: 30` for origin transport failures. A message racing the idle check
+may still be interrupted; a distributed drain/queue is not implemented.
+Hashing, uploads and recovery checks happen after the freeze ends. Exclusions
 change the copied checkpoint only; they never delete anything from the live profile.
 
 The maintenance restic container has no Docker socket, published ports or access

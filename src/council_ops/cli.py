@@ -17,6 +17,7 @@ from .instructions import export as export_instructions
 from .instructions import sync as sync_instructions
 from .lifecycle import deploy, restore, smoke
 from .restic import Restic, cloud_backup
+from .routing import configure as configure_route
 from .runtime import Runtime
 from .secretary import prepare as prepare_secretary
 from .setup import configure_backups
@@ -81,6 +82,9 @@ def parser():
     )
     secretary.add_argument("--assistant-name", default="Ассистент")
     commands.add_parser("doctor", help="Read safe configuration, isolation and service status")
+    commands.add_parser(
+        "configure-route", help="Validate and gracefully apply Council's Nginx route"
+    )
     commands.add_parser(
         "install", help="Initialize a new loopback-only deployment with no default owner"
     )
@@ -164,6 +168,8 @@ def main(argv=None):
             doctor(runtime)
         if arguments.action == "doctor":
             result = doctor(runtime)
+        elif arguments.action == "configure-route":
+            result = configure_route(runtime)
         elif arguments.action == "apply-instructions":
             result = apply_instructions(
                 runtime, arguments.source, arguments.revision, fetch=arguments.fetch

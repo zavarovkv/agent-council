@@ -2,7 +2,11 @@
 
 import json
 import os
+import re
 import subprocess
+import time
+import uuid
+from contextlib import contextmanager
 
 from .config import OperationError, atomic_write, read_settings
 
@@ -167,6 +171,55 @@ class Runtime:
         companion = self.companion()
         if companion:
             self.run(["docker", "stop", "--time", "15", companion])
+
+    @contextmanager
+    def frozen(self):
+        """Freeze owned writers briefly; a host timer thaws them if this CLI dies."""
+        containers = [self.container()]
+        companion = self.companion()
+        if companion:
+            state = json.loads(self.run(["docker", "inspect", companion]))[0]["State"]
+            if state["Running"]:
+                containers.append(companion)
+        if any(not re.fullmatch(r"[a-f0-9]{12,64}", value) for value in containers):
+            raise OperationError("Expected owned Docker container IDs.")
+        unit = "agent-council-thaw-" + uuid.uuid4().hex
+        # Schedule before freezing. The independent system manager survives a
+        # killed CLI; an incomplete checkpoint never receives a manifest.
+        self.run(
+            [
+                "systemd-run",
+                "--quiet",
+                "--collect",
+                "--unit=" + unit,
+                "--on-active=45s",
+                "--timer-property=AccuracySec=1s",
+                "/usr/bin/docker",
+                "unpause",
+                *containers,
+            ]
+        )
+        paused = []
+        try:
+            deadline = time.monotonic() + 20
+            for container in containers:
+                paused.append(container)
+                self.run(["docker", "pause", container], timeout=10)
+            yield deadline
+            if time.monotonic() >= deadline:
+                raise OperationError("Snapshot freeze budget exceeded; checkpoint discarded.")
+        finally:
+            failures = []
+            for container in reversed(paused):
+                try:
+                    self.run(["docker", "unpause", container], timeout=10)
+                except OperationError:
+                    failures.append(container)
+            if not failures:
+                self.run(["systemctl", "stop", unit + ".timer"])
+            else:
+                # Leave the independent recovery timer armed.
+                raise OperationError("Could not thaw a container; recovery watchdog remains armed.")
 
     def companion(self):
         identifiers = self.run(

@@ -3,6 +3,7 @@ import os
 import sys
 import tempfile
 import unittest
+from contextlib import contextmanager
 from pathlib import Path
 from unittest.mock import patch
 
@@ -88,6 +89,14 @@ class FakeRuntime:
         self.events.append("stop")
         self.running = False
 
+    @contextmanager
+    def frozen(self):
+        self.events.append("pause")
+        try:
+            yield None
+        finally:
+            self.events.append("unpause")
+
     def start(self):
         self.events.append("start")
         self.running = True
@@ -160,7 +169,7 @@ class OperationTests(unittest.TestCase):
         (self.fixture.workspace / "link").symlink_to(outside)
         runtime = FakeRuntime(self.fixture.settings())
         backup = snapshot(runtime)
-        self.assertEqual(runtime.events[:3], ["idle", "stop", "start"])
+        self.assertEqual(runtime.events[:3], ["idle", "pause", "unpause"])
         self.assertTrue(runtime.running)
         self.assertEqual(backup.stat().st_mode & 0o777, 0o700)
         self.assertEqual((backup / "auth.env").stat().st_mode & 0o777, 0o600)
@@ -180,6 +189,79 @@ class OperationTests(unittest.TestCase):
         self.assertTrue(runtime.running)
         self.assertEqual(runtime.events[-3:], ["start", "ready", "protected"])
         self.assertFalse(list(self.fixture.backups.glob("*/manifest.json")))
+
+    def test_failed_routine_snapshot_thaws_without_restarting_or_publishing_a_manifest(self):
+        runtime = FakeRuntime(self.fixture.settings())
+        with patch("council_ops.snapshots.copy_state", side_effect=OSError("copy failed")):
+            with self.assertRaises(OSError):
+                snapshot(runtime, portable=True)
+        self.assertTrue(runtime.running)
+        self.assertEqual(runtime.events, ["idle", "pause", "unpause"])
+        self.assertFalse(list(self.fixture.backups.glob("*/manifest.json")))
+
+    def test_freeze_watchdog_is_armed_before_pausing_and_kept_after_thaw_failure(self):
+        runtime = Runtime(self.fixture.settings())
+        calls = []
+        hermes, worker = "a" * 64, "b" * 64
+
+        def run(arguments, **_kwargs):
+            calls.append(arguments)
+            if arguments[:2] == ["docker", "inspect"]:
+                return json.dumps([{"State": {"Running": True}}])
+            if arguments == ["docker", "unpause", worker]:
+                raise OperationError("Fixture thaw failure")
+            return ""
+
+        with (
+            patch.object(runtime, "container", return_value=hermes),
+            patch.object(runtime, "companion", return_value=worker),
+            patch.object(runtime, "run", side_effect=run),
+        ):
+            with self.assertRaisesRegex(OperationError, "watchdog remains armed"):
+                with runtime.frozen():
+                    pass
+        armed = next(i for i, command in enumerate(calls) if command[0] == "systemd-run")
+        pause = next(i for i, command in enumerate(calls) if command[:2] == ["docker", "pause"])
+        self.assertLess(armed, pause)
+        self.assertIn(["docker", "unpause", hermes], calls)
+        self.assertFalse(any(command[:2] == ["systemctl", "stop"] for command in calls))
+
+    def test_watchdog_setup_failure_never_freezes_a_container(self):
+        runtime = Runtime(self.fixture.settings())
+        with (
+            patch.object(runtime, "container", return_value="a" * 64),
+            patch.object(runtime, "companion", return_value=None),
+            patch.object(runtime, "run", side_effect=OperationError("No system manager")) as run,
+        ):
+            with self.assertRaises(OperationError):
+                with runtime.frozen():
+                    self.fail("Must not freeze without an independent watchdog")
+        self.assertEqual(run.call_count, 1)
+        self.assertEqual(run.call_args.args[0][0], "systemd-run")
+
+    def test_partial_freeze_failure_thaws_the_first_container(self):
+        runtime = Runtime(self.fixture.settings())
+        calls = []
+        hermes, worker = "a" * 64, "b" * 64
+
+        def run(arguments, **_kwargs):
+            calls.append(arguments)
+            if arguments[:2] == ["docker", "inspect"]:
+                return json.dumps([{"State": {"Running": True}}])
+            if arguments == ["docker", "pause", worker]:
+                raise OperationError("Fixture pause failure")
+            return ""
+
+        with (
+            patch.object(runtime, "container", return_value=hermes),
+            patch.object(runtime, "companion", return_value=worker),
+            patch.object(runtime, "run", side_effect=run),
+        ):
+            with self.assertRaises(OperationError):
+                with runtime.frozen():
+                    self.fail("Partial freeze must not copy state")
+        self.assertIn(["docker", "unpause", hermes], calls)
+        self.assertTrue(any(command[:2] == ["systemctl", "stop"] for command in calls))
 
     def test_cloud_checkpoint_excludes_software_but_keeps_credentials_skills_and_workspace(self):
         for relative in (

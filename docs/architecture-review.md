@@ -69,10 +69,16 @@ instruction activation and consistent snapshots currently stop owned services;
 profile copying, verification and gateway startup make repeated operations
 noticeable in the web UI. This is an observed usability/availability issue.
 
+Implemented: routine snapshots freeze/resume the existing processes instead of
+restarting gateways. A bounded copy and independent host thaw timer protect
+against an interrupted CLI. Council's Nginx route maps origin connection failures
+to a non-cached 503 with `Retry-After`, preserving application auth/error responses.
+The real template is tested against a loopback-only fixture upstream.
+
 Coalesce maintenance steps, validate staged instruction bundles before downtime
 and separate style/skill activation from code-image deployment. Use atomic bundle
 selection and a tested reader reload where native contracts permit it. Investigate
-coordinated online SQLite/file backups before reducing stop-the-world snapshots;
+coordinated online SQLite/file backups before eliminating the brief freeze;
 consistency must remain explicit. Add a maintenance response with Retry-After on
 the Council route and measure an availability budget. Preserve the single Telegram
 poller and image/data rollback when designing any overlapping cutover.
