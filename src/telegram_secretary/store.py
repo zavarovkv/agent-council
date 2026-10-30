@@ -161,6 +161,22 @@ class Store:
             )
             return result.rowcount == 1
 
+    def can_generate(self, identifier):
+        """Recheck claimed work after waiting for capacity, before any provider spend."""
+        with self.database() as db:
+            return (
+                db.execute(
+                    """
+                SELECT 1 FROM jobs WHERE id=? AND status='working' AND created>?
+                AND connection IN (SELECT id FROM connections WHERE enabled=1)
+                AND NOT EXISTS(SELECT 1 FROM pauses WHERE pauses.connection=jobs.connection
+                    AND pauses.chat=jobs.chat AND until>?)
+                """,
+                    (identifier, self.clock() - 23 * 3600, self.clock()),
+                ).fetchone()
+                is not None
+            )
+
     def finish(self, identifier, status):
         if status not in {"sent", "failed", "cancelled", "uncertain"}:
             raise ValueError("Invalid terminal delivery state.")

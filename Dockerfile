@@ -24,10 +24,10 @@ COPY scripts/healthcheck.py scripts/verify-profile.py /opt/agent-council/
 RUN chmod 0444 /opt/agent-council/LICENSE /opt/agent-council/healthcheck.py /opt/agent-council/verify-profile.py
 
 COPY --from=web-assets /vendor/advanced-delegation/ /opt/hermes/plugins/advanced-delegation/
-COPY agents/ /opt/agent-council/agents/
+COPY instructions/ /opt/agent-council/instructions/
 COPY scripts/provision-researcher.py /opt/agent-council/provision-researcher.py
 COPY scripts/configure-drive.py /opt/agent-council/configure-drive.py
-RUN chmod -R a+rX,go-w /opt/hermes/plugins/advanced-delegation /opt/agent-council/agents \
+RUN chmod -R a+rX,go-w /opt/hermes/plugins/advanced-delegation /opt/agent-council/instructions \
     && chmod 0444 /opt/agent-council/provision-researcher.py /opt/agent-council/configure-drive.py
 
 COPY scripts/initialize-profile.py /opt/agent-council/initialize-profile.py

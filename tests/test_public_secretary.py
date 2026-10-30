@@ -3,10 +3,10 @@ import sys
 import tempfile
 import types
 import unittest
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from types import SimpleNamespace as Object
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, Mock, patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 from telegram_secretary.public import PUBLIC_CONNECTION, PublicBridge
@@ -54,7 +54,7 @@ class PublicTests(unittest.IsolatedAsyncioTestCase):
             message=Object(
                 chat=Object(id=chat, type="private"),
                 from_user=Object(id=chat, username=username, is_bot=False),
-                date=datetime.fromtimestamp(1_000_000, timezone.utc),
+                date=datetime.fromtimestamp(1_000_000, UTC),
                 message_id=number,
                 text=text,
             ),
@@ -90,10 +90,12 @@ class PublicTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(self.bot.send_message.call_count, 1)
 
     async def test_start_help_and_media_use_local_text_and_never_a_private_command(self):
+        self.bridge.acknowledge = Mock()
         for number, text in enumerate(("/start", "/help", None), 1):
             await self.bridge.handle(self.update(text, number=number))
         await self.settle()
         self.assertFalse(self.requests)
+        self.bridge.acknowledge.assert_not_called()
         self.assertEqual(self.bot.send_message.call_count, 3)
         self.assertIn("текст", self.bot.send_message.call_args.kwargs["text"])
 

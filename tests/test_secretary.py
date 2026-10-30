@@ -1,25 +1,27 @@
 import asyncio
 import hashlib
 import json
+import shutil
 import sqlite3
 import sys
 import tempfile
 import types
 import unittest
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from types import SimpleNamespace as Object
 from unittest.mock import AsyncMock, patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from secretary_worker.instructions import load_skills
-from secretary_worker.service import PROMPT, Service
-from telegram_secretary.bridge import Bridge, contact_ids, normalize_username
+from secretary_worker.instructions import load_instructions, load_skills
+from secretary_worker.service import Service
+from telegram_secretary.bridge import Bridge
+from telegram_secretary.policy import contact_ids, normalize_username
 from telegram_secretary.store import Store
 
 KEY = "a" * 64
-SKILLS_ROOT = Path(__file__).resolve().parents[1] / "agents/secretary"
+INSTRUCTIONS_ROOT = Path(__file__).resolve().parents[1] / "instructions/secretary"
 
 
 def digest(value):
@@ -36,11 +38,13 @@ class WorkerTests(unittest.TestCase):
             self.calls.append(messages)
             return "Я помощник Константина. Чем могу помочь?"
 
-        self.skills = load_skills(SKILLS_ROOT)
+        instructions = load_instructions(INSTRUCTIONS_ROOT)
+        self.skills, self.policy = instructions.skills, instructions.policy
         self.service = Service(
             self.directory.name,
             KEY,
             skills=self.skills,
+            prompt=self.policy,
             generate=generate,
             clock=lambda: 1_000_000,
         )
@@ -66,7 +70,7 @@ class WorkerTests(unittest.TestCase):
         self.assertIn("private phrase in chat one", json.dumps(self.calls[-1]))
         self.assertEqual(
             self.calls[-1][0],
-            {"role": "system", "content": PROMPT + "\n" + self.skills["new-users"]},
+            {"role": "system", "content": self.policy + "\n" + self.skills["new-users"]},
         )
         self.assertEqual(
             Path(self.directory.name, "secretary-history.sqlite3").stat().st_mode & 0o777, 0o600
@@ -124,7 +128,30 @@ class WorkerTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 load_skills(temporary)
         with self.assertRaises(ValueError):
-            Service(self.directory.name, KEY, skills={"contacts": "only one scenario"})
+            Service(
+                self.directory.name,
+                KEY,
+                skills={"contacts": "only one scenario"},
+                prompt=self.policy,
+            )
+
+    def test_common_policy_is_required_and_rejects_empty_or_symlinked_files(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary) / "instructions"
+            shutil.copytree(INSTRUCTIONS_ROOT, root)
+            policy = root / "POLICY.md"
+            policy.unlink()
+            with self.assertRaises(FileNotFoundError):
+                load_instructions(root)
+            policy.write_text("  \n")
+            with self.assertRaises(ValueError):
+                load_instructions(root)
+            policy.unlink()
+            policy.symlink_to(INSTRUCTIONS_ROOT / "POLICY.md")
+            with self.assertRaises(ValueError):
+                load_instructions(root)
+        with self.assertRaises(ValueError):
+            Service(self.directory.name, KEY, skills=self.skills, prompt="")
 
     def test_interrupted_generation_is_not_reissued_ambiguously(self):
         self.service.generate = lambda _messages: (_ for _ in ()).throw(
@@ -244,7 +271,7 @@ class BridgeTests(unittest.IsolatedAsyncioTestCase):
             business_connection_id="connection",
             chat=Object(id=67890, type="private"),
             message_id=10,
-            date=datetime.fromtimestamp(1_000_000, timezone.utc),
+            date=datetime.fromtimestamp(1_000_000, UTC),
             from_user=Object(id=self.owner if owner else 67890, is_bot=False),
             text=text,
         )
@@ -361,3 +388,41 @@ class BridgeTests(unittest.IsolatedAsyncioTestCase):
         await self.settle()
         self.assertFalse(self.requests)
         self.bot.send_message.assert_not_called()
+
+    async def test_human_takeover_while_waiting_for_capacity_does_not_spend_on_generation(self):
+        self.bridge.capacity = asyncio.Semaphore(0)
+        await self.bridge.handle(self.update())
+        await asyncio.sleep(0)
+        await self.bridge.handle(self.update(owner=True))
+        self.bridge.capacity.release()
+        await self.settle()
+        self.assertFalse(self.requests)
+        self.bot.send_message.assert_not_called()
+
+    async def test_deleted_work_waiting_for_capacity_does_not_invoke_the_model(self):
+        self.bridge.capacity = asyncio.Semaphore(0)
+        await self.bridge.handle(self.update())
+        await asyncio.sleep(0)
+        self.store.cancel("connection", 67890, [10])
+        self.bridge.capacity.release()
+        await self.settle()
+        self.assertFalse(self.requests)
+
+    async def test_cancelled_task_cleans_up_claim_and_does_not_block_maintenance(self):
+        self.bridge.capacity = asyncio.Semaphore(0)
+        await self.bridge.handle(self.update())
+        await asyncio.sleep(0)
+        for task in self.tasks:
+            task.cancel()
+        await asyncio.gather(*self.tasks, return_exceptions=True)
+        self.assertFalse(self.bridge.tasks)
+        with self.store.database() as db:
+            self.assertEqual(db.execute("SELECT status FROM jobs").fetchone()[0], "failed")
+
+    async def test_unfamiliar_sender_metadata_does_not_break_default_reply(self):
+        update = self.update()
+        update.business_message.from_user.username = "1234"
+        await self.bridge.handle(update)
+        await self.settle()
+        self.assertEqual(self.requests[0]["audience"], "new-users")
+        self.bot.send_message.assert_awaited_once()

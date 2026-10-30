@@ -36,9 +36,12 @@ Protecting the dashboard from hostile code already running inside its own
 runtime is outside the current supported threat model.
 
 The optional Telegram secretary is a separate, deliberately limited boundary:
-it handles text from the pinned owner's selected business chats in an isolated
+it handles text from the pinned owner's selected business chats and optional
+public bot DMs in an isolated
 tool-free service, with its own model grant/history and no private-agent mounts.
-Business updates never enter the owner's command/tool dispatcher. This does not
+These external updates never enter the owner's command/tool dispatcher. Spouse,
+contact and new-user instructions select conversation style, not extra rights;
+a spouse username is not verified family identity. This does not
 authorize general guest execution or access to private Notion/Drive integrations.
 See [secretary setup and delivery limits](docs/secretary.md).
 
@@ -48,7 +51,9 @@ See [secretary setup and delivery limits](docs/secretary.md).
 - Keep owner authorization enabled, including during initial setup. Prefer an
   explicit numeric Telegram ID in the root-owned authentication environment.
   Username-based enrollment is a bootstrap convenience; later ID pinning is
-  stored in the trusted owner profile.
+  stored in the trusted owner profile. Explicit-ID logins create that pin too.
+  A conflicting existing pin requires deliberate operator reconciliation; changing
+  the environment alone cannot silently replace the pinned owner.
 - Add collaborators only by numeric Telegram ID in the root-owned allowlist.
   Removing an invitation and recreating Hermes rejects the removed account's
   existing tokens and disconnects open sessions. The separate owner setting

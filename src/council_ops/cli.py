@@ -9,6 +9,7 @@ import tempfile
 from pathlib import Path
 
 from .config import OperationError, Settings
+from .doctor import doctor
 from .guard import ServiceGuard
 from .install import install, recover
 from .lifecycle import deploy, restore, smoke
@@ -100,137 +101,6 @@ def parser():
     )
     download.add_argument("snapshot_id")
     return result
-
-
-def doctor(runtime):
-    runtime.compose("config", "--quiet")
-    inspected = runtime.inspect()
-    expected = {
-        "/opt/data": runtime.settings.data_dir,
-        "/workspace": runtime.settings.workspace_dir,
-    }
-    mounts = inspected["Mounts"]
-    if len(mounts) != len(expected):
-        raise OperationError("Unexpected runtime mounts; inspect the deployment privately.")
-    for mount in mounts:
-        if expected.get(mount["Destination"]) != Path(mount["Source"]) or not mount["RW"]:
-            raise OperationError(
-                "Runtime volume configuration differs from the deployment settings."
-            )
-    bindings = inspected["HostConfig"]["PortBindings"]
-    if set(bindings) != {"9119/tcp"} or len(bindings["9119/tcp"]) != 1:
-        raise OperationError("Unexpected published runtime ports.")
-    binding = bindings["9119/tcp"][0]
-    if binding["HostIp"] != "127.0.0.1" or binding["HostPort"] != runtime.settings.values.get(
-        "HERMES_HTTP_PORT", "9119"
-    ):
-        raise OperationError("Hermes must publish only the configured loopback port.")
-    security = inspected["HostConfig"]
-    if (
-        security.get("Privileged")
-        or security.get("NetworkMode") == "host"
-        or security.get("PidMode")
-    ):
-        raise OperationError(
-            "Privileged containers and host/shared process namespaces are unsupported."
-        )
-    if set(security.get("CapDrop") or []) != {"ALL"} or {
-        name.removeprefix("CAP_") for name in security.get("CapAdd") or []
-    } != {
-        "CHOWN",
-        "DAC_OVERRIDE",
-        "FOWNER",
-        "SETGID",
-        "SETUID",
-        "KILL",
-    }:
-        raise OperationError("Runtime capabilities differ from the reviewed bootstrap allowance.")
-    if "no-new-privileges:true" not in security.get("SecurityOpt", []):
-        raise OperationError("The no-new-privileges control is missing.")
-    if not security.get("Memory") or not security.get("PidsLimit") or not security.get("NanoCpus"):
-        raise OperationError("Runtime CPU, memory and process limits are required.")
-    logging = security.get("LogConfig", {})
-    if logging.get("Type") != "local" or not all(
-        logging.get("Config", {}).get(key) for key in ("max-size", "max-file")
-    ):
-        raise OperationError("Bounded local runtime logs are required.")
-    for path in (runtime.settings.env_file, runtime.settings.auth_file):
-        metadata = path.stat()
-        if (
-            path.is_symlink()
-            or not path.is_file()
-            or metadata.st_uid != 0
-            or metadata.st_mode & 0o077
-        ):
-            raise OperationError("Host configuration must be regular root-only files.")
-    if inspected["State"]["Running"]:
-        source = (
-            "import json; from pathlib import Path; from gateway.status import read_runtime_status; "
-            "s=read_runtime_status() or {}; p=int(s.get('pid',0)); "
-            "v=Path(f'/proc/{p}/status').read_text(); "
-            "print(json.dumps([int(x) for x in next(l for l in v.splitlines() if l.startswith('Uid:')).split()[1:]]))"
-        )
-        identities = json.loads(
-            runtime.compose(
-                "exec",
-                "-T",
-                "--user",
-                "hermes",
-                "hermes",
-                "/opt/hermes/.venv/bin/python",
-                "-c",
-                source,
-            )
-        )
-        if identities != [int(runtime.settings.values["HERMES_UID"])] * 4:
-            raise OperationError("The gateway must execute as the dedicated non-root Hermes user.")
-    companion = runtime.companion()
-    if companion:
-        worker = json.loads(runtime.run(["docker", "inspect", companion]))[0]
-        controls = worker["HostConfig"]
-        expected_profile = runtime.settings.data_dir / ".council/secretary"
-        mounts = worker["Mounts"]
-        if (
-            len(mounts) != 1
-            or Path(mounts[0]["Source"]) != expected_profile
-            or mounts[0]["Destination"] != "/opt/data"
-            or not mounts[0]["RW"]
-        ):
-            raise OperationError("The secretary must mount only its own profile.")
-        if (
-            controls.get("PortBindings")
-            or controls.get("Privileged")
-            or controls.get("NetworkMode") == "host"
-            or controls.get("PidMode")
-        ):
-            raise OperationError("The secretary must have no published ports or host namespaces.")
-        if (
-            not controls.get("ReadonlyRootfs")
-            or controls.get("CapAdd")
-            or set(controls.get("CapDrop") or []) != {"ALL"}
-            or "no-new-privileges:true" not in controls.get("SecurityOpt", [])
-        ):
-            raise OperationError("Secretary isolation controls are missing.")
-        if (
-            worker["Config"]["User"]
-            != runtime.settings.values["HERMES_UID"] + ":" + runtime.settings.values["HERMES_GID"]
-        ):
-            raise OperationError("The secretary must run as its configured non-root user.")
-        for name in ("Memory", "PidsLimit", "NanoCpus"):
-            if not controls.get(name):
-                raise OperationError("Secretary resource limits are required.")
-    if runtime.settings.secretary_file.exists():
-        metadata = runtime.settings.secretary_file.stat()
-        if metadata.st_uid != 0 or metadata.st_mode & 0o077:
-            raise OperationError("The secretary machine key must remain root-only.")
-    return {
-        "status": inspected["State"]["Status"],
-        "health": inspected["State"].get("Health", {}).get("Status"),
-        "image": inspected["Image"],
-        "loopback_only": True,
-        "mounts_verified": True,
-        "non_root_gateway": inspected["State"]["Running"],
-    }
 
 
 def main(argv=None):

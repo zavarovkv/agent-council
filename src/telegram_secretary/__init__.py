@@ -1,7 +1,7 @@
-"""Native Telegram extension; business updates never enter the owner's agent."""
+"""Native Telegram extension with separate private, public and business routes."""
 
 
 def register(ctx):
-    from .bridge import attach
+    from .plugin import attach
 
     ctx.register_telegram_handler(attach)

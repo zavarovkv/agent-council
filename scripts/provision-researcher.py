@@ -105,7 +105,7 @@ def provision(home, assets, read_config, write_config, create_profile):
     # Validate the model before creating any state.
     researcher_config({}, coordinator, profile / "research")
     soul = (assets / PROFILE / "SOUL.md").read_bytes()
-    workflow = (assets / PROFILE / "coordinator" / "SKILL.md").read_bytes()
+    workflow = (assets / "assistant" / "skills" / "competitor-research" / "SKILL.md").read_bytes()
     for parent in (home / "profiles", home / "skills", skill.parent, profile):
         if parent.is_symlink():
             raise ValueError(f"Refusing a symlinked managed directory: {parent.name}")
@@ -185,7 +185,7 @@ def main():
         fcntl.flock(lock, fcntl.LOCK_EX)
         profile = provision(
             home,
-            Path(__file__).parent / "agents",
+            Path(__file__).parent / "instructions",
             read_user_config_raw,
             atomic_config_replace,
             create_profile,

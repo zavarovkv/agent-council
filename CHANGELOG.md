@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Organize versioned agent instructions in `instructions/` with a linked editing guide; load the common secretary policy from Markdown.
+- Separate Telegram admission, policy, transport and durable delivery; separate worker protocol, HTTP, history and model composition.
+- Recheck queued work before model generation, clean up cancelled tasks and acknowledge only generated replies.
+- Pin verified explicit owner IDs, reject unsafe session files and serialize model/Drive setup with maintenance.
+- Report optional secretary policy, worker health and queue counts through safe read-only diagnostics.
+
 - Add a native Telegram Business handler and a separate, tool-free secretary with its own model login, per-chat history, revocation checks and a durable reply queue.
 
 - License Agent Council under MIT; preserve third-party licenses.

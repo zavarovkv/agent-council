@@ -19,6 +19,17 @@ not a complete audit of upstream Hermes, all dependencies or the host OS.
 | Reproducible software inflated cloud copies | Data-only cloud checkpoints exclude images, tools, environments, caches, logs and nested backups; local rollback copies remain complete |
 | Historical migrations looked like update commands | Explicit legacy opt-in, guarded builds and current operator documentation |
 | No project source license | MIT selected by the maintainer; retain third-party licenses |
+| Telegram reception, admission, policy, RPC and delivery were coupled | Separate modules and shared delivery lifecycle; independent public/business transports |
+| Worker transport, history and model composition lived in one module | Strict protocol, bounded HTTP transport, transactional history and narrow model adapter |
+| Queued work could be cancelled while waiting for capacity yet still call the model | Recheck eligibility after acquiring capacity; release pending claims on task cancellation |
+| Local help replies attempted model-history acknowledgements | Acknowledge only generated replies after confirmed Telegram delivery |
+| Equal timestamps could reorder model context | Stable ordering by creation time and insertion order; concurrent reservation regression tests |
+| Explicit owner-ID setup did not publish an owner pin | Verified enrollment pins explicit IDs too; mismatched/corrupt existing pins fail closed |
+| Existing session-file reads could follow symlinks | Reject unexpected file type, owner or permissions on lookup and revocation |
+| Model/Drive setup could race maintenance; Drive assumed one Docker network | Shared operations lock and explicit selection of the private Hermes callback network |
+| Restoring a checkpoint without a secretary could retain a newer machine-key file | Restore service credentials together with the checkpoint's profile and Compose source |
+| Instructions were scattered and common reply policy was embedded in Python | Indexed `instructions/` tree included in the image; explicit provisioning preserves edited private profiles |
+| Optional-route failures were hard to inspect safely | Read-only doctor reports route policy, worker health and whitelisted queue counts without private text or keys |
 
 Earlier auth controls remain: no implicit owner, immutable numeric-ID pinning,
 closed registration for invalid settings, raw literal credentials, browser-bound
