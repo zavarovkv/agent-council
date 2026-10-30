@@ -53,7 +53,10 @@ proves the worker is running, not that a provider grant or real chat is authoriz
 
 ## Editing reply skills
 
-The two editable reply scenarios live in this repository:
+The three editable reply scenarios live in this repository, in priority order:
+
+- [`agents/secretary/spouse/SKILL.md`](../agents/secretary/spouse/SKILL.md):
+  warm, informal replies for the spouse conversation style.
 
 - [`agents/secretary/contacts/SKILL.md`](../agents/secretary/contacts/SKILL.md):
   warmer, concise replies to explicitly listed contacts.
@@ -62,7 +65,7 @@ The two editable reply scenarios live in this repository:
 
 Edit the Markdown below the YAML front matter, commit the change and deploy that
 release using `sudo python3 scripts/manage.py deploy` on the Docker host. Docker
-ships both files in the image; the worker loads them on startup. Editing a file
+ships all three files in the image; the worker loads them on startup. Editing a file
 in GitHub alone does not change the running release. Do not edit files inside a
 running container: those changes are lost on recreation. The secretary does not
 use the owner's full Hermes skill loader or execute skill code.
@@ -74,17 +77,30 @@ Chat Automation contact filters select which chats reach the bot, but do not lab
 each incoming message with a contact category. Therefore this release uses an
 **explicit secretary contact list**, not automatic address-book synchronization.
 It never infers contact status from a username, a claim in a message, or an
-earlier conversation. Everyone outside the list keeps the new-user scenario,
-including returning correspondents.
+earlier conversation. Apart from the explicit spouse-style selection below,
+everyone outside the list keeps the new-user scenario, including returning
+correspondents.
 
 On the Docker host, run `sudoedit /etc/agent-council/secretary.env` and add or edit
-this line using actual numeric Telegram user IDs, without spaces:
+these settings. Use actual numeric Telegram user IDs for the contact list,
+without spaces, and the spouse's current username for the conversation style:
 
 ```dotenv
 COUNCIL_SECRETARY_CONTACT_IDS=111111111,222222222
+COUNCIL_SECRETARY_SPOUSE_USERNAME=example_spouse
 ```
 
-An absent/empty value means no contacts. Keep this private list out of Git. Leave
+The spouse style matches Telegram's sender username, case-insensitively, with an
+optional leading `@` in the setting. It takes priority over the contact list.
+Names written in a message, display names and forwarded authors do not select
+it. Usernames can change or be reassigned: update this setting when that happens.
+This is a style preference, not verified family identity or an access grant;
+never store family secrets in the skill or use this match for permissions.
+The owner authorization gate continues to require the pinned numeric owner ID.
+The original sender username is retained in the private queue with the message
+for restart recovery; old queued messages without this metadata do not match.
+
+An absent/empty value disables that selector. Keep these private settings out of Git. Leave
 the key, owner ID and other settings intact. Run `sudo python3 scripts/manage.py
 deploy` from the server checkout to recreate the two Council services with the
 updated environment; the existing image is reused for an unchanged Git revision.
@@ -93,14 +109,14 @@ consistent rollback point. A malformed list keeps business updates closed rather
 than guessing which scenario to use.
 
 Only the verified bridge chooses the scenario. A recipient cannot change it by
-asking the model. Both scenarios have the same tool-free permissions; contact
-membership grants no private-agent, document or administrative access. Changing
+asking the model. All scenarios have the same tool-free permissions; contact
+membership and spouse style grant no private-agent, document or administrative access. Changing
 someone's category starts a separate history context. Existing pre-scenario
 history is retained under normal retention, but is not reused in these contexts.
 The common safety/identity constraints remain in
 `src/secretary_worker/service.py`; the editable files control conversation style
 and clarification, not execution permissions. No private facts or credentials
-belong in either skill.
+belong in any skill.
 
 ## Isolation and delivery
 

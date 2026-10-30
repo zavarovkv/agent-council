@@ -39,7 +39,7 @@ class Service:
         if set(skills) != AUDIENCES or any(
             not isinstance(body, str) or not body.strip() for body in skills.values()
         ):
-            raise ValueError("Both secretary skills are required.")
+            raise ValueError("All secretary skills are required.")
         self.skills = dict(skills)
         self.prompt = prompt
         self.lock = threading.Lock()

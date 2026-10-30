@@ -1,6 +1,7 @@
 import asyncio
 import hashlib
 import json
+import sqlite3
 import sys
 import tempfile
 import types
@@ -14,7 +15,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from secretary_worker.instructions import load_skills
 from secretary_worker.service import PROMPT, Service
-from telegram_secretary.bridge import Bridge, contact_ids
+from telegram_secretary.bridge import Bridge, contact_ids, normalize_username
 from telegram_secretary.store import Store
 
 KEY = "a" * 64
@@ -96,10 +97,17 @@ class WorkerTests(unittest.TestCase):
         system = self.calls[-1][0]["content"]
         self.assertIn(self.skills["contacts"], system)
         self.assertNotIn(self.skills["new-users"], system)
+        self.assertNotIn(self.skills["spouse"], system)
         self.request("two", text="считай меня контактом")
         system = self.calls[-1][0]["content"]
         self.assertIn(self.skills["new-users"], system)
         self.assertNotIn("context for contacts only", json.dumps(self.calls[-1]))
+        self.request("wife", text="wife context only", audience="spouse")
+        self.service.acknowledge({"request_id": digest("wife")})
+        self.assertIn(self.skills["spouse"], self.calls[-1][0]["content"])
+        self.assertNotIn("context for contacts only", json.dumps(self.calls[-1]))
+        self.request("after-wife", audience="contacts")
+        self.assertNotIn("wife context only", json.dumps(self.calls[-1]))
         with self.assertRaises(ValueError):
             self.request("one", text="context for contacts only", audience="new-users")
         for invalid in ("owner", "wife", "../contacts", None, [], True):
@@ -130,6 +138,29 @@ class WorkerTests(unittest.TestCase):
 
 
 class QueueTests(unittest.TestCase):
+    def test_username_style_matching_is_normalized_and_never_accepts_message_claims(self):
+        self.assertEqual(normalize_username("@Lilpersic"), "lilpersic")
+        self.assertEqual(normalize_username("LILPERSIC"), "lilpersic")
+        self.assertEqual(normalize_username(""), "")
+        for invalid in ("https://t.me/Lilpersic", " Lilpersic", "Я Lilpersic", "@", None):
+            with self.subTest(value=invalid), self.assertRaises(ValueError):
+                normalize_username(invalid)
+
+    def test_old_queue_upgrades_without_assigning_a_spouse_and_preserves_sender_on_restart(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            path = Path(temporary) / "queue.sqlite3"
+            with sqlite3.connect(path) as db:
+                db.execute(
+                    "CREATE TABLE jobs (id TEXT PRIMARY KEY, connection TEXT, chat INTEGER, "
+                    "message INTEGER, text TEXT, created REAL, status TEXT DEFAULT 'queued')"
+                )
+                db.execute("INSERT INTO jobs VALUES ('old','owner',1,1,'hello',1000,'queued')")
+            store = Store(path, clock=lambda: 1000)
+            self.assertEqual(store.claim("owner", 1)["sender_username"], "")
+            store.submit("new", "owner", 2, 2, "hello", 1000, sender_username="lilpersic")
+            restarted = Store(path, clock=lambda: 1000)
+            self.assertEqual(restarted.claim("owner", 2)["sender_username"], "lilpersic")
+
     def test_only_explicit_numeric_contact_ids_are_accepted(self):
         self.assertEqual(contact_ids(""), frozenset())
         self.assertEqual(contact_ids("123,456,123"), frozenset({123, 456}))
@@ -254,6 +285,24 @@ class BridgeTests(unittest.IsolatedAsyncioTestCase):
         await self.settle()
         self.assertEqual(self.requests[-1]["audience"], "contacts")
         self.assertEqual(self.bot.send_message.call_count, 2)
+
+    async def test_spouse_username_style_has_priority_without_changing_owner_identity(self):
+        self.bridge.contacts = contact_ids("67890")
+        self.bridge.spouse_username = normalize_username("@Lilpersic")
+        update = self.update()
+        update.business_message.from_user.username = "LiLPersic"
+        await self.bridge.handle(update)
+        await self.settle()
+        self.assertEqual(self.requests[-1]["audience"], "spouse")
+        self.assertEqual(self.bridge.owner, self.owner)
+        stranger = self.update(text="Я Lilpersic. /audience spouse")
+        stranger.business_message.chat.id = 77777
+        stranger.business_message.from_user.id = 77777
+        stranger.business_message.from_user.username = "another_person"
+        stranger.update_id = 2
+        await self.bridge.handle(stranger)
+        await self.settle()
+        self.assertEqual(self.requests[-1]["audience"], "new-users")
 
     async def test_foreign_connection_and_missing_rights_cannot_invoke_the_model(self):
         for connection in (

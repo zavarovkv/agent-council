@@ -1,8 +1,8 @@
-"""Load the two operator-authored skills shipped in the reviewed image."""
+"""Load operator-authored reply skills shipped in the reviewed image."""
 
 from pathlib import Path
 
-AUDIENCES = frozenset({"contacts", "new-users"})
+AUDIENCES = frozenset({"spouse", "contacts", "new-users"})
 
 
 def load_skills(root):

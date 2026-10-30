@@ -24,6 +24,10 @@ class Store:
                 );
                 CREATE INDEX IF NOT EXISTS jobs_chat ON jobs(connection,chat,created);
             """)
+            if "sender_username" not in {
+                row["name"] for row in db.execute("PRAGMA table_info(jobs)")
+            }:
+                db.execute("ALTER TABLE jobs ADD COLUMN sender_username TEXT NOT NULL DEFAULT ''")
             # Generation may be resumed idempotently. A possibly delivered send must never replay.
             db.execute("UPDATE jobs SET status='queued' WHERE status='working'")
             db.execute("UPDATE jobs SET status='uncertain' WHERE status='sending'")
@@ -82,7 +86,7 @@ class Store:
                 ).fetchone()
             )
 
-    def submit(self, identifier, connection, chat, message, text, created):
+    def submit(self, identifier, connection, chat, message, text, created, *, sender_username=""):
         with self.database() as db:
             db.execute("DELETE FROM jobs WHERE created < ?", (self.clock() - 14 * 86400,))
             # Bound private queue size and cost even while the worker is unavailable.
@@ -94,8 +98,8 @@ class Store:
             ):
                 return False
             db.execute(
-                "INSERT OR IGNORE INTO jobs(id,connection,chat,message,text,created) VALUES (?,?,?,?,?,?)",
-                (identifier, connection, chat, message, text, created),
+                "INSERT OR IGNORE INTO jobs(id,connection,chat,message,text,created,sender_username) VALUES (?,?,?,?,?,?,?)",
+                (identifier, connection, chat, message, text, created, sender_username),
             )
             return True
 
