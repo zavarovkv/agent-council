@@ -40,6 +40,7 @@ def disposable_path(relative):
     return bool(parts) and (
         parts[0] in DISPOSABLE
         or (len(parts) >= 3 and parts[0] == "profiles" and parts[2] in DISPOSABLE)
+        or (len(parts) >= 3 and parts[:2] == (".council", "secretary") and parts[2] in DISPOSABLE)
     )
 
 
@@ -110,7 +111,7 @@ def load_manifest(backup):
     if not expected.issubset(manifest.get("files", {})):
         raise OperationError("The restore point is missing required files.")
     for name, digest in manifest["files"].items():
-        if name not in expected | {"image.tar"}:
+        if name not in expected | {"image.tar", "secretary.env"}:
             raise OperationError("Unexpected snapshot manifest file.")
         item = backup / name
         if item.is_symlink() or not item.is_file() or checksum(item) != digest:
@@ -126,7 +127,10 @@ def snapshot(runtime, *, include_image=False, restart=True, portable=False):
     settings.backup_dir.mkdir(mode=0o700, parents=True, exist_ok=True)
     settings.backup_dir.chmod(0o700)
     image, labels = runtime.image()
+    running_services = runtime.running_services()
     running = runtime.inspect()["State"]["Running"]
+    if not running and "secretary" in running_services:
+        raise OperationError("Stop the secretary too before copying a stopped Hermes deployment.")
     runtime.require_idle()
     size = 0
     for root in (settings.data_dir, settings.workspace_dir):
@@ -174,6 +178,9 @@ def snapshot(runtime, *, include_image=False, restart=True, portable=False):
             if source.is_symlink() or not source.is_file():
                 raise OperationError("Refusing a missing or symlinked host configuration.")
             atomic_write(backup / target, source.read_bytes())
+        if settings.secretary_file.exists():
+            atomic_write(backup / "secretary.env", settings.secretary_file.read_bytes())
+            files["secretary.env"] = checksum(backup / "secretary.env")
         copy_state(settings.data_dir, backup / "hermes", portable=portable)
         copy_state(settings.workspace_dir, backup / "workspace")
         # Daily backups restart before hashing/upload; a deployment freezes its
@@ -192,6 +199,7 @@ def snapshot(runtime, *, include_image=False, restart=True, portable=False):
             "excluded_profile_entries": sorted(DISPOSABLE) if portable else [],
             "created_at": datetime.now(timezone.utc).isoformat(),
             "image_id": image,
+            "running_services": running_services,
             "revision": labels.get("org.opencontainers.image.revision")
             or (
                 settings.env_file.with_name("revision").read_text().strip()

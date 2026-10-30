@@ -4,7 +4,7 @@ import json
 import os
 import subprocess
 
-from .config import OperationError, atomic_write
+from .config import OperationError, atomic_write, read_settings
 
 
 class Runtime:
@@ -88,6 +88,17 @@ class Runtime:
             )
         ):
             raise OperationError("Finish interactive account setup before deployment maintenance.")
+        source = (
+            "import sqlite3; from pathlib import Path; "
+            "p=Path('/opt/data/plugin-data/council-secretary/queue.sqlite3'); "
+            "c=sqlite3.connect(p.as_uri()+'?mode=ro',uri=True) if p.exists() else None; "
+            "print(c.execute(\"SELECT count(*) FROM jobs WHERE status IN ('queued','working','sending')\").fetchone()[0] if c else 0)"
+        )
+        pending = self.compose(
+            "exec", "-T", "--user", "hermes", "hermes", "/opt/hermes/.venv/bin/python", "-c", source
+        )
+        if pending != "0":
+            raise OperationError("Secretary replies are pending; retry maintenance when idle.")
 
     def run(self, arguments, *, timeout=180, interactive=False, environment=None):
         try:
@@ -152,8 +163,43 @@ class Runtime:
 
     def stop(self):
         self.compose("stop", "--timeout", "30", "hermes")
+        companion = self.companion()
+        if companion:
+            self.run(["docker", "stop", "--time", "15", companion])
+
+    def companion(self):
+        identifiers = self.run(
+            [
+                "docker",
+                "ps",
+                "--all",
+                "--quiet",
+                "--filter",
+                "label=com.docker.compose.project=agent-council",
+                "--filter",
+                "label=com.docker.compose.service=secretary",
+            ]
+        ).splitlines()
+        if len(identifiers) > 1:
+            raise OperationError("Expected at most one secretary container.")
+        return identifiers[0] if identifiers else None
+
+    def running_services(self):
+        companion = self.companion()
+        if (
+            companion
+            and json.loads(self.run(["docker", "inspect", companion]))[0]["State"]["Running"]
+        ):
+            return ["hermes", "secretary"]
+        return ["hermes"]
 
     def start(self):
+        values = read_settings(self.settings.env_file)
+        services = ["hermes"]
+        if values.get("COUNCIL_SECRETARY_ENABLED") == "true":
+            if "\n  secretary:\n" not in self.compose_source().read_text():
+                raise OperationError("The active release does not contain the secretary service.")
+            services.append("secretary")
         self.compose(
             "up",
             "-d",
@@ -164,7 +210,7 @@ class Runtime:
             "--wait",
             "--wait-timeout",
             "150",
-            "hermes",
+            *services,
         )
 
     def ready(self):

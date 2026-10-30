@@ -29,6 +29,7 @@ def main():
         )
         environment = dict(os.environ)
         environment.update(
+            COUNCIL_SECRETARY_ENV_FILE=str(auth),
             HERMES_AUTH_ENV_FILE=str(auth),
             HERMES_PUBLIC_URL="https://fixture.example.test",
             HERMES_UID="10000",

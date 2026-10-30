@@ -35,6 +35,13 @@ gateway/control plane and per-agent credentials, storage and execution sandboxes
 Protecting the dashboard from hostile code already running inside its own
 runtime is outside the current supported threat model.
 
+The optional Telegram secretary is a separate, deliberately limited boundary:
+it handles text from the pinned owner's selected business chats in an isolated
+tool-free service, with its own model grant/history and no private-agent mounts.
+Business updates never enter the owner's command/tool dispatcher. This does not
+authorize general guest execution or access to private Notion/Drive integrations.
+See [secretary setup and delivery limits](docs/secretary.md).
+
 ## Deployment controls
 
 - Keep the application port on host loopback behind HTTPS Nginx.

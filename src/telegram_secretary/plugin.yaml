@@ -1,0 +1,8 @@
+name: council-secretary
+label: Council Telegram Secretary
+kind: standalone
+version: 1.0.0
+requires_hermes: ">=0.22.5"
+description: Route verified owner business connections to an isolated tool-free secretary.
+provides_tools: []
+provides_hooks: []

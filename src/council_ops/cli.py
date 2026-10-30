@@ -14,6 +14,7 @@ from .install import install, recover
 from .lifecycle import deploy, restore, smoke
 from .restic import Restic, cloud_backup
 from .runtime import Runtime
+from .secretary import prepare as prepare_secretary
 from .setup import configure_backups
 from .snapshots import snapshot
 
@@ -32,6 +33,15 @@ def parser():
         default=os.environ.get("COUNCIL_BACKUP_DIR", "/var/backups/agent-council"),
     )
     commands = result.add_subparsers(dest="action", required=True)
+    secretary = commands.add_parser(
+        "prepare-secretary", help="Prepare a separate tool-free Telegram secretary profile"
+    )
+    secretary.add_argument(
+        "--owner-name",
+        required=True,
+        help="Explicit account-owner display name; no implicit repository owner",
+    )
+    secretary.add_argument("--assistant-name", default="Ассистент")
     commands.add_parser("doctor", help="Read safe configuration, isolation and service status")
     commands.add_parser(
         "install", help="Initialize a new loopback-only deployment with no default owner"
@@ -174,6 +184,45 @@ def doctor(runtime):
         )
         if identities != [int(runtime.settings.values["HERMES_UID"])] * 4:
             raise OperationError("The gateway must execute as the dedicated non-root Hermes user.")
+    companion = runtime.companion()
+    if companion:
+        worker = json.loads(runtime.run(["docker", "inspect", companion]))[0]
+        controls = worker["HostConfig"]
+        expected_profile = runtime.settings.data_dir / ".council/secretary"
+        mounts = worker["Mounts"]
+        if (
+            len(mounts) != 1
+            or Path(mounts[0]["Source"]) != expected_profile
+            or mounts[0]["Destination"] != "/opt/data"
+            or not mounts[0]["RW"]
+        ):
+            raise OperationError("The secretary must mount only its own profile.")
+        if (
+            controls.get("PortBindings")
+            or controls.get("Privileged")
+            or controls.get("NetworkMode") == "host"
+            or controls.get("PidMode")
+        ):
+            raise OperationError("The secretary must have no published ports or host namespaces.")
+        if (
+            not controls.get("ReadonlyRootfs")
+            or controls.get("CapAdd")
+            or set(controls.get("CapDrop") or []) != {"ALL"}
+            or "no-new-privileges:true" not in controls.get("SecurityOpt", [])
+        ):
+            raise OperationError("Secretary isolation controls are missing.")
+        if (
+            worker["Config"]["User"]
+            != runtime.settings.values["HERMES_UID"] + ":" + runtime.settings.values["HERMES_GID"]
+        ):
+            raise OperationError("The secretary must run as its configured non-root user.")
+        for name in ("Memory", "PidsLimit", "NanoCpus"):
+            if not controls.get(name):
+                raise OperationError("Secretary resource limits are required.")
+    if runtime.settings.secretary_file.exists():
+        metadata = runtime.settings.secretary_file.stat()
+        if metadata.st_uid != 0 or metadata.st_mode & 0o077:
+            raise OperationError("The secretary machine key must remain root-only.")
     return {
         "status": inspected["State"]["Status"],
         "health": inspected["State"].get("Health", {}).get("Status"),
@@ -201,6 +250,11 @@ def main(argv=None):
             doctor(runtime)
         if arguments.action == "doctor":
             result = doctor(runtime)
+        elif arguments.action == "prepare-secretary":
+            doctor(runtime)
+            result = prepare_secretary(
+                runtime, owner_name=arguments.owner_name, assistant_name=arguments.assistant_name
+            )
         elif arguments.action == "install":
             result = install(runtime)
         elif arguments.action == "recover":

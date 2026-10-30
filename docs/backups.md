@@ -8,7 +8,8 @@ A second directory on the same disk does not protect against losing the server.
 
 A restore point contains the Hermes profile (sessions, memories, model/OAuth
 connections, skills, agent profiles and downloaded files), `/workspace`, the
-root-only Telegram authentication environment and the active Compose source.
+root-only Telegram authentication environment, optional secretary service key
+and the active Compose source. The secretary's own profile/history are included.
 Cloud backups contain **data only**: Docker images, installed tools, dependency
 environments, caches, logs, telemetry and nested old backups are excluded. The
 excluded entries are recorded in the snapshot manifest and in `DISPOSABLE` in
@@ -73,7 +74,7 @@ backups. GitHub Actions receives no deployment or storage credentials.
 
 ## Consistency and retention
 
-Only Hermes is stopped while its profile and workspace are copied. A known
+Hermes and its optional secretary stop while profiles/workspace are copied. A known
 active agent/model/OAuth setup blocks maintenance. Use a quiet window: there is
 brief dashboard/Telegram downtime, and a message racing the idle check can be
 interrupted by graceful shutdown. A distributed drain/queue is not implemented.

@@ -39,6 +39,11 @@ RUN chmod 0555 /etc/cont-init.d/03-council-session-store \
 COPY src/telegram_auth/ /opt/hermes/plugins/dashboard_auth/telegram_owner/
 RUN chmod -R a+rX,go-w /opt/hermes/plugins/dashboard_auth/telegram_owner
 
+# Native SDK hook, plus a separate tool-free HTTP worker. No upstream source patches.
+COPY src/telegram_secretary/ /opt/hermes/plugins/council-secretary/
+COPY src/secretary_worker/ /opt/agent-council/secretary_worker/
+RUN chmod -R a+rX,go-w /opt/hermes/plugins/council-secretary /opt/agent-council/secretary_worker
+
 COPY assets/login/ /opt/agent-council-theme/
 COPY --from=web-assets /styles/node_modules/beauty-css/dist/beauty.min.css /opt/agent-council-theme/dependencies/beauty.min.css
 COPY --from=web-assets /styles/node_modules/beauty-css/LICENSE /opt/agent-council-theme/dependencies/beauty-css.LICENSE

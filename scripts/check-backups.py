@@ -46,6 +46,9 @@ def main():
             def require_idle(self):
                 pass
 
+            def running_services(self):
+                return ["hermes"]
+
             def image(self):
                 metadata = json.loads(self.run(["docker", "image", "inspect", image]))[0]
                 return metadata["Id"], metadata["Config"].get("Labels", {}) or {}

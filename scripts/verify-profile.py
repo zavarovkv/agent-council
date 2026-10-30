@@ -27,13 +27,19 @@ def main():
         with closing(sqlite3.connect(path.as_uri() + "?mode=ro", uri=True)) as connection:
             if connection.execute("PRAGMA quick_check").fetchall() != [("ok",)]:
                 raise ValueError("Session database integrity check failed.")
-    session_store = home / "dashboard-sessions.sqlite3"
-    if session_store.exists():
-        if session_store.is_symlink():
-            raise ValueError("Refusing a symlinked dashboard session store.")
-        with closing(sqlite3.connect(session_store.as_uri() + "?mode=ro", uri=True)) as connection:
-            if connection.execute("PRAGMA quick_check").fetchall() != [("ok",)]:
-                raise ValueError("Dashboard session integrity check failed.")
+    for session_store in (
+        home / "dashboard-sessions.sqlite3",
+        home / "plugin-data/council-secretary/queue.sqlite3",
+        home / ".council/secretary/secretary-history.sqlite3",
+    ):
+        if session_store.exists():
+            if session_store.is_symlink():
+                raise ValueError("Refusing a symlinked dashboard session store.")
+            with closing(
+                sqlite3.connect(session_store.as_uri() + "?mode=ro", uri=True)
+            ) as connection:
+                if connection.execute("PRAGMA quick_check").fetchall() != [("ok",)]:
+                    raise ValueError("Dashboard session integrity check failed.")
 
     class Context:
         def __init__(self):

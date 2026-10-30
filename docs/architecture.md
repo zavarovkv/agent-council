@@ -15,6 +15,8 @@ flowchart LR
     GitHub --> Checkout[Root-owned deployment checkout]
     Checkout --> Image[Digest-pinned image + owner policy]
     Image --> Hermes
+    Hermes -->|verified business connection| Secretary[Isolated tool-free secretary]
+    Secretary --> OwnProfile[Separate model grant and chat history]
     Operator[Root-only operator CLI] --> Snapshot[Consistent private restore point]
     State --> Snapshot
     Workspace --> Snapshot
@@ -34,6 +36,13 @@ which the profile stores the immutable ID. Profile/plugin execution belongs to
 the same trusted-owner boundary; see SECURITY.md before expanding the system
 to untrusted agents or mutually untrusted users. Invited operators share one
 runtime and have the same rights; they are not separate tenants.
+
+The optional [Telegram secretary](secretary.md) is a narrow exception for external
+messages: the native Telegram hook verifies the owner's business connection and
+routes its text to a separate private HTTP worker. That worker has only its own
+profile, a separate model grant and no tools or owner integrations. Ordinary owner
+messages and dashboard authorization remain on the existing private route. This
+does not open the private agent to general guest execution.
 
 Model credentials and user state belong to the private data volume. They do
 not belong in an image, a source checkout or GitHub Actions. The deployment

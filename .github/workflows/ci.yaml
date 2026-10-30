@@ -44,6 +44,8 @@ jobs:
         run: make test-integration
       - name: Verify encrypted backups and real profile recovery offline
         run: make test-backups
+      - name: Verify the isolated secretary service offline
+        run: make test-secretary
       - run: npm ci --ignore-scripts --no-audit --no-fund
       - run: npx playwright install --with-deps chromium
       - name: Verify the official SDK popup and callback contract

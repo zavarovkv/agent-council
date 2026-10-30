@@ -69,6 +69,9 @@ class FakeRuntime:
     def image(self):
         return IMAGE, {"org.opencontainers.image.revision": "c" * 40}
 
+    def running_services(self):
+        return ["hermes"]
+
     def compose_source(self):
         return self.settings.env_file.with_name("active-compose.yaml")
 
@@ -186,6 +189,7 @@ class OperationTests(unittest.TestCase):
             "logs/log",
             "backups/old",
             "profiles/dexter/cache/tmp",
+            ".council/secretary/tools/python",
         ):
             path = self.fixture.data / relative
             path.parent.mkdir(parents=True, exist_ok=True)
@@ -194,6 +198,7 @@ class OperationTests(unittest.TestCase):
             "skills/custom/tools/script.py",
             "profiles/dexter/memories/notes.md",
             "mcp-tokens/notion.json",
+            ".council/secretary/auth.json",
         ):
             path = self.fixture.data / relative
             path.parent.mkdir(parents=True, exist_ok=True)
@@ -205,7 +210,15 @@ class OperationTests(unittest.TestCase):
         _, manifest = load_manifest(backup)
         self.assertEqual(manifest["kind"], "portable-data")
         self.assertNotIn("image.tar", manifest["files"])
-        for relative in ("tools", "cache", "installs", "logs", "backups", "profiles/dexter/cache"):
+        for relative in (
+            "tools",
+            "cache",
+            "installs",
+            "logs",
+            "backups",
+            "profiles/dexter/cache",
+            ".council/secretary/tools",
+        ):
             self.assertFalse((backup / "hermes" / relative).exists())
         for relative in (
             "skills/custom/tools/script.py",
@@ -213,6 +226,9 @@ class OperationTests(unittest.TestCase):
             "mcp-tokens/notion.json",
         ):
             self.assertEqual((backup / "hermes" / relative).read_text(), "must survive")
+        self.assertEqual(
+            (backup / "hermes/.council/secretary/auth.json").read_text(), "must survive"
+        )
         self.assertTrue((backup / "hermes/.env").is_file())
         self.assertEqual(
             (backup / "workspace/cache/report.txt").read_text(), "user output, not a system cache"
@@ -279,6 +295,18 @@ class OperationTests(unittest.TestCase):
         retained = restore(runtime, backup)
         self.assertEqual((self.fixture.data / "history.txt").read_text(), "original history")
         self.assertEqual((Path(retained["hermes"]) / "history.txt").read_text(), "newer live data")
+
+    def test_secretary_key_and_service_selection_restore_with_the_profile(self):
+        runtime = FakeRuntime(self.fixture.settings())
+        runtime.running_services = lambda: ["hermes", "secretary"]
+        private_key = runtime.settings.secretary_file
+        private_key.write_text("COUNCIL_SECRETARY_KEY=" + "a" * 64 + "\n")
+        private_key.chmod(0o600)
+        backup = snapshot(runtime)
+        private_key.write_text("COUNCIL_SECRETARY_KEY=" + "b" * 64 + "\n")
+        restore(runtime, backup)
+        self.assertIn("a" * 64, private_key.read_text())
+        self.assertEqual(read_settings(self.fixture.env)["COUNCIL_SECRETARY_ENABLED"], "true")
 
     def test_compose_cannot_dump_secrets_or_inherit_a_foreign_volume(self):
         runtime = Runtime(self.fixture.settings())
