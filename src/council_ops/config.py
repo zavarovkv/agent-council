@@ -141,11 +141,16 @@ class Settings:
             raise OperationError(
                 "Use a distinct loopback COUNCIL_LINEAR_HTTP_PORT between 1024 and 65535."
             )
-        for name in ("COUNCIL_LINEAR_ENABLED", "COUNCIL_LINEAR_DEXTER_ENABLED"):
+        specialist_flags = (
+            "COUNCIL_LINEAR_DEXTER_ENABLED",
+            "COUNCIL_LINEAR_MARKETING_ENABLED",
+            "COUNCIL_LINEAR_PADME_ENABLED",
+        )
+        for name in ("COUNCIL_LINEAR_ENABLED", *specialist_flags):
             if values.get(name, "false") not in {"true", "false"}:
                 raise OperationError("Use true or false for optional Linear services.")
         if (
-            values.get("COUNCIL_LINEAR_DEXTER_ENABLED") == "true"
+            any(values.get(name) == "true" for name in specialist_flags)
             and values.get("COUNCIL_LINEAR_ENABLED") != "true"
         ):
             raise OperationError("The specialist requires the Linear adapter and coordinator.")

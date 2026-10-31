@@ -18,6 +18,9 @@ the personal assistant's existing MCP connection.
 4. Qui-Gon reads the live `linear_agents` roster and can create up to four
    sub-issues for **Декстер Джеттстер** (product/market/customer research) or
    **Лэндо Калриссиан**, slug `marketing` (promotion/SEO/content/experiments).
+   **Падме Амидала**, slug `padme`, edits Russian text and prepares website copy
+   and executive materials. Required editorial review is part of the final
+   acceptance criteria for publication and top-management text.
    Only registered, installed targets allowed by policy can receive work.
    You can also create a sub-issue under a known Qui-Gon task and delegate it
    to an installed specialist yourself. The child must be created by the configured
@@ -56,6 +59,22 @@ The coordinator supplies a bounded brief and reviews results. Sequential work
 passes reviewed research to marketing; independent deliverables can run in parallel.
 
 ## Install
+
+To add Падме to an existing three-agent installation, deploy a release with
+`agent-editor-v1`, then prepare all existing roles plus the new one:
+
+```bash
+sudo python3 scripts/manage.py prepare-linear-agents \
+  --owner OWNER_ID --organization WORKSPACE_ID --team TEAM_ID \
+  --with-dexter --with-marketing --with-padme
+bash scripts/setup-linear.sh padme
+bash scripts/setup-model.sh padme-executor
+```
+
+Use the generated application link, its own credentials and its own model login.
+Preserve the existing owner, workspace and team IDs. Complete browser OAuth in
+the setup window; preparation and skills alone do not connect the visible agent.
+The native private profile `padme` is separate and shares only canonical instructions.
 
 Each visible agent needs a separate private OAuth application, installed by a
 Linear workspace administrator. An executor profile alone is not a Linear agent.

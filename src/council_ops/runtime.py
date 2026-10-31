@@ -314,6 +314,8 @@ class Runtime:
                 services.append("dexter-executor")
             if values.get("COUNCIL_LINEAR_MARKETING_ENABLED") == "true":
                 services.append("marketing-executor")
+            if values.get("COUNCIL_LINEAR_PADME_ENABLED") == "true":
+                services.append("padme-executor")
         self.compose(
             "up",
             "-d",

@@ -15,7 +15,11 @@ def call(path, args):
     }
     slug = os.environ.get("COUNCIL_LINEAR_AGENT", "")
     key = os.environ.get("API_SERVER_KEY", "")
-    if slug not in {"qui-gon", "dexter", "marketing"} or not key or not any(context.values()):
+    if (
+        slug not in {"qui-gon", "dexter", "marketing", "padme"}
+        or not key
+        or not any(context.values())
+    ):
         return json.dumps({"error": "This tool requires an active authorized Linear session."})
 
     class NoRedirect(urllib.request.HTTPRedirectHandler):
@@ -108,7 +112,7 @@ def register(ctx):
             "linear_delegate",
             "Create or retrieve one idempotent sub-issue under the current Linear task for an allowed specialist. Reuse key when retrying; the coordinator receives the result automatically.",
             {
-                "target": {"type": "string", "enum": ["dexter", "marketing"]},
+                "target": {"type": "string", "enum": ["dexter", "marketing", "padme"]},
                 "key": {"type": "string", "maxLength": 80},
                 "title": {"type": "string", "maxLength": 200},
                 "description": {"type": "string", "maxLength": 12000},

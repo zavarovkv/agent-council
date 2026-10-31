@@ -241,7 +241,7 @@ class OperationTests(unittest.TestCase):
 
     def test_snapshot_freezes_all_linear_writers_and_thaws_them_in_reverse_order(self):
         runtime = Runtime(self.fixture.settings())
-        identifiers = [letter * 64 for letter in "abcdef0"]
+        identifiers = [letter * 64 for letter in "abcdef01"]
         calls = []
 
         def run(arguments, **_kwargs):
@@ -271,6 +271,7 @@ class OperationTests(unittest.TestCase):
                             "linear-executor",
                             "dexter-executor",
                             "marketing-executor",
+                            "padme-executor",
                         ),
                         identifiers[3:],
                         strict=True,

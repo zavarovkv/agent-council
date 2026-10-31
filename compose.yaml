@@ -285,6 +285,45 @@ services:
       options: {max-size: 5m, max-file: "2"}
     healthcheck: *linear-executor-health
 
+  padme-executor:
+    init: true
+    profiles: [linear-padme]
+    image: ${COUNCIL_HERMES_IMAGE:-agent-council-hermes:local}
+    entrypoint: [/opt/hermes/.venv/bin/hermes]
+    command: [gateway, run]
+    user: "${HERMES_UID:-10000}:${HERMES_GID:-10000}"
+    restart: unless-stopped
+    stop_grace_period: 30s
+    read_only: true
+    env_file:
+      - path: ${HERMES_DATA_DIR:?Set an absolute data path}/.council/linear/bridge/padme.env
+        format: raw
+        required: false
+    environment: *linear-executor-environment
+    volumes:
+      - type: bind
+        source: ${HERMES_DATA_DIR:?Set an absolute data path}/.council/linear/padme
+        target: /opt/data
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ${HERMES_DATA_DIR:?Set an absolute data path}/.council/linear/padme/workspace
+        target: /workspace
+        bind:
+          create_host_path: false
+    working_dir: /workspace
+    networks: [linear]
+    tmpfs: ["/tmp:rw,nosuid,nodev,size=128m"]
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    cpus: "0.5"
+    mem_limit: 768m
+    pids_limit: 96
+    logging:
+      driver: local
+      options: {max-size: 5m, max-file: "2"}
+    healthcheck: *linear-executor-health
+
   telegram-reader:
     profiles: [research-monitor]
     init: true

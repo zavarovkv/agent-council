@@ -22,3 +22,6 @@
 !scripts/verify-profile.py
 **/__pycache__/
 **/*.pyc
+
+!assets/agents/
+!assets/agents/**

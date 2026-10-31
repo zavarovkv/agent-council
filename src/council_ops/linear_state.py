@@ -25,6 +25,8 @@ def require_capability(runtime, *homes, image=None):
         verify_capabilities(runtime, ["linear-agents-v1"], image=image)
     if any((home / ".council/linear/marketing/config.yaml").exists() for home in homes):
         verify_capabilities(runtime, ["agent-specialists-v1"], image=image)
+    if any((home / ".council/linear/padme/config.yaml").exists() for home in homes):
+        verify_capabilities(runtime, ["agent-editor-v1"], image=image)
 
 
 @contextmanager

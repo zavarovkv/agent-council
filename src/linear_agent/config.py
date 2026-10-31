@@ -174,7 +174,7 @@ def app_manifest(origin, slug):
         "$schema": "https://linear.app/.well-known/oauth-app-manifest.schema.json",
         "schemaVersion": "1.0.0",
         "distribution": "private",
-        "display": {"description": "Agent Council assistant for delegated tasks and research."},
+        "display": {"description": ROLES[slug]["specialty"]},
         "developer": {"name": "Agent Council"},
         "oauth": {
             "client_name": ROLES[slug]["name"],

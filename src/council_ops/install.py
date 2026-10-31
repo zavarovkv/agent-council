@@ -131,6 +131,9 @@ def recover(runtime, backup, *, rebuild=False):
             "COUNCIL_LINEAR_MARKETING_ENABLED": "true"
             if "marketing-executor" in manifest.get("running_services", [])
             else "false",
+            "COUNCIL_LINEAR_PADME_ENABLED": "true"
+            if "padme-executor" in manifest.get("running_services", [])
+            else "false",
         }
     )
     runtime.activate_source(backup / "compose.yaml")

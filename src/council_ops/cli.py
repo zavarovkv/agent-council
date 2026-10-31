@@ -125,13 +125,14 @@ def parser():
     )
     prepare_linear.add_argument("--with-dexter", action="store_true")
     prepare_linear.add_argument("--with-marketing", action="store_true")
+    prepare_linear.add_argument("--with-padme", action="store_true")
     configure_linear = commands.add_parser(
         "configure-linear-agents",
         help="Enter app credentials privately; execution remains disabled",
     )
     configure_linear.add_argument(
         "--agent",
-        choices=["dexter", "marketing"],
+        choices=["dexter", "marketing", "padme"],
         help="Add only this new prepared agent; preserve existing grants and runs",
     )
     commands.add_parser(
@@ -280,6 +281,7 @@ def operate(arguments, settings):
                 teams=arguments.team,
                 with_dexter=arguments.with_dexter,
                 with_marketing=arguments.with_marketing,
+                with_padme=arguments.with_padme,
             )
         elif arguments.action == "configure-linear-agents":
             result = linear.configure(runtime, selected=arguments.agent)

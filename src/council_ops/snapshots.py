@@ -12,6 +12,8 @@ from contextlib import nullcontext
 from datetime import UTC, datetime
 from pathlib import Path
 
+from linear_agent.config import SLUGS
+
 from .config import OperationError, atomic_write
 from .linear_state import maintenance
 
@@ -48,7 +50,7 @@ def disposable_path(relative):
         or (
             len(parts) >= 4
             and parts[:2] == (".council", "linear")
-            and parts[2] in {"bridge", "qui-gon", "dexter", "marketing"}
+            and parts[2] in {"bridge", *SLUGS}
             and parts[3] in DISPOSABLE
         )
     )
