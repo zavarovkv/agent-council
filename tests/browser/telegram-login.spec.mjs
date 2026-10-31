@@ -60,7 +60,11 @@ for (const colorScheme of ["light", "dark"]) {
     await expect(page.locator('[data-agent="dexter"] [data-field="model"]')).toHaveText("GPT-6 Astra · high");
     await expect(page.locator('[data-agent="padme"] [data-field="closed_tasks"]')).toHaveText("—");
     await expect(page.locator('[data-agent="padme"] [data-field="connection"]')).toHaveText("Подключение к Linear не завершено");
-    expect(await page.locator("[data-avatar]").evaluateAll(images => images.every(image => image.complete && image.naturalWidth > 0))).toBeTruthy();
+    for (const image of await page.locator("[data-avatar]").all()) {
+      await image.scrollIntoViewIfNeeded();
+      await expect.poll(() => image.evaluate(element => element.naturalWidth)).toBeGreaterThan(0);
+    }
+    await page.evaluate(() => window.scrollTo(0, 0));
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBeTruthy();
     if (process.env.COUNCIL_SCREENSHOTS) await page.screenshot({ path: `${process.env.COUNCIL_SCREENSHOTS}/${colorScheme}.png`, fullPage: true });
     await page.keyboard.press("Tab");
