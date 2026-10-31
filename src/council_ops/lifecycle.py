@@ -292,7 +292,7 @@ def deploy(runtime, *, instruction_source=None, instruction_revision=None):
     require_capability(runtime, runtime.settings.data_dir, image=image)
     if files is not None:
         verify_capabilities(runtime, capabilities, image=image)
-    backup = snapshot(runtime, restart=False)
+    backup = snapshot(runtime, restart=False, automatic=True)
     switched = False
     try:
         smoke(runtime, backup)  # Prove the previous image is usable before attempting an upgrade.

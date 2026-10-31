@@ -490,7 +490,7 @@ def apply(runtime, source, revision, *, fetch=False, adoptions=None):
                 "files_installed": len(files),
                 "changed": False,
             }
-    backup = snapshot(runtime, restart=False)
+    backup = snapshot(runtime, restart=False, automatic=True)
     changed = False
     try:
         uid, gid = identity(runtime.settings)

@@ -138,7 +138,7 @@ def prepare(runtime, *, owner, organization, teams, with_dexter=False, with_mark
     if not all(isinstance(model.get(key), str) and model[key] for key in ("provider", "default")):
         raise OperationError("Select the coordinator's public model choice first.")
     uid, gid = identity(runtime.settings)
-    checkpoint = snapshot(runtime)
+    checkpoint = snapshot(runtime, automatic=True)
 
     def create(home):
         prepare_files(home, plan, model, runtime.settings.repository, uid, gid)
@@ -246,7 +246,7 @@ def configure(runtime, *, selected=None):
         "agents": records,
     }
     # Validate credentials on a copied profile before changing live configuration.
-    checkpoint = snapshot(runtime)
+    checkpoint = snapshot(runtime, automatic=True)
     uid, gid = identity(runtime.settings)
 
     def write(home):
@@ -307,7 +307,7 @@ def execution(runtime, *, enabled):
             )
             if status.get("logged_in") is not True:
                 raise OperationError("Authorize each isolated executor's own model account first.")
-        checkpoint = snapshot(runtime)
+        checkpoint = snapshot(runtime, automatic=True)
         smoke(runtime, checkpoint)
     value = {
         **current,

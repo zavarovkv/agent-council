@@ -61,7 +61,7 @@ class GuestOperationsTests(unittest.TestCase):
             platform.return_value = True
             result = configure(self.runtime, enabled=True)
             self.assertTrue(result["enabled"])
-            backup.assert_called_once_with(self.runtime)
+            backup.assert_called_once_with(self.runtime, automatic=True)
             smoke.assert_called_once()
             copied = self.home / "copy"
             copied.mkdir()
