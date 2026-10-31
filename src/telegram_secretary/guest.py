@@ -6,6 +6,7 @@ import logging
 
 from .delivery import Delivery, Reply
 from .guest_policy import load_state
+from .policy import pinned_owner
 
 logger = logging.getLogger(__name__)
 NOTICES = {
@@ -94,9 +95,10 @@ def incoming(update, now):
 class GuestBridge(Delivery):
     route = "public"
 
-    def __init__(self, *args, home, **kwargs):
+    def __init__(self, *args, home, formatter=None, **kwargs):
         super().__init__(*args, **kwargs)
         self.home = home
+        self.formatter = formatter
         self.capability_lock = asyncio.Lock()
         self.capable, self.checked_until = False, 0
 
@@ -112,7 +114,11 @@ class GuestBridge(Delivery):
 
     async def refresh(self, identifier):
         state = load_state(self.home)
-        if not state.enabled or state.revision != identifier:
+        if (
+            not state.enabled
+            or state.revision != identifier
+            or pinned_owner(self.home, expected=str(self.owner)) != self.owner
+        ):
             return False
         if self.clock() < self.checked_until:
             return self.capable
@@ -132,8 +138,24 @@ class GuestBridge(Delivery):
         if not state.enabled:
             return
         job = incoming(update, self.clock())
-        if job is not None and self.store.submit(job, state.revision):
+        if job is not None and self.eligible(job) and self.store.submit(job, state.revision):
             self.kick(state.revision, job["chat"])
+
+    def eligible(self, job):
+        return job["actor"] == self.owner
+
+    def rendered_reply(self, reply):
+        # Reuse the pinned native adapter's escaping/conversion. Fall back before
+        # sending, never by retrying an ambiguous answerGuestQuery request.
+        plain = text_only(reply)
+        if callable(self.formatter):
+            try:
+                formatted = self.formatter(plain)
+                if isinstance(formatted, str) and formatted.strip() and len(formatted) <= 24000:
+                    return formatted, "MarkdownV2"
+            except Exception:
+                pass
+        return plain, None
 
     async def generate_reply(self, job):
         if job["notice"]:
@@ -159,11 +181,14 @@ class GuestBridge(Delivery):
     async def send_reply(self, job, reply):
         from telegram import InlineQueryResultArticle, InputTextMessageContent, LinkPreviewOptions
 
+        text, parse_mode = self.rendered_reply(reply)
         result = InlineQueryResultArticle(
             id=job["id"],
             title="Ответ ассистента",
             input_message_content=InputTextMessageContent(
-                reply, parse_mode=None, link_preview_options=LinkPreviewOptions(is_disabled=True)
+                text,
+                parse_mode=parse_mode,
+                link_preview_options=LinkPreviewOptions(is_disabled=True),
             ),
         )
         await self.application.bot.answer_guest_query(

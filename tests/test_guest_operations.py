@@ -37,7 +37,9 @@ class GuestOperationsTests(unittest.TestCase):
             configure(self.runtime, enabled=False)
             self.assertEqual(load_state(self.home).revision, first)
             require_compatible(self.runtime, self.home, image="old")
-            verify.assert_called_once_with(self.runtime, ["telegram-guests-v1"], image="old")
+            verify.assert_called_once_with(
+                self.runtime, ["telegram-guests-v1", "telegram-guest-owner-v1"], image="old"
+            )
             self.assertEqual((self.home / RELATIVE_POLICY).stat().st_mode & 0o777, 0o600)
 
     def test_enable_requires_platform_and_matching_worker_before_checkpoint(self):

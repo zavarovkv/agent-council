@@ -127,7 +127,7 @@ class GuestSDKTests(unittest.IsolatedAsyncioTestCase):
             private.assert_not_called()
             self.assertIn("guest_message", Update.ALL_TYPES)
 
-    async def test_actual_sdk_uses_one_guest_answer_with_plain_text_and_no_chat_destination(self):
+    async def test_actual_sdk_formats_markdown_and_sends_only_once_without_chat_destination(self):
         module = plugin("council_guest_wire_fixture")
         guest = __import__(module.__name__ + ".guest", fromlist=["GuestBridge"])
         store_module = __import__(module.__name__ + ".guest_store", fromlist=["GuestStore"])
@@ -137,6 +137,7 @@ class GuestSDKTests(unittest.IsolatedAsyncioTestCase):
             policy.parent.mkdir(parents=True)
             policy.write_text(json.dumps({"schema": 1, "enabled": True, "revision": "a" * 32}))
             policy.chmod(0o600)
+            (home / "telegram-owner.json").write_text('{"telegram_id":12345}')
             request = Request()
             async with Bot(
                 "12345:fixture-token", request=request, get_updates_request=request
@@ -152,7 +153,9 @@ class GuestSDKTests(unittest.IsolatedAsyncioTestCase):
 
                 def generate(_key, payload):
                     calls.append(payload)
-                    return "Literal *text* <tag>"
+                    return "**Логика**: 2+2=4. <tag>"
+
+                from plugins.platforms.telegram.adapter import TelegramAdapter
 
                 bridge = guest.GuestBridge(
                     SimpleNamespace(bot=bot, create_task=schedule),
@@ -160,9 +163,14 @@ class GuestSDKTests(unittest.IsolatedAsyncioTestCase):
                     "a" * 64,
                     store_module.GuestStore(home / "guest.sqlite3", clock=lambda: 1_000_000),
                     home=home,
+                    formatter=lambda text: TelegramAdapter.format_message(None, text),
                     request=generate,
                     clock=lambda: 1_000_000,
                 )
+                for actor in (67890, 77777):
+                    await bridge.handle(event(actor=actor, number=50))
+                self.assertFalse(calls)
+                self.assertFalse(request.answers)
                 update = event()
                 await bridge.handle(update)
                 await asyncio.gather(*tasks)
@@ -180,8 +188,11 @@ class GuestSDKTests(unittest.IsolatedAsyncioTestCase):
                     result = json.loads(result)
                 self.assertEqual(result["type"], "article")
                 content = result["input_message_content"]
-                self.assertEqual(content["message_text"], "Literal *text* <tag>")
-                self.assertNotIn("parse_mode", content)
+                self.assertIn("*Логика*", content["message_text"])
+                self.assertNotIn("**Логика**", content["message_text"])
+                self.assertIn(r"2\+2\=4\.", content["message_text"])
+                self.assertIn(r"<tag\>", content["message_text"])
+                self.assertEqual(content["parse_mode"], "MarkdownV2")
                 self.assertTrue(content["link_preview_options"]["is_disabled"])
                 request.fail_send = True
                 await bridge.handle(event(number=2))

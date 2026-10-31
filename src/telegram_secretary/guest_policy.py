@@ -13,6 +13,7 @@ class GuestState:
     enabled: bool = False
     revision: str = ""
     error: bool = False
+    schema: int = 2
 
 
 def load_state(home):
@@ -32,12 +33,12 @@ def load_state(home):
             not isinstance(value, dict)
             or set(value) != {"schema", "enabled", "revision"}
             or type(value["schema"]) is not int
-            or value["schema"] != 1
+            or value["schema"] not in {1, 2}
             or type(value["enabled"]) is not bool
             or not isinstance(value["revision"], str)
             or not re.fullmatch(r"[a-f0-9]{32}", value["revision"])
         ):
             raise ValueError("Invalid guest policy.")
-        return GuestState(value["enabled"], value["revision"])
+        return GuestState(value["enabled"], value["revision"], schema=value["schema"])
     except (OSError, ValueError, TypeError, KeyError):
         return GuestState(error=True)
