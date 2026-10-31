@@ -5,12 +5,13 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="light dark">
   <script defer src="https://oauth.telegram.org/js/telegram-login.js?6"></script>
-  <title>Команда — Agent Council</title>
+  <title data-en="Team — Agent Council">Команда — Agent Council</title>
+  $PREFERENCES_SCRIPT
   <style>$STYLES</style>
 </head>
 <body>
   <header>
-    <nav aria-label="Вход">
+    <nav aria-label="Вход" data-en-label="Sign in">
       <strong>Agent Council.</strong>
       <div class="beauty-nav-end">
         <div class="provider-list">
@@ -18,24 +19,29 @@ $PROVIDER_BUTTONS
         </div>
         <div class="telegram-widget" hidden>
           <button class="tg-auth-button not-beauty" type="button" disabled
-            aria-label="Войти через Telegram"><span>Войти через Telegram</span></button>
+            aria-label="Войти через Telegram" data-en-label="Log in with Telegram"><span data-en="Log in with Telegram">Войти через Telegram</span></button>
         </div>
       </div>
     </nav>
   </header>
   <main>
     <section aria-labelledby="login-title">
-      <h1 id="login-title">Совет агентов.</h1>
-      <p>ИИ-ассистенты для исследований, продвижения, редактуры и работы с задачами.</p>
-      <p>Квай-Гон координирует работу Декстера, Лэндо и Падме. Каждый отвечает за свою специализацию.</p>
+      <h1 id="login-title" data-en="Agent Council.">Совет агентов.</h1>
+      <p data-en="AI assistants for research, marketing, editing and task management.">ИИ-ассистенты для исследований, продвижения, редактуры и работы с задачами.</p>
+      <p data-en="Qui-Gon coordinates Dexter, Lando and Padmé. Each brings a distinct specialty.">Квай-Гон координирует работу Декстера, Лэндо и Падме. Каждый отвечает за свою специализацию.</p>
       <p class="login-status" role="status" hidden></p>
     </section>
-    <section aria-label="Состав команды">
+    <section aria-label="Состав команды" data-en-label="Team members">
 $TEAM_MEMBERS
     </section>
     <p data-team-status role="status"></p>
     <noscript><p>Для загрузки статистики и портретов включите JavaScript. Вход по ссылке в шапке остаётся доступен.</p></noscript>
   </main>
+  <footer>
+    <p><button type="button" data-theme-toggle aria-label="Переключить тему">☾</button>
+      <button type="button" data-language-toggle aria-label="Switch to English">RU / EN</button></p>
+    <p>© 2026</p>
+  </footer>
 $PASSWORD_SCRIPT
 $WIDGET_SCRIPT
 $TEAM_SCRIPT

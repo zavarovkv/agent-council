@@ -332,6 +332,9 @@ class Service:
             question = control.get("question") or control.get("prompt") or control.get("body")
             if not isinstance(question, str) or not question.strip() or len(question) > 12000:
                 raise ValueError("Invalid clarification.")
+            question = re.sub(
+                r"(?m)^Reply [\"']skip[\"'] to skip this question\.\s*$", "", question
+            ).strip()
             current = {**control, "execution_generation": result["execution_generation"]}
             identity = job["key"] + ":clarify:" + control["prompt_id"]
             if not self.store.publication_exists(stable_id(identity)):
@@ -341,7 +344,7 @@ class Service:
                     job["session"],
                     identity,
                     "elicitation",
-                    f"{mention}, нужен ваш ответ:\n\n{question}\n\nОтветьте в этой ветке — продолжу после вашего ответа.",
+                    f"{mention}\n\n{question}\n\nОтветьте в этой ветке.",
                 )
             self.store.update_job(job["key"], state="waiting", control=json.dumps(current))
             return

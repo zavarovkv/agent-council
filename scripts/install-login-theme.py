@@ -59,6 +59,10 @@ def install(renderer: Path, assets: Path) -> None:
         "<script>\n" + (assets / "telegram-widget.js").read_text(encoding="utf-8") + "\n</script>"
     )
     login = login.replace("$WIDGET_SCRIPT", widget_script)
+    login = login.replace(
+        "$PREFERENCES_SCRIPT",
+        "<script>\n" + (assets / "preferences.js").read_text(encoding="utf-8") + "\n</script>",
+    )
     login = login.replace("$TEAM_MEMBERS", markup()).replace(
         "$TEAM_SCRIPT",
         "<script>\n" + (assets / "team.js").read_text(encoding="utf-8") + "\n</script>",

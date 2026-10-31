@@ -60,7 +60,7 @@ def register(ctx):
     for name, description, properties, required, path in (
         (
             "linear_issues",
-            "Manage Linear tasks: context lists team states/projects/members/labels; list searches titles; get reads an issue and comments; create makes ordinary Backlog tasks without delegating them; update changes task fields; comment posts a note; start moves to In Progress; complete marks Done only with a verified deliverable and no open children. Qui-Gon manages allowed teams; specialists manage only their current task. Mutations require a stable key, reused on retries. Never claim a completed action without its receipt.",
+            "Manage Linear tasks: context lists team states/projects/members/labels; list searches titles; get reads an issue and comments; create makes ordinary Backlog tasks without delegating them; update changes task fields; comment posts a note; start moves to In Progress; complete marks Done only with a verified deliverable and no open children. Qui-Gon manages allowed teams; all specialists can read, create and update tasks throughout their current project or shared parent task tree. project reads project materials, document reads a linked document, save_document creates or updates one using fields.title/content (document UUID only for updates), comments pages complete comments; use cursor and offset/next_offset for long content. Mutations require a stable key, reused on retries. Never claim a completed action without its receipt.",
             {
                 "action": {
                     "type": "string",
@@ -68,6 +68,10 @@ def register(ctx):
                         "context",
                         "list",
                         "get",
+                        "project",
+                        "document",
+                        "save_document",
+                        "comments",
                         "create",
                         "update",
                         "comment",
@@ -83,6 +87,11 @@ def register(ctx):
                     "type": "string",
                     "description": "Allowed team UUID; defaults to current task's team.",
                 },
+                "document": {
+                    "type": "string",
+                    "description": "Linked document UUID for document action.",
+                },
+                "offset": {"type": "integer", "minimum": 0},
                 "query": {"type": "string", "maxLength": 200},
                 "cursor": {"type": "string"},
                 "key": {"type": "string", "maxLength": 80},
@@ -91,6 +100,7 @@ def register(ctx):
                     "properties": {
                         "title": {"type": "string", "maxLength": 200},
                         "description": {"type": "string", "maxLength": 12000},
+                        "content": {"type": "string", "maxLength": 12000},
                         "priority": {"type": "integer", "minimum": 0, "maximum": 4},
                         "stateId": {"type": "string"},
                         "projectId": {"type": ["string", "null"]},

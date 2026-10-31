@@ -35,14 +35,18 @@ sessions also require a durable delegation record and verified parent lineage.
 Results are visible to everyone who can read their Linear issue: these executors
 receive no personal Telegram history, owner memory or personal MCP grants.
 They have public web research, clarification, reviewed profile-local skills and
-narrow task-bound tools. `council_skill` reads only those skill instructions and
+project-scoped task and material tools. `council_skill` reads only those skill instructions and
 Markdown references; it cannot execute scripts, edit skills or read credentials.
 With `linear-task-management-v1`, `linear_issues` lets Qui-Gon read, search,
 create and edit ordinary issues in the explicitly allowed teams, write comments,
 set priority, project, human assignee, labels and due date, and manage workflow
 states. New ordinary issues default to Backlog and have no delegate or automatic
-execution. Use `linear_delegate` for actual specialist execution. Specialists can
-read, comment, start and complete only their own authorized issue. No additional
+execution. Use `linear_delegate` for actual specialist execution. With `linear-project-collaboration-v1`, all specialists can read, create and edit
+issues, comments and documents in their current project. Tasks without a project
+share their parent task tree, including siblings. Other projects and unconfigured
+teams remain inaccessible. Use `project` for project resources, `document` and
+`save_document` for complete texts, and `comments` with cursor/offset for full
+discussions. These grants do not automatically start unrelated work. No additional
 OAuth grant is needed: the existing app already has read/write scope.
 
 Delegated issues enter the team's first `started` state when execution begins;

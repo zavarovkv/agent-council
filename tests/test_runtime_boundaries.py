@@ -1,4 +1,4 @@
-"""Import boundaries guard against accidentally adding private execution to guest code."""
+"""Import boundaries keep public inference isolated; only the owner transport uses native execution."""
 
 import ast
 import sys
@@ -35,7 +35,7 @@ class RuntimeBoundaryTests(unittest.TestCase):
             },
         )
 
-    def test_gateway_uses_the_worker_only_through_rpc(self):
+    def test_gateway_has_only_reviewed_transport_imports(self):
         self.check_imports(
             "telegram_secretary",
             {
@@ -43,6 +43,8 @@ class RuntimeBoundaryTests(unittest.TestCase):
                 "bridge.py": {"telegram"},
                 "public.py": {"telegram"},
                 "guest.py": {"telegram"},
+                "owner_guest.py": {"telegram"},
+                "owner_agent.py": {"hermes_cli.gateway_client"},
                 "menus.py": {"telegram", "hermes_cli.commands_platforms"},
             },
         )

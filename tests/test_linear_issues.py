@@ -40,7 +40,7 @@ class IssueManagementTests(unittest.TestCase):
         self.assertEqual(result["state"]["type"], "backlog")
         self.assertEqual(result["priority"], 2)
         self.assertFalse(self.store.children("qui-gon", uid(10)))
-        self.assertIsNone(self.linear.issues[result["id"]].get("parent"))
+        self.assertIsNone(self.linear.issue_records[result["id"]].get("parent"))
         self.assertEqual(
             self.call(
                 context,
@@ -67,7 +67,7 @@ class IssueManagementTests(unittest.TestCase):
         self.linear.create_issue = create
         self.service = Service(self.home, store=self.store, linear=self.linear, hermes=self.hermes)
         result = self.call(context, "create", key="lost", fields={"title": "Future"})
-        self.assertEqual(len(self.linear.issues), 1)
+        self.assertEqual(len(self.linear.issue_records), 1)
         self.assertEqual(result["state"]["type"], "backlog")
 
     def test_begins_delegated_issue_but_not_a_comment_only_mention_or_terminal_issue(self):
@@ -198,10 +198,10 @@ class IssueManagementTests(unittest.TestCase):
         with self.assertRaises(PermissionError):
             self.call(context, "create", key="stale", fields={"title": "Task"})
 
-    def test_other_issue_outside_team_is_not_exposed_and_specialists_cannot_create(self):
+    def test_other_issue_outside_team_is_not_exposed_and_specialists_create_within_root(self):
         context = self.start()
-        self.linear.issues[uid(99)] = copy.deepcopy(self.linear.sessions[uid(10)]["issue"])
-        self.linear.issues[uid(99)]["team"] = {"id": uid(999)}
+        self.linear.issue_records[uid(99)] = copy.deepcopy(self.linear.sessions[uid(10)]["issue"])
+        self.linear.issue_records[uid(99)]["team"] = {"id": uid(999)}
         with self.assertRaises(PermissionError):
             self.call(context, "get", issue=uid(99))
         session = self.store.context("qui-gon", context["run"], context["session"])
@@ -210,11 +210,11 @@ class IssueManagementTests(unittest.TestCase):
         self.store.context = lambda *args: session
         self.service.authorize = lambda *args: (session, self.linear.sessions[uid(10)])
         try:
-            with self.assertRaises(PermissionError):
-                self.service.issue_tasks(
-                    "dexter",
-                    {**context, "action": "create", "key": "bad", "fields": {"title": "Task"}},
-                )
+            result = self.service.issue_tasks(
+                "dexter",
+                {**context, "action": "create", "key": "shared", "fields": {"title": "Task"}},
+            )
+            self.assertEqual(self.linear.issue_records[result["id"]]["parent"]["id"], uid(20))
         finally:
             self.store.context = original
 
@@ -264,14 +264,151 @@ class IssueManagementTests(unittest.TestCase):
                 result="Parent done",
                 verification="Sub-issue Done",
             )
-        for action in ("create", "list"):
+        created = self.service.issue_tasks(
+            "dexter",
+            {
+                **child_context,
+                "action": "create",
+                "key": "followup",
+                "fields": {"title": "Shared follow-up"},
+            },
+        )
+        self.assertEqual(self.linear.issue_records[created["id"]]["parent"]["id"], uid(20))
+        parent = self.service.issue_tasks(
+            "dexter", {**child_context, "action": "get", "issue": uid(20)}
+        )
+        self.assertEqual(parent["id"], uid(20))
+
+    def test_specialists_share_project_content_and_writes_but_cannot_escape_project(self):
+        context = self.start()
+        current = self.linear.sessions[uid(10)]["issue"]
+        current["project"] = {"id": uid(300)}
+        sibling = copy.deepcopy(current)
+        sibling.update(id=uid(99), title="Sibling", description="Shared source", parent=None)
+        self.linear.issue_records[uid(99)] = sibling
+        foreign = copy.deepcopy(sibling)
+        foreign.update(id=uid(98), project={"id": uid(301)}, description="PRIVATE OTHER PROJECT")
+        self.linear.issue_records[uid(98)] = foreign
+        session = self.store.context("qui-gon", context["run"], context["session"])
+        session["agent"] = "dexter"
+        self.store.context = lambda *args: session
+        self.service.authorize = lambda *args: (session, self.linear.sessions[uid(10)])
+
+        def call(action, **params):
+            return self.service.issue_tasks("dexter", {**context, "action": action, **params})
+
+        self.assertEqual(call("get", issue=uid(99))["description"], "Shared source")
+        call("update", issue=uid(99), key="edit", fields={"description": "Edited source"})
+        self.assertEqual(self.linear.issue_records[uid(99)]["description"], "Edited source")
+        listing = call("list")
+        self.assertNotIn(uid(98), [r["id"] for r in listing["nodes"]])
+        for action, params in (
+            ("get", {"issue": uid(98)}),
+            ("update", {"issue": uid(99), "key": "move", "fields": {"projectId": uid(301)}}),
+            ("create", {"key": "new", "fields": {"title": "Wrong", "projectId": uid(301)}}),
+        ):
             with self.subTest(action=action), self.assertRaises(PermissionError):
-                self.service.issue_tasks(
-                    "dexter",
-                    {
-                        **child_context,
-                        "action": action,
-                        "key": "other",
-                        "fields": {"title": "Unrelated work"},
-                    },
-                )
+                call(action, **params)
+
+    def test_no_project_siblings_share_root_but_unrelated_tasks_are_denied(self):
+        from linear_agent.issues import Issues
+        from linear_agent.project_scope import ProjectScope
+
+        self.start()
+        root = self.linear.issue_details(None, uid(20))
+        for number in (80, 81, 82):
+            self.linear.issue_records[uid(number)] = {
+                **copy.deepcopy(root),
+                "id": uid(number),
+                "parent": {"id": uid(20)} if number != 82 else None,
+            }
+        scope = ProjectScope(
+            Issues(self.service),
+            self.service.registry().agents["dexter"],
+            self.service.registry(),
+            self.linear.issue_records[uid(80)],
+        )
+        scope.require(self.linear.issue_records[uid(81)])
+        scope.require(root)
+        with self.assertRaises(PermissionError):
+            scope.require(self.linear.issue_records[uid(82)])
+
+    def test_full_comment_and_document_reading_checks_scope_and_offsets(self):
+        context = self.start()
+        current = self.linear.sessions[uid(10)]["issue"]
+        current["project"] = {"id": uid(300)}
+        self.linear.issue_comments = lambda *args: {
+            "nodes": [{"id": uid(70), "body": "x" * 13000}],
+            "pageInfo": {"hasNextPage": False},
+        }
+        first = self.call(context, "comments")
+        self.assertEqual(first["nodes"][0]["next_offset"], 12000)
+        self.assertEqual(
+            len(self.call(context, "comments", offset=12000)["nodes"][0]["body"]), 1000
+        )
+        self.linear.document = lambda *args: {
+            "id": uid(71),
+            "project": {"id": uid(301)},
+            "content": "OTHER PROJECT",
+        }
+        with self.assertRaises(PermissionError):
+            self.call(context, "document", document=uid(71))
+
+    def test_document_writes_reconcile_lost_receipt_and_do_not_overwrite_newer_content(self):
+        context = self.start()
+        documents, writes = {}, []
+        self.linear.document = lambda agent, identity: copy.deepcopy(documents.get(identity))
+
+        def save(agent, identity, fields, *, create=False):
+            writes.append(identity)
+            documents.setdefault(
+                identity,
+                {
+                    "id": identity,
+                    "url": "https://linear.app/document/fixture",
+                    "issue": {"id": fields.get("issueId", uid(20))},
+                },
+            ).update({k: v for k, v in fields.items() if k in {"title", "content"}})
+
+        self.linear.save_document = save
+        result = self.call(
+            context,
+            "save_document",
+            key="document",
+            fields={"title": "Deliverable", "content": "Reviewed text"},
+        )
+        self.assertEqual(
+            self.call(
+                context,
+                "save_document",
+                key="document",
+                fields={"title": "Deliverable", "content": "Reviewed text"},
+            ),
+            result,
+        )
+        self.assertEqual(len(writes), 1)
+
+        def lost(*args, **kwargs):
+            save(*args, **kwargs)
+            raise RemoteError()
+
+        self.linear.save_document = lost
+        with self.assertRaises(RemoteError):
+            self.call(
+                context,
+                "save_document",
+                key="edit",
+                document=result["id"],
+                fields={"title": "Deliverable", "content": "Updated"},
+            )
+        documents[result["id"]]["content"] = "Later human edit"
+        self.linear.save_document = save
+        with self.assertRaises(RemoteError):
+            self.call(
+                context,
+                "save_document",
+                key="edit",
+                document=result["id"],
+                fields={"title": "Deliverable", "content": "Updated"},
+            )
+        self.assertEqual(documents[result["id"]]["content"], "Later human edit")

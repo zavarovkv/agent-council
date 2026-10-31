@@ -54,6 +54,7 @@ def event(actor=12345, number=1):
 class Request(BaseRequest):
     def __init__(self):
         self.answers = []
+        self.edits = []
         self.fail_send = False
 
     @property
@@ -81,6 +82,9 @@ class Request(BaseRequest):
             if self.fail_send:
                 raise TimeoutError("Fixture ambiguous delivery")
             result = {"inline_message_id": "fixture-inline-message"}
+        elif endpoint == "editMessageText":
+            self.edits.append(request_data.parameters)
+            result = True
         else:
             raise AssertionError(
                 "Guest transport must not use sendMessage or start another poller."
@@ -201,6 +205,57 @@ class GuestSDKTests(unittest.IsolatedAsyncioTestCase):
                 await asyncio.gather(*tasks)
                 self.assertEqual(len(calls), 2)
                 self.assertEqual(len(request.answers), 2)
+
+    async def test_owner_agent_uses_real_guest_receipt_for_inline_edits(self):
+        module = plugin("council_owner_wire_fixture")
+        guest = __import__(module.__name__ + ".guest", fromlist=["GuestBridge"])
+        stores = __import__(module.__name__ + ".guest_store", fromlist=["GuestStore"])
+        owner = __import__(module.__name__ + ".owner_guest", fromlist=["OwnerGuestBridge"])
+        owner_stores = __import__(module.__name__ + ".owner_store", fromlist=["OwnerStore"])
+        with tempfile.TemporaryDirectory() as temporary:
+            home = Path(temporary)
+            policy = home / "plugin-data/council-secretary/guest.json"
+            policy.parent.mkdir(parents=True)
+            policy.write_text(
+                json.dumps(
+                    {"schema": 3, "enabled": True, "revision": "b" * 32, "owner_agent": True}
+                )
+            )
+            policy.chmod(0o600)
+            (home / "telegram-owner.json").write_text('{"telegram_id":12345}')
+            request = Request()
+            async with Bot(
+                "12345:fixture-token", request=request, get_updates_request=request
+            ) as bot:
+                tasks = []
+
+                def schedule(coro):
+                    task = asyncio.create_task(coro)
+                    tasks.append(task)
+                    return task
+
+                bridge = guest.GuestBridge(
+                    SimpleNamespace(bot=bot, create_task=schedule),
+                    12345,
+                    "a" * 64,
+                    stores.GuestStore(home / "queue.sqlite3"),
+                    home=home,
+                    clock=lambda: 1_000_000,
+                )
+                execute = AsyncMock(return_value="Ваша команда: Квай-Гон, Декстер, Лэндо, Падме.")
+                bridge.owner_bridge = owner.OwnerGuestBridge(
+                    bridge, owner_stores.OwnerStore(home / "owner.sqlite3"), execute=execute
+                )
+                await bridge.handle(event(actor=77777))
+                execute.assert_not_called()
+                await bridge.handle(event())
+                await asyncio.gather(*tasks)
+                self.assertEqual(len(request.answers), 1)
+                self.assertEqual(len(request.edits), 1)
+                self.assertEqual(request.edits[0]["inline_message_id"], "fixture-inline-message")
+                self.assertNotIn("chat_id", request.edits[0])
+                self.assertNotIn("business_connection_id", request.edits[0])
+                self.assertIn("Падме", request.edits[0]["text"])
 
     async def test_actual_sdk_rejects_unknown_anonymous_bot_and_expired_callers(self):
         module = plugin("council_guest_identity_fixture")

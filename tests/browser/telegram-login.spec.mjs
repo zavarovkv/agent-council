@@ -55,7 +55,14 @@ for (const colorScheme of ["light", "dark"]) {
     await expect(button).toBeVisible();
     await expect(button).toBeEnabled();
     await expect(page.locator("header nav button.tg-auth-button")).toHaveCount(1);
-    await expect(page.locator("footer")).toHaveCount(0);
+    await expect(page.locator("footer")).toHaveCount(1);
+    await expect(page.locator("footer")).toContainText("© 2026");
+    await expect(page.locator("footer a")).toHaveCount(0);
+    await expect(button).toHaveAttribute("data-style", colorScheme === "dark" ? "icon" : "");
+    if (colorScheme === "dark") {
+      expect(await button.evaluate(element => getComputedStyle(element).fontSize)).toBe("0px");
+      expect((await button.boundingBox()).width).toBe(44);
+    }
     await expect(page.locator("[data-agent]")).toHaveCount(4);
     await expect(page.locator('[data-agent="dexter"] [data-field="model"]')).toHaveText("GPT-6 Astra · high");
     await expect(page.locator('[data-agent="padme"] [data-field="closed_tasks"]')).toHaveText("—");
@@ -114,4 +121,26 @@ test("unavailable SDK keeps a functional server-side login link", async ({ page 
   await expect(page.getByRole("link", { name: "Войти через Telegram" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Войти через Telegram" })).toBeHidden();
   await expect(page.locator(".login-status")).toContainText("Не удалось загрузить кнопку Telegram");
+});
+
+test("footer preferences persist, translate counters and keep the native mobile icon", async ({ page }) => {
+  await mount(page);
+  await page.getByRole("button", { name: "Switch to English" }).click();
+  await expect(page.locator("html")).toHaveAttribute("lang", "en");
+  await expect(page.locator("h1")).toHaveText("Agent Council.");
+  await expect(page.locator('[data-agent="dexter"]')).toContainText("Product researcher");
+  await expect(page.locator('[data-agent="dexter"] [data-field="tokens"]')).toHaveText("123,456");
+  await page.emulateMedia({ colorScheme: "light" });
+  await page.getByRole("button", { name: "Switch theme" }).click();
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+  await page.reload({ waitUntil: "networkidle" });
+  await expect(page.locator("html")).toHaveAttribute("lang", "en");
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+  await page.setViewportSize({ width: 375, height: 812 });
+  const button = page.getByRole("button", { name: "Log in with Telegram" });
+  await expect(button).toHaveAttribute("data-style", "icon");
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await expect(button).toHaveAttribute("data-style", "");
+  await page.getByRole("button", { name: "Переключить на русский" }).click();
+  await expect(page.locator("h1")).toHaveText("Совет агентов.");
 });

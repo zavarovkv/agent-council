@@ -82,6 +82,14 @@ def attach(application, adapter):
                 capacity=public_capacity,
             )
             bridges["guest"] = guest_bridge
+            from .owner_guest import OwnerGuestBridge
+            from .owner_store import OwnerStore
+
+            guest_bridge.owner_bridge = OwnerGuestBridge(
+                guest_bridge,
+                OwnerStore(settings.home / "plugin-data/council-secretary/owner-guest.sqlite3"),
+            )
+            background(application, guest_bridge.owner_bridge.recover())
             background(application, guest_bridge.recover())
             background(application, guest_bridge.housekeeping())
         except Exception:
