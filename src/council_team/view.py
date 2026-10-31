@@ -16,9 +16,9 @@ TITLES = {
     "padme": "Редактор",
 }
 AVATARS = {
-    "qui-gon": "qui-gon.jpg",
-    "dexter": "dexter.jpg",
-    "lando": "lando.jpg",
+    "qui-gon": "qui-gon.png",
+    "dexter": "dexter.png",
+    "lando": "lando.png",
     "padme": "padme.png",
 }
 PUBLIC_SLUGS = {slug: "lando" if slug == "marketing" else slug for slug in ROLES}

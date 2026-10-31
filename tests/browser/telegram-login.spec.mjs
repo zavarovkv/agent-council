@@ -32,8 +32,8 @@ async function mount(page, { deny = false, sdkUnavailable = false } = {}) {
     }
     if (url.pathname.startsWith("/auth/council/avatars/")) {
       const slug = url.pathname.split("/").pop();
-      const filename = { "qui-gon": "qui-gon.jpg", dexter: "dexter.jpg", lando: "lando.jpg", padme: "padme.png" }[slug];
-      return route.fulfill({ contentType: slug === "padme" ? "image/png" : "image/jpeg", body: await readFile(`assets/agents/${filename}`) });
+      const filename = { "qui-gon": "qui-gon.png", dexter: "dexter.png", lando: "lando.png", padme: "padme.png" }[slug];
+      return route.fulfill({ contentType: "image/png", body: await readFile(`assets/agents/${filename}`) });
     }
     return route.fulfill({ contentType: "text/html", body: url.pathname === "/sessions" ? "<h1>Authorized test fixture</h1>" : html });
   });

@@ -22,8 +22,9 @@ class TeamLandingTests(unittest.TestCase):
         self.assertNotIn("set-cookie", result.headers)
 
     def test_only_fixed_image_owned_portraits_are_served(self):
-        result = self.client.get("/auth/council/avatars/padme")
-        self.assertEqual(result.status_code, 200)
-        self.assertEqual(result.headers["content-type"], "image/png")
+        for slug in ("qui-gon", "dexter", "lando", "padme"):
+            result = self.client.get("/auth/council/avatars/" + slug)
+            self.assertEqual(result.status_code, 200)
+            self.assertEqual(result.headers["content-type"], "image/png")
         for path in ("auth.json", "..%2fauth.json", "padme.png", "qui-gon.env"):
             self.assertEqual(self.client.get("/auth/council/avatars/" + path).status_code, 404)

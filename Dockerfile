@@ -28,7 +28,7 @@ LABEL org.opencontainers.image.revision="${COUNCIL_REVISION}"
 LABEL org.opencontainers.image.licenses="MIT"
 LABEL io.agent-council.capabilities="private-instructions-v1,research-filing-v1,telegram-guests-v1,telegram-guest-owner-v1,linear-agents-v1,agent-specialists-v1,linear-task-management-v1,telegram-reader-v1,agent-editor-v1"
 
-COPY assets/agents/ /opt/agent-council/assets/agents/
+COPY assets/agents/*.png /opt/agent-council/assets/agents/
 COPY LICENSE /opt/agent-council/LICENSE
 COPY scripts/healthcheck.py scripts/verify-profile.py /opt/agent-council/
 RUN chmod 0444 /opt/agent-council/LICENSE /opt/agent-council/healthcheck.py /opt/agent-council/verify-profile.py
