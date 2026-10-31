@@ -155,12 +155,17 @@ class Linear:
             return current["access"]
 
     def raw(self, access, query, variables):
-        result = self.request(
-            API,
-            method="POST",
-            body={"query": query, "variables": variables},
-            headers={"Authorization": "Bearer " + access},
-        )
+        try:
+            result = self.request(
+                API,
+                method="POST",
+                body={"query": query, "variables": variables},
+                headers={"Authorization": "Bearer " + access},
+            )
+        except RemoteError as error:
+            if error.status in {401, 403}:
+                raise PermissionError("Linear application access was revoked or denied.") from None
+            raise
         if (
             not isinstance(result, dict)
             or result.get("errors")

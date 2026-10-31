@@ -396,6 +396,13 @@ class LinearAgentTests(unittest.TestCase):
         self.assertEqual(len(parents), 2)
         self.assertIn("Manual child research", parents[-1]["text"])
 
+    def test_coordinator_can_receive_an_owner_sub_issue_under_an_unmanaged_parent(self):
+        self.linear.sessions[uid(10)]["issue"]["parent"] = {"id": uid(999)}
+        self.ingest(self.event())
+        self.tick()
+        self.assertEqual(len(self.hermes.requests), 1)
+        self.assertEqual(self.store.session("qui-gon", uid(10))["depth"], 0)
+
     def test_child_cannot_continue_after_owner_stops_parent(self):
         self.ingest(self.event())
         self.tick()

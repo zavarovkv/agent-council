@@ -79,7 +79,12 @@ class Service:
         issue_id = identifier(issue.get("id"))
         owner = (remote.get("creator") or {}).get("id")
         child = self.store.delegation(agent.slug, issue_id)
-        if not child and owner == registry.owner and (issue.get("parent") or {}).get("id"):
+        if (
+            not child
+            and owner == registry.owner
+            and (issue.get("parent") or {}).get("id")
+            and any(agent.slug in candidate.delegates for candidate in registry.agents.values())
+        ):
             parent = self.store.parent_session(issue["parent"]["id"])
             coordinator = registry.agents[parent["agent"]]
             if (

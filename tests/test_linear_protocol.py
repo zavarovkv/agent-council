@@ -20,6 +20,7 @@ from linear_agent.http import Server
 from linear_agent.linear import API, TOKEN, Linear
 from linear_agent.service import Service
 from linear_agent.store import Store
+from linear_agent.transport import RemoteError
 
 
 class LinearProtocolTests(unittest.TestCase):
@@ -141,6 +142,14 @@ class LinearProtocolTests(unittest.TestCase):
         (self.home / "agents.json").write_text('{"enabled": true}')
         with self.assertRaises(ValueError):
             Registry.load(self.home)
+
+    def test_revoked_application_fails_authorization_instead_of_retrying_work(self):
+        def request(*_args, **_kwargs):
+            raise RemoteError(401)
+
+        linear = Linear(self.store, request=request)
+        with self.assertRaises(PermissionError):
+            linear.raw("fixture-access", "query Fixture{viewer{id}}", {})
 
     def test_public_http_cannot_reach_internal_tools_or_leak_callback_details(self):
         service = Service(self.home, store=self.store, linear=FakeLinear(), hermes=FakeHermes())
