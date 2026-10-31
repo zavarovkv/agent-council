@@ -114,6 +114,28 @@ class IssueManagementTests(unittest.TestCase):
         self.call(context, "complete", key="done", result="Delivered", verification="Checked")
         self.assertEqual(len(self.linear.comments), 1)
 
+    def test_long_completion_is_rejected_before_writing_and_can_be_rephrased(self):
+        context = self.start()
+        before = len(self.linear.issue_writes)
+        for result, verification in (("x" * 501, "Checked"), ("Delivered", "x" * 161)):
+            with self.subTest(result_length=len(result), verification_length=len(verification)):
+                with self.assertRaisesRegex(ValueError, "save_document"):
+                    self.call(
+                        context, "complete", key="concise", result=result, verification=verification
+                    )
+                self.assertEqual(len(self.linear.issue_writes), before)
+                self.assertFalse(self.linear.comments)
+                self.assertEqual(self.call(context, "get")["state"]["type"], "started")
+        result = (
+            "Готов [материал](https://linear.app/document/result). Публикация не входила в задачу."
+        )
+        verification = "Редактура завершена; замечания устранены."
+        self.call(context, "complete", key="concise", result=result, verification=verification)
+        body = next(iter(self.linear.comments.values()))["body"]
+        self.assertEqual(body, result + "\n\n**Проверено:** " + verification)
+        self.assertLessEqual(len(body), 700)
+        self.assertEqual(self.call(context, "get")["state"]["type"], "completed")
+
     def test_unknown_update_never_overwrites_a_later_human_edit(self):
         context = self.start()
         update = self.linear.update_issue

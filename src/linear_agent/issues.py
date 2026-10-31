@@ -220,12 +220,16 @@ class Issues:
         elif action == "start":
             fields = {"stateId": first_state(workflow, "started")["id"]}
         elif action == "complete":
-            for name in ("result", "verification"):
+            for name, limit in (("result", 500), ("verification", 160)):
                 if (
                     not isinstance(payload.get(name), str)
-                    or not 1 <= len(payload[name].strip()) <= 4000
+                    or not 1 <= len(payload[name].strip()) <= limit
                 ):
-                    raise ValueError("Completion requires the actual result and its verification.")
+                    raise ValueError(
+                        f"Completion requires {name} in 1–{limit} characters. "
+                        "Summarize the outcome and link the full deliverable saved with "
+                        "save_document; do not include a work log or omit material uncertainty."
+                    )
             if issue["id"] == session["issue"] and any(
                 child["state"] != "done" for child in self.store.children(slug, session["id"])
             ):
@@ -255,7 +259,7 @@ class Issues:
             payload.get("body")
             if action == "comment"
             else (
-                payload["result"].strip() + "\n\nПроверено: " + payload["verification"].strip()
+                payload["result"].strip() + "\n\n**Проверено:** " + payload["verification"].strip()
                 if action == "complete"
                 else None
             )

@@ -112,8 +112,16 @@ def register(ctx):
                     "additionalProperties": False,
                 },
                 "body": {"type": "string", "maxLength": 10000},
-                "result": {"type": "string", "maxLength": 4000},
-                "verification": {"type": "string", "maxLength": 4000},
+                "result": {
+                    "type": "string",
+                    "maxLength": 500,
+                    "description": "Concise outcome and deliverable link; no work log. Full text belongs in save_document.",
+                },
+                "verification": {
+                    "type": "string",
+                    "maxLength": 160,
+                    "description": "One short sentence: acceptance check and any material limitation.",
+                },
             },
             ["action"],
             "issues",
