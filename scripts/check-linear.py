@@ -122,9 +122,10 @@ call('/v1/runs/'+first['run_id']+'/stop',{})
             print(
                 "Linear services: isolated non-root boot, private API, exact tool policy and durable run deduplication: OK"
             )
-        except subprocess.CalledProcessError:
+        except subprocess.CalledProcessError as error:
             # Every profile and key in this drill is a disposable fixture.
             print(run("logs", "--tail", "60", *services), file=sys.stderr)
+            print(error.stderr or "", file=sys.stderr)
             raise
         finally:
             subprocess.run(

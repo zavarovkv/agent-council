@@ -454,6 +454,7 @@ class Service:
             try:
                 self.step()
             except Exception:
-                logger.warning("Linear adapter is not ready; private details omitted.")
+                if (self.home / "agents.json").exists():
+                    logger.warning("Linear adapter is not ready; private details omitted.")
             self.wake.wait(2)
             self.wake.clear()
