@@ -146,8 +146,8 @@ def markup():
             f"<h2>{html.escape(role['name'])}</h2><p><strong>{TITLES[slug]}</strong></p>"
             f"<p>{html.escape(role['specialty'])}</p>"
             '<p>Модель: <strong data-field="model">—</strong></p>'
-            '<p><strong data-field="closed_tasks">—</strong> завершённых задач · '
-            '<strong data-field="tokens">—</strong> токенов</p>'
+            '<p>Завершено задач: <strong data-field="closed_tasks">—</strong> · '
+            'Токены: <strong data-field="tokens">—</strong></p>'
             '<p><small data-field="connection"></small></p></article>'
         )
     return "\n".join(cards)
