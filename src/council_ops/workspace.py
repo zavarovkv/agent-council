@@ -78,8 +78,6 @@ print('Shared workspace: eight authenticated profiles ready')
         runtime.compose(
             "exec",
             "-T",
-            "--user",
-            "hermes",
             "--workdir",
             "/opt/hermes",
             "hermes",
