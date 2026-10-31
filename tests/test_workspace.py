@@ -209,6 +209,26 @@ class WorkspaceTests(unittest.TestCase):
         )
         api.get_media.assert_not_called()
 
+    def test_notion_readback_accepts_escaping_and_auto_links_but_rejects_changed_targets(self):
+        pages = Pages(Mock(), ROOT)
+        expected = "Роли: linear_agents. Источник: web.run. [Материал](https://example.com/a)."
+        actual = (
+            r"Роли: linear\_agents. Источник: [web.run](http://web.run). "
+            "[Материал](https://example.com/a)."
+        )
+        pages.fetch = Mock(return_value={"content": actual})
+        self.assertTrue(pages.verified(CHILD, expected)["verified"])
+        self.assertEqual(pages.verified(CHILD, expected)["revision"], revision(actual))
+        for changed in (
+            actual.replace("example.com/a", "example.com/b"),
+            actual.replace("http://web.run", "http://other.example"),
+            actual.replace("Роли", "Другая роль"),
+        ):
+            with self.subTest(content=changed):
+                pages.fetch.return_value = {"content": changed}
+                with self.assertRaisesRegex(ValueError, "readback differs"):
+                    pages.verified(CHILD, expected)
+
 
 if __name__ == "__main__":
     unittest.main()
