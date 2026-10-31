@@ -38,7 +38,7 @@ def smoke(runtime, backup, *, image=None, prepare_copy=None, instruction_mode=No
         from .instructions import verify_capabilities
 
         ReaderSettings.load(read_settings(backup / "telegram-reader.env"))
-        verify_capabilities(runtime, ["telegram-monitor-v1"], image=image)
+        verify_capabilities(runtime, ["telegram-reader-v1"], image=image)
     mode = instruction_mode or (
         read_settings(backup / "secretary.env").get("COUNCIL_SECRETARY_INSTRUCTIONS", "image")
         if "secretary.env" in manifest["files"]

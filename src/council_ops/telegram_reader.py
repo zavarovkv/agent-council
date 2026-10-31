@@ -1,4 +1,4 @@
-"""Private interactive reader authorization and native daily report orchestration."""
+"""Private interactive authorization for one isolated Telegram source reader."""
 
 import json
 import os
@@ -10,8 +10,7 @@ from pathlib import Path
 
 from telegram_monitor.config import Settings as ReaderSettings
 from telegram_monitor.config import source_name
-from telegram_monitor.delivery import read_json
-from telegram_monitor.evidence import ZONE, daily_window
+from telegram_monitor.evidence import ZONE, daily_window, read_json
 from telegram_secretary.policy import pinned_owner
 
 from .config import OperationError, atomic_write, read_settings
@@ -55,49 +54,6 @@ def workspace(runtime):
     atomic_write(marker, b'{"schema":1,"managed_by":"agent-council"}\n')
     os.chown(marker, uid, gid)
     return root
-
-
-def provision_copy(runtime, home, reader, owner):
-    uid, gid = identity(runtime.settings)
-    runtime.run(
-        [
-            "docker",
-            "run",
-            "--rm",
-            "--network",
-            "none",
-            "--read-only",
-            "--user",
-            f"{uid}:{gid}",
-            "--cap-drop",
-            "ALL",
-            "--security-opt",
-            "no-new-privileges:true",
-            "--memory",
-            "512m",
-            "--pids-limit",
-            "64",
-            "--tmpfs",
-            "/tmp:rw,nosuid,nodev,size=64m",
-            "-e",
-            "HERMES_HOME=/opt/data",
-            "-e",
-            "PYTHONDONTWRITEBYTECODE=1",
-            "--mount",
-            f"type=bind,source={home},target=/opt/data",
-            "--workdir",
-            "/opt/agent-council",
-            "--entrypoint",
-            "/opt/hermes/.venv/bin/python",
-            runtime.image()[0],
-            "-m",
-            "telegram_monitor.schedule",
-            reader.source,
-            str(reader.peer),
-            str(owner),
-            "prepare",
-        ]
-    )
 
 
 def collector_units(runtime):
@@ -163,21 +119,19 @@ def configure(runtime, source, *, reauthorize=False):
         raise OperationError(
             "Use the interactive setup script; never pass credentials as arguments."
         )
-    verify_capabilities(runtime, ["telegram-monitor-v1"])
+    verify_capabilities(runtime, ["telegram-reader-v1"])
     runtime.require_idle()
     settings = runtime.settings
     owner = pinned_owner(settings.data_dir)
     if owner is None:
         raise OperationError("Complete verified owner sign-in before setting a report destination.")
-    if not (settings.data_dir / "skills/travel-digest/SKILL.md").is_file():
-        raise OperationError("Install the reviewed travel-digest skill before setup.")
     workspace(runtime)
     collector_units(runtime)
     target = settings.telegram_reader_file
     if target.is_symlink():
         raise OperationError("Refusing a symlinked reader session.")
     previous = load_reader(target) if target.exists() else None
-    marker = settings.data_dir / ".council/telegram-monitor.json"
+    marker = settings.data_dir / ".council/telegram-reader.json"
     configuration = read_json(marker) if marker.exists() else None
     if configuration and (
         configuration.get("source") != source
@@ -239,33 +193,35 @@ def configure(runtime, source, *, reauthorize=False):
     reader = load_reader(target)
     settings.update_values({"COUNCIL_TG_READER_ENV_FILE": str(target)})
     backup = snapshot(runtime, automatic=True)
-    smoke(runtime, backup, prepare_copy=lambda home: provision_copy(runtime, home, reader, owner))
+    smoke(runtime, backup)
     result = collect(runtime)
     if result["status"] == "unavailable":
         raise OperationError(
             "The session is saved, but collection is unavailable. Rerun setup to retry without logging in again."
         )
-    command = (
-        "exec",
-        "-T",
-        "--user",
-        "hermes",
-        "--workdir",
-        "/opt/agent-council",
-        "hermes",
-        "/opt/hermes/.venv/bin/python",
-        "-m",
-        "telegram_monitor.schedule",
-        reader.source,
-        str(reader.peer),
-        str(owner),
+    uid, gid = identity(settings)
+    marker.parent.mkdir(mode=0o700, exist_ok=True)
+    os.chown(marker.parent, uid, gid)
+    atomic_write(
+        marker,
+        (
+            json.dumps(
+                {
+                    "schema": 1,
+                    "managed_by": "agent-council",
+                    "source": reader.source,
+                    "peer_id": reader.peer,
+                    "owner_id": owner,
+                }
+            )
+            + "\n"
+        ).encode(),
     )
-    runtime.compose(*command, "prepare")
+    os.chown(marker, uid, gid)
     enable_timer(runtime)
-    schedule = json.loads(runtime.compose(*command, "activate"))
     runtime.check_protected()
     return {
-        **schedule,
+        "collector_ready": True,
         "source": source,
         "collection": result,
         "backup": str(backup),

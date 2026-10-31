@@ -57,7 +57,7 @@ def parser():
     commands = result.add_subparsers(dest="action", required=True)
     telegram = commands.add_parser(
         "configure-telegram-monitor",
-        help="Privately authorize one Telegram source and its daily report",
+        help="Privately authorize one pinned Telegram source",
     )
     telegram.add_argument("source", help="Existing source username; no @ or URL")
     telegram.add_argument("--reauthorize", action="store_true")

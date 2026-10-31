@@ -31,6 +31,16 @@ PATTERNS = {
 }
 
 
+def read_json(path, limit=65536):
+    path = Path(path)
+    if path.resolve() != path or not path.is_file() or path.stat().st_size > limit:
+        raise ValueError("Missing or unsafe source artifact.")
+    value = json.loads(path.read_text())
+    if not isinstance(value, dict):
+        raise ValueError("An object artifact is required.")
+    return value
+
+
 def daily_window(now):
     if now.tzinfo is None:
         raise ValueError("Use an aware collection timestamp.")
