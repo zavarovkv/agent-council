@@ -84,15 +84,22 @@ def configure(runtime, *, enabled=None):
     if path.parent.resolve() != path.parent:
         raise OperationError("Refusing a symlinked guest configuration directory.")
     checkpoint = None
+    value = {"schema": 1, "enabled": enabled, "revision": secrets.token_hex(16)}
+    body = (json.dumps(value) + "\n").encode()
+    uid, gid = identity(settings)
+
+    def write_policy(home):
+        target = home / RELATIVE_POLICY
+        target.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+        atomic_write(target, body)
+        os.chown(target, uid, gid)
+
     if enabled:
         checkpoint = snapshot(runtime)
-        smoke(runtime, checkpoint)
+        smoke(runtime, checkpoint, prepare_copy=write_policy)
     # Revocation deliberately needs neither an idle queue nor a model/network call.
     # A fresh epoch also invalidates all work admitted before a disable/re-enable.
-    value = {"schema": 1, "enabled": enabled, "revision": secrets.token_hex(16)}
-    path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
-    atomic_write(path, (json.dumps(value) + "\n").encode())
-    os.chown(path, *identity(settings))
+    write_policy(settings.data_dir)
     result = {"enabled": enabled, "changed": True, "restart_required": False}
     if checkpoint is not None:
         result["checkpoint"] = str(checkpoint)

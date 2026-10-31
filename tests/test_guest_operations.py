@@ -60,7 +60,12 @@ class GuestOperationsTests(unittest.TestCase):
             result = configure(self.runtime, enabled=True)
             self.assertTrue(result["enabled"])
             backup.assert_called_once_with(self.runtime)
-            smoke.assert_called_once_with(self.runtime, self.home / "checkpoint")
+            smoke.assert_called_once()
+            copied = self.home / "copy"
+            copied.mkdir()
+            smoke.call_args.kwargs["prepare_copy"](copied)
+            self.assertTrue(load_state(copied).enabled)
+            self.assertEqual(load_state(copied).revision, load_state(self.home).revision)
             epoch = load_state(self.home).revision
             configure(self.runtime, enabled=False)
             self.assertNotEqual(load_state(self.home).revision, epoch)
