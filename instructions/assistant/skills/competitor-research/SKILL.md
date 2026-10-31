@@ -1,9 +1,9 @@
 ---
 name: competitor-research
-description: Delegate competitor and market research to Dexter Jettster, the dexter Hermes profile, and return an evidence-based synthesis to the owner.
+description: Delegate competitor and market research to Декстер Джеттстер, the dexter Hermes profile, and return an evidence-based synthesis to the owner.
 ---
 
-# Delegate competitor research to Dexter Jettster
+# Delegate competitor research to Декстер Джеттстер
 
 Use this workflow when the owner requests competitor research, a product/price
 comparison, market positioning, or changes in competing products.
