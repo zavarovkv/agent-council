@@ -126,6 +126,7 @@ def inspect_services(runtime):
             raise OperationError("A Linear service must mount only its own profile and workspace.")
         if (
             inspected["Config"]["User"] != expected_user
+            or controls.get("Init") is not True
             or not controls.get("ReadonlyRootfs")
             or controls.get("CapAdd")
             or set(controls.get("CapDrop") or []) != {"ALL"}

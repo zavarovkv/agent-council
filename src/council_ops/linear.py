@@ -61,7 +61,7 @@ def prepare_files(home, plan, model, repository, uid, gid):
                 "model": model,
                 "platform_toolsets": {"api_server": ["web", "clarify", "council-linear"]},
                 "mcp_servers": {},
-                "plugins": {"entries": {"council-linear": {"enabled": True}}},
+                "plugins": {"enabled": ["council-linear"]},
                 "security": {"allow_lazy_installs": False},
                 "agent": {"max_turns": 20},
                 "gateway": {"api_server": {"max_concurrent_runs": 1}},
@@ -161,6 +161,8 @@ def configure(runtime):
     directory = root(runtime.settings) / "bridge"
     plan = private_json(directory / "plan.json")
     old = private_json(directory / "agents.json") if (directory / "agents.json").exists() else None
+    if old and old.get("enabled"):
+        raise OperationError("Disable Linear execution before changing application credentials.")
     from .config import read_settings
 
     records = {}
@@ -176,6 +178,10 @@ def configure(runtime):
                 slug + " — " + label + (" (Enter keeps existing): " if previous.get(name) else ": ")
             )
             values[name] = value or previous.get(name, "")
+        if previous.get("client_id") and previous["client_id"] != values["client_id"]:
+            raise OperationError(
+                "Changing an existing application's identity requires a separately reviewed migration; its grant is preserved."
+            )
         key = read_settings(directory / (slug + ".env"))["API_SERVER_KEY"]
         records[slug] = {
             **values,

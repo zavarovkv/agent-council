@@ -239,6 +239,42 @@ class OperationTests(unittest.TestCase):
         self.assertEqual(run.call_count, 1)
         self.assertEqual(run.call_args.args[0][0], "systemd-run")
 
+    def test_snapshot_freezes_all_linear_writers_and_thaws_them_in_reverse_order(self):
+        runtime = Runtime(self.fixture.settings())
+        identifiers = [letter * 64 for letter in "abcde"]
+        calls = []
+
+        def run(arguments, **_kwargs):
+            calls.append(arguments)
+            if arguments[:2] == ["docker", "inspect"]:
+                return json.dumps([{"State": {"Running": True}}])
+            return ""
+
+        with (
+            patch.object(runtime, "container", return_value=identifiers[0]),
+            patch.object(runtime, "companion", return_value=identifiers[1]),
+            patch.object(
+                runtime,
+                "linear_companions",
+                return_value=[
+                    (name, cid, True)
+                    for name, cid in zip(
+                        ("linear-adapter", "linear-executor", "dexter-executor"),
+                        identifiers[2:],
+                        strict=True,
+                    )
+                ],
+            ),
+            patch.object(runtime, "run", side_effect=run),
+        ):
+            with runtime.frozen():
+                pass
+        self.assertEqual([row[-1] for row in calls if row[:2] == ["docker", "pause"]], identifiers)
+        self.assertEqual(
+            [row[-1] for row in calls if row[:2] == ["docker", "unpause"]], identifiers[::-1]
+        )
+        self.assertEqual(next(row[-5:] for row in calls if row[0] == "systemd-run"), identifiers)
+
     def test_partial_freeze_failure_thaws_the_first_container(self):
         runtime = Runtime(self.fixture.settings())
         calls = []

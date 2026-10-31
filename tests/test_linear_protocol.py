@@ -105,6 +105,33 @@ class LinearProtocolTests(unittest.TestCase):
         self.assertEqual(len(calls), 1)
         self.assertEqual(self.store.installation("qui-gon")["refresh"], "rotated-refresh")
 
+    def test_wrong_workspace_grant_is_revoked_and_never_installed(self):
+        revoked = []
+
+        def request(url, **kwargs):
+            if url == TOKEN:
+                return {
+                    "access_token": "wrong-workspace-access",
+                    "refresh_token": "wrong-workspace-refresh",
+                    "expires_in": 86400,
+                    "token_type": "Bearer",
+                }
+            if url == API:
+                return {"data": {"viewer": {"id": uid(1000)}, "organization": {"id": uid(999)}}}
+            revoked.append(url)
+            return {}
+
+        linear = Linear(self.store, request=request, clock=lambda: NOW)
+        state = parse_qs(
+            urlsplit(linear.authorization(self.registry, self.agent, "browser")).query
+        )["state"][0]
+        with self.assertRaises(PermissionError):
+            linear.callback(
+                self.registry, self.agent, state=state, browser="browser", code="fixture-code"
+            )
+        self.assertIsNone(self.store.installation("qui-gon"))
+        self.assertEqual(revoked, ["https://api.linear.app/oauth/revoke"])
+
     def test_concurrent_replay_admits_exactly_one_job_and_corrupt_state_fails_closed(self):
         event = Event("a" * 64, "qui-gon", uid(10), "created", "", uid(2), "Fixture", NOW)
         with concurrent.futures.ThreadPoolExecutor(max_workers=8) as pool:

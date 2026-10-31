@@ -34,7 +34,7 @@ class Linear:
 
     def authorization(self, registry, agent, browser):
         if self.store.installation(agent.slug):
-            raise PermissionError("This app is installed; use the operator reconnect command.")
+            raise PermissionError("This app is already installed; preserve its existing grant.")
         state, verifier = secrets.token_urlsafe(32), secrets.token_urlsafe(48)
         self.store.oauth_state(state, browser, agent.slug, verifier)
         challenge = (

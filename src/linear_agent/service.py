@@ -151,6 +151,9 @@ class Service:
                     self.store.update_job(job["key"], state="cancelling")
                     return
         self.store.update_job(job["key"], state="cancelled")
+        self.store.child_finished(
+            agent.slug, job["session"], "Подзадача остановлена; подтверждённого результата нет."
+        )
 
     def step(self):
         registry = self.registry()

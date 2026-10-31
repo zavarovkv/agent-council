@@ -69,6 +69,7 @@ def main():
                 or set(config.get("platform_toolsets", {}).get("api_server", []))
                 != {"web", "clarify", "council-linear"}
                 or config.get("mcp_servers") != {}
+                or config.get("plugins", {}).get("enabled") != ["council-linear"]
                 or not (profile / "SOUL.md").is_file()
             ):
                 raise ValueError("Invalid isolated Linear executor policy.")
