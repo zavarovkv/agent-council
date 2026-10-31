@@ -18,6 +18,14 @@ workspace content and custom skill source are never filtered. Container images
 are rebuilt from the recorded Git revision and digest-pinned Dockerfile.
 Local upgrade checkpoints retain the full profile for immediate rollback;
 `backup --include-image` optionally adds an image tar for local offline recovery.
+Automatic deployment, instruction and configuration operations retain their two
+newest full checkpoints. Both retained points are checksum-validated before an
+older automatic point is removed. Manual `backup` exports, legacy unmarked
+copies, pinned points and incomplete/unknown directories are not deleted by this
+policy. Keep a manual export when a particular historical state must persist.
+Cloud backups retain their separate verified portable-copy policy; Docker layers
+and tool caches never enter R2. Retention failures preserve the latest recovery
+points and do not strand a stopped service.
 Files are checksummed, symlinks are preserved without following their targets,
 and ephemeral sockets are excluded. External symlink targets are not backed up.
 

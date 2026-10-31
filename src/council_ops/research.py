@@ -9,7 +9,7 @@ from .snapshots import snapshot
 
 def configure(runtime):
     runtime.require_idle()
-    backup = snapshot(runtime)
+    backup = snapshot(runtime, automatic=True)
     uid, gid = identity(runtime.settings)
     result = runtime.run(
         [

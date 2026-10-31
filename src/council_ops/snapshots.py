@@ -2,6 +2,7 @@
 
 import hashlib
 import json
+import logging
 import os
 import shutil
 import stat
@@ -136,8 +137,52 @@ def load_manifest(backup):
     return backup, manifest
 
 
+def prune_automatic_checkpoints(root, *, keep=2, protected=None):
+    """Bound only explicitly automatic rollback points; preserve manual/legacy exports."""
+    if keep < 1 or root.resolve() != root:
+        raise OperationError("Keep a valid local checkpoint directory and at least one point.")
+    candidates = []
+    for path in root.glob("backup-*"):
+        marker = path / "manifest.json"
+        if path.is_symlink() or not path.is_dir() or marker.is_symlink() or not marker.is_file():
+            continue
+        try:
+            value = json.loads(marker.read_text())
+            if (
+                not isinstance(value, dict)
+                or value.get("application") != "agent-council"
+                or value.get("schema") != 1
+                or value.get("kind") != "full-local-checkpoint"
+                or value.get("automatic") is not True
+                or value.get("pinned") is True
+            ):
+                continue
+            created = datetime.fromisoformat(value["created_at"])
+            if created.tzinfo is None:
+                continue
+        except (ValueError, KeyError, TypeError):
+            continue
+        candidates.append((created, path))
+    candidates.sort(reverse=True)
+    if protected is not None and protected not in {path for _created, path in candidates}:
+        raise OperationError("Protect only a complete automatic checkpoint in this directory.")
+    retained = {protected} if protected is not None else set()
+    for _created, path in candidates:
+        if len(retained) < keep:
+            retained.add(path)
+    removed = [path for _created, path in candidates if path not in retained]
+    if not removed:
+        return 0
+    # Validate the retained recovery points before deleting any older one.
+    for path in retained:
+        load_manifest(path)
+    for path in removed:
+        shutil.rmtree(path)
+    return len(removed)
+
+
 @maintenance
-def snapshot(runtime, *, include_image=False, restart=True, portable=False):
+def snapshot(runtime, *, include_image=False, restart=True, portable=False, automatic=False):
     settings = runtime.settings
     settings.backup_dir.mkdir(mode=0o700, parents=True, exist_ok=True)
     settings.backup_dir.chmod(0o700)
@@ -212,6 +257,7 @@ def snapshot(runtime, *, include_image=False, restart=True, portable=False):
             "application": "agent-council",
             "schema": 1,
             "kind": "portable-data" if portable else "full-local-checkpoint",
+            "automatic": automatic,
             "excluded_profile_entries": sorted(DISPOSABLE) if portable else [],
             "created_at": datetime.now(UTC).isoformat(),
             "image_id": image,
@@ -232,4 +278,12 @@ def snapshot(runtime, *, include_image=False, restart=True, portable=False):
             runtime.start()
             runtime.ready()
             runtime.check_protected()
+    if automatic and not portable:
+        try:
+            prune_automatic_checkpoints(settings.backup_dir, keep=2, protected=backup)
+        except (OperationError, OSError, ValueError):
+            # Retention cannot strand a stopped gateway or invalidate a new backup.
+            logging.getLogger(__name__).warning(
+                "Local checkpoint retention deferred; latest recovery points were retained."
+            )
     return backup

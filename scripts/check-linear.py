@@ -129,10 +129,11 @@ call('/v1/runs/'+first['run_id']+'/stop',{})
             raise
         finally:
             subprocess.run(
-                [*compose, "down", "--volumes", "--remove-orphans"],
+                [*compose, "--profile", "*", "down", "--volumes", "--remove-orphans"],
                 env=environment,
                 capture_output=True,
-                timeout=60,
+                check=True,
+                timeout=120,
             )
 
 

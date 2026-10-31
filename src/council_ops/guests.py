@@ -104,7 +104,7 @@ def configure(runtime, *, enabled=None):
         os.chown(target, uid, gid)
 
     if enabled:
-        checkpoint = snapshot(runtime)
+        checkpoint = snapshot(runtime, automatic=True)
         smoke(runtime, checkpoint, prepare_copy=write_policy)
     # Revocation deliberately needs neither an idle queue nor a model/network call.
     # A fresh epoch also invalidates all work admitted before a disable/re-enable.
