@@ -61,7 +61,11 @@ def valid_destination(name):
                 for role in ("spouse", "contacts", "new-users")
             ),
         }
-    if parts[0] == "profiles":
+    if parts[:2] == (".council", "linear"):
+        if len(parts) < 4 or parts[2] not in {"qui-gon", "dexter", "marketing"}:
+            return False
+        parts = parts[3:]
+    elif parts[0] == "profiles":
         if len(parts) < 3 or not ROLE.fullmatch(parts[1]):
             return False
         parts = parts[2:]
@@ -85,10 +89,48 @@ def destination(home, name):
 def collect(source, home):
     """Read bounded text artifacts only; never import a whole Hermes profile."""
     files = {}
+    bundles = []
     roles = [path for path in source.iterdir() if path.name != ".git" and path.is_dir()]
     for role in roles:
         if role.is_symlink() or not ROLE.fullmatch(role.name):
             raise OperationError("Invalid instruction role directory.")
+        if role.name == "linear":
+            if "agent-specialists-v1" not in source_requirements(source):
+                raise OperationError("Linear instruction bundles require agent-specialists-v1.")
+            for agent in role.iterdir():
+                if (
+                    agent.name not in {"qui-gon", "dexter", "marketing"}
+                    or agent.is_symlink()
+                    or not agent.is_dir()
+                ):
+                    raise OperationError("Invalid isolated Linear instruction role.")
+                profile = home / ".council/linear" / agent.name
+                if not (profile / "config.yaml").is_file():
+                    raise OperationError("Prepare each isolated executor before its instructions.")
+                prefix = ".council/linear/" + agent.name
+                bundles.append((agent, prefix, True))
+                alias = agent / "skills-source.json"
+                if alias.exists() or alias.is_symlink():
+                    if (
+                        alias.resolve() != alias
+                        or not alias.is_file()
+                        or alias.stat().st_size > 256
+                    ):
+                        raise OperationError("Invalid shared skill source.")
+                    value = json.loads(alias.read_text())
+                    if (
+                        not isinstance(value, dict)
+                        or set(value) != {"role"}
+                        or not isinstance(value["role"], str)
+                        or not ROLE.fullmatch(value["role"])
+                        or value["role"] in {"linear", "secretary"}
+                    ):
+                        raise OperationError("Invalid shared skill source.")
+                    shared = source / value["role"]
+                    if shared.resolve() != shared or not (shared / "skills").is_dir():
+                        raise OperationError("Missing shared skill source.")
+                    bundles.append((shared / "skills", prefix + "/skills", False))
+            continue
         if role.name == "secretary":
             load_instructions(role)
             if not (home / ".council/secretary/.council-secretary.json").is_file():
@@ -100,21 +142,31 @@ def collect(source, home):
             if not (home / "profiles" / role.name / "config.yaml").is_file():
                 raise OperationError("Provision each named agent profile before its instructions.")
             prefix = "profiles/" + role.name
+        bundles.append((role, prefix, True))
+    for role, prefix, full_role in bundles:
         for path in role.rglob("*"):
             if path.is_symlink():
                 raise OperationError("Instruction bundles must not contain symlinks.")
             if path.is_dir():
                 continue
             relative = path.relative_to(role)
-            if relative == Path("README.md"):
+            if relative == Path("README.md") or (
+                relative == Path("skills-source.json") and prefix.startswith(".council/linear/")
+            ):
                 continue
             name = str(PurePosixPath(prefix) / relative)
-            if not valid_destination(name) or not path.is_file() or path.stat().st_size > 1048576:
-                raise OperationError("Invalid or oversized instruction artifact.")
-            if relative.parts[0] == "skills" and not any(
+            if (
+                name in files
+                or not valid_destination(name)
+                or not path.is_file()
+                or path.stat().st_size > 1048576
+            ):
+                raise OperationError("Duplicate, invalid or oversized instruction artifact.")
+            skill_root = role / "skills" if full_role else role
+            if (not full_role or relative.parts[0] == "skills") and not any(
                 (parent / "SKILL.md").is_file()
                 for parent in path.parents
-                if contained(parent, role / "skills")
+                if contained(parent, skill_root)
             ):
                 raise OperationError("Skill resources require a parent SKILL.md.")
             data = path.read_bytes()
@@ -465,10 +517,15 @@ def apply(runtime, source, revision, *, fetch=False):
     return {"instructions_revision": revision, "files_installed": len(files), "backup": str(backup)}
 
 
-def source_name(name):
+def source_name(name, source=None):
     parts = PurePosixPath(name).parts
     if parts[:3] == (".council", "secretary", "instructions"):
         return PurePosixPath("secretary", *parts[3:])
+    if parts[:2] == (".council", "linear"):
+        alias = source / "linear" / parts[2] / "skills-source.json" if source else None
+        if parts[3] == "skills" and alias and alias.is_file():
+            return PurePosixPath(json.loads(alias.read_text())["role"], *parts[3:])
+        return PurePosixPath("linear", parts[2], *parts[3:])
     if parts[0] == "profiles":
         return PurePosixPath(parts[1], *parts[2:])
     return PurePosixPath("assistant", *parts)
@@ -483,6 +540,7 @@ def export(runtime, source, revision, *, include_skills=()):
     if not previous or json.loads((home / MARKER).read_text()).get("revision") != revision:
         raise OperationError("Export into the clean checkout of the currently installed revision.")
     runtime.require_idle()
+    collect(source, home)  # Validate role aliases before resolving export destinations.
     names = set(previous)
     for skill in include_skills:
         directory = home / "skills" / skill
@@ -505,10 +563,15 @@ def export(runtime, source, revision, *, include_skills=()):
         data = path.read_bytes()
         if CREDENTIAL.search(data.decode("utf-8")):
             raise OperationError("Credential-like content found; export refused.")
-        target = source / source_name(name)
+        target = source / source_name(name, source)
         if target.resolve() != target:
             raise OperationError("Refusing a symlinked export destination.")
-        artifacts[target] = Artifact(data, bool(path.stat().st_mode & 0o111))
+        artifact = Artifact(data, bool(path.stat().st_mode & 0o111))
+        if target in artifacts and artifacts[target] != artifact:
+            raise OperationError(
+                "Shared skills diverged between runtimes; reconcile before export."
+            )
+        artifacts[target] = artifact
     if len(artifacts) > 1024 or sum(len(f.data) for f in artifacts.values()) > 8 * 1048576:
         raise OperationError("Instruction export exceeds its size limit.")
     for target, artifact in artifacts.items():

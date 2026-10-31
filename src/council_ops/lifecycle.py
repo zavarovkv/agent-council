@@ -163,6 +163,9 @@ def restore(runtime, backup, *, require_idle=True):
                 "COUNCIL_LINEAR_DEXTER_ENABLED": "true"
                 if "dexter-executor" in manifest.get("running_services", [])
                 else "false",
+                "COUNCIL_LINEAR_MARKETING_ENABLED": "true"
+                if "marketing-executor" in manifest.get("running_services", [])
+                else "false",
             }
         )
         runtime.activate_source(backup / "compose.yaml")

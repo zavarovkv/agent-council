@@ -47,7 +47,7 @@ def disposable_path(relative):
         or (
             len(parts) >= 4
             and parts[:2] == (".council", "linear")
-            and parts[2] in {"bridge", "qui-gon", "dexter"}
+            and parts[2] in {"bridge", "qui-gon", "dexter", "marketing"}
             and parts[3] in DISPOSABLE
         )
     )

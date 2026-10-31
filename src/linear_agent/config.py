@@ -8,7 +8,9 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from urllib.parse import urlsplit
 
-SLUGS = {"qui-gon": "linear-executor", "dexter": "dexter-executor"}
+from .catalog import ROLES
+
+SLUGS = {slug: role["service"] for slug, role in ROLES.items()}
 SCOPES = frozenset({"read", "write", "app:assignable", "app:mentionable"})
 CAPABILITY = "linear-agents-v1"
 
@@ -175,7 +177,7 @@ def app_manifest(origin, slug):
         "display": {"description": "Agent Council assistant for delegated tasks and research."},
         "developer": {"name": "Agent Council"},
         "oauth": {
-            "client_name": "Квай-Гон Джинн" if slug == "qui-gon" else "Dexter Jettster",
+            "client_name": ROLES[slug]["name"],
             "client_uri": origin,
             "redirect_uris": [base + "/oauth/callback"],
             "grant_types": ["authorization_code"],

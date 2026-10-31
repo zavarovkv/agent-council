@@ -21,6 +21,19 @@ private-skills/
     └── skills/{spouse,contacts,new-users}/SKILL.md
 ```
 
+Isolated Linear roles use `linear/{qui-gon,dexter,marketing}/SOUL.md` and
+`linear/<slug>/skills/<name>/SKILL.md`. Prepare each executor first and declare
+`agent-specialists-v1` in `requires.json`. These files map only into that
+executor's own profile; they grant no credentials or additional tools.
+
+To keep identical research procedures in one source, a role may contain
+`linear/dexter/skills-source.json` with `{"role":"dexter"}`. The installer copies
+only that named role's `skills/` into the isolated executor. Its separate Linear
+`SOUL.md` remains in charge of the execution workflow; config, memory and grants
+are never shared. Conflicting duplicate destinations are rejected. Export maps
+shared skills back to their canonical source and refuses diverged runtime copies
+until reconciled.
+
 Skill folders can contain nested categories, scripts and reference files.
 Artifacts must be regular UTF-8 files, with no symlinks or hidden resources,
 at most 1 MiB per file and 8 MiB/1,024 files per bundle. Common credential

@@ -63,6 +63,42 @@ class PrivateInstructionTests(unittest.TestCase):
         install_files(self.home, files, REVISION, self.uid, self.gid)
         return files
 
+    def test_isolated_roles_reuse_reviewed_skill_source_without_other_profile_data(self):
+        researcher = self.home / "profiles/dexter"
+        researcher.mkdir(parents=True)
+        (researcher / "config.yaml").write_text("{}")
+        for role in ("dexter", "marketing"):
+            profile = self.home / ".council/linear" / role
+            profile.mkdir(parents=True)
+            (profile / "config.yaml").write_text("{}")
+        (self.source / "dexter/skills/evidence").mkdir(parents=True)
+        (self.source / "dexter/SOUL.md").write_text("Native research lifecycle")
+        skill = self.source / "dexter/skills/evidence/SKILL.md"
+        skill.write_text("---\nname: evidence\ndescription: Trace evidence.\n---\nCheck sources.")
+        isolated = self.source / "linear/dexter"
+        isolated.mkdir(parents=True)
+        (isolated / "SOUL.md").write_text("Isolated Linear lifecycle")
+        (isolated / "skills-source.json").write_text('{"role":"dexter"}')
+        marketing = self.source / "linear/marketing"
+        marketing.mkdir()
+        (marketing / "SOUL.md").write_text("Marketing role")
+        with self.assertRaises(OperationError):
+            collect(self.source, self.home)
+        (self.source / "requires.json").write_text(
+            '{"schema":1,"capabilities":["agent-specialists-v1"]}'
+        )
+        files = collect(self.source, self.home)
+        self.assertEqual(
+            files["profiles/dexter/skills/evidence/SKILL.md"].data,
+            files[".council/linear/dexter/skills/evidence/SKILL.md"].data,
+        )
+        self.assertEqual(files[".council/linear/dexter/SOUL.md"].data, b"Isolated Linear lifecycle")
+        self.assertNotIn(".council/linear/dexter/config.yaml", files)
+        self.assertNotIn(".council/linear/dexter/skills-source.json", files)
+        (isolated / "skills-source.json").write_text('{"role":"../assistant"}')
+        with self.assertRaises(OperationError):
+            collect(self.source, self.home)
+
     def test_install_adopts_identical_files_preserves_unrelated_state_and_script_mode(self):
         (self.home / "SOUL.md").write_text("Private assistant identity")
         self.install()

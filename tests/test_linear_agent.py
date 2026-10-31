@@ -56,7 +56,7 @@ def configuration(home):
 def session(slug="qui-gon", sid=10, issue=20, owner=2, parent=None, creator=None):
     return {
         "id": uid(sid),
-        "appUser": {"id": uid(1000 if slug == "qui-gon" else 1001)},
+        "appUser": {"id": uid({"qui-gon": 1000, "dexter": 1001, "marketing": 1002}[slug])},
         "creator": {"id": uid(owner)} if owner else None,
         "dismissedAt": None,
         "archivedAt": None,
@@ -68,7 +68,7 @@ def session(slug="qui-gon", sid=10, issue=20, owner=2, parent=None, creator=None
             "url": "https://linear.app/fixture/issue/F-1",
             "team": {"id": uid(3)},
             "parent": {"id": parent} if parent else None,
-            "delegate": {"id": uid(1000 if slug == "qui-gon" else 1001)},
+            "delegate": {"id": uid({"qui-gon": 1000, "dexter": 1001, "marketing": 1002}[slug])},
             "creator": {"id": uid(creator or owner or 2)},
         },
         "comment": {"body": "Fixture directive", "user": {"id": uid(2)}},
@@ -108,7 +108,8 @@ class FakeLinear:
                 "id": child["issue"],
                 "url": "https://linear.app/fixture/issue/F-2",
             }
-            value = session("dexter", sid=11, owner=0, parent=parent_issue, creator=1000)
+            target = "marketing" if delegate == uid(1002) else "dexter"
+            value = session(target, sid=11, owner=0, parent=parent_issue, creator=1000)
             value["issue"]["id"] = child["issue"]
             self.sessions[uid(11)] = value
         if self.uncertain_child:
@@ -381,13 +382,30 @@ class LinearAgentTests(unittest.TestCase):
         self.assertTrue(self.hermes.stops)
 
     def test_sub_issue_delegation_is_idempotent_and_returns_results_to_parent(self):
+        self.assert_specialist_roundtrip("dexter")
+
+    def test_marketing_sub_issue_returns_to_the_same_coordinator_session(self):
+        self.config["agents"]["marketing"] = {
+            **self.config["agents"]["dexter"],
+            "client_id": uid(103),
+            "client_secret": "marketing-client-fixture",
+            "webhook_secret": "marketing-webhook-fixture",
+            "executor_key": "3" * 64,
+            "executor_url": "http://marketing-executor:8642",
+        }
+        self.config["agents"]["qui-gon"]["delegates"].append("marketing")
+        (self.home / "agents.json").write_text(json.dumps(self.config))
+        self.store.install("marketing", uid(1002), uid(1), "fixture", "fixture", NOW + 86400)
+        self.assert_specialist_roundtrip("marketing")
+
+    def assert_specialist_roundtrip(self, target):
         self.ingest(self.event())
         self.tick()
         root = self.store.session("qui-gon", uid(10))
         payload = {
             "run": self.run_for(),
             "session": root["hermes"],
-            "target": "dexter",
+            "target": target,
             "key": "competitor-a",
             "title": "Research competitor A",
             "description": "Find sources and compare features.",
@@ -401,13 +419,13 @@ class LinearAgentTests(unittest.TestCase):
         self.hermes.finish(self.run_for(), "Delegated the research")
         self.tick()
         self.assertEqual(self.store.jobs()[0]["state"], "waiting_children")
-        self.ingest(self.event(slug="dexter", sid=11, actor=0), slug="dexter")
+        self.ingest(self.event(slug=target, sid=11, actor=0), slug=target)
         self.tick()
-        child_run = self.run_for("dexter")
-        child = self.store.session("dexter", uid(11))
+        child_run = self.run_for(target)
+        child = self.store.session(target, uid(11))
         with self.assertRaises(PermissionError):
             self.service.delegate(
-                "dexter",
+                target,
                 {**payload, "run": child_run, "session": child["hermes"], "target": "qui-gon"},
             )
         self.hermes.finish(child_run, "Verified competitor findings")

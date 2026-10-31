@@ -26,7 +26,7 @@ def main():
             "organization": str(uuid.UUID(int=1)),
             "teams": [str(uuid.UUID(int=3))],
             "origin": "https://fixture.example.test",
-            "agents": ["qui-gon", "dexter"],
+            "agents": ["qui-gon", "dexter", "marketing"],
         }
         prepare_files(
             data, plan, {"provider": "openai-codex", "default": "gpt-5.4"}, repository, uid, gid
@@ -34,7 +34,7 @@ def main():
         auth = root / "fixture.env"
         auth.write_text("HERMES_TELEGRAM_OWNER_USERNAME=fixture_owner\n")
         auth.chmod(0o600)
-        services = ("linear-adapter", "linear-executor", "dexter-executor")
+        services = ("linear-adapter", "linear-executor", "dexter-executor", "marketing-executor")
         override = root / "offline.yaml"
         override.write_text(
             "services:\n"
@@ -94,7 +94,7 @@ inventory=call('/v1/toolsets')['data']
 enabled={v['name'] for v in inventory if v['enabled']}
 assert enabled=={'web','clarify','council-linear'}, enabled
 tools={tool for v in inventory if v['enabled'] for tool in v['tools']}
-assert {'linear_delegate','linear_child_tasks','clarify'}<=tools, tools
+assert {'linear_delegate','linear_child_tasks','linear_agents','council_skill','clarify'}<=tools, tools
 assert not {'terminal','read_file','execute_code','memory','delegate_task'}&tools
 first=call('/v1/runs',{'session_id':'linear_offline_fixture','input':'Offline fixture. Reply with one word; do not call tools.'},key='fixture-admission')
 second=call('/v1/runs',{'session_id':'linear_offline_fixture','input':'Offline fixture. Reply with one word; do not call tools.'},key='fixture-admission')

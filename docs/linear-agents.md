@@ -15,9 +15,12 @@ the personal assistant's existing MCP connection.
    comment and marks the session as awaiting input. Reply there to resume that
    exact run. Repeated polling or delivery retries do not post the question twice.
    Later follow-ups use the same task session.
-4. Qui-Gon can create up to four sub-issues and delegate them to **Dexter
-   Jettster**. You can also create a sub-issue under a known Qui-Gon task and
-   delegate it to Dexter yourself. The child must be created by the configured
+4. Qui-Gon reads the live `linear_agents` roster and can create up to four
+   sub-issues for **Dexter Jettster** (product/market/customer research) or
+   **Лэндо Калриссиан**, slug `marketing` (promotion/SEO/content/experiments).
+   Only registered, installed targets allowed by policy can receive work.
+   You can also create a sub-issue under a known Qui-Gon task and delegate it
+   to an installed specialist yourself. The child must be created by the configured
    owner or coordinator, in an allowed team. Specialists cannot delegate further.
 5. Each specialist publishes its result in its own session. Once children finish,
    Qui-Gon resumes, reviews the findings and returns a combined answer in the
@@ -27,9 +30,13 @@ Only the explicitly pinned human Linear user can start or continue work.
 Usernames, issue text and mentions cannot grant permissions. Agent-created child
 sessions also require a durable delegation record and verified parent lineage.
 Results are visible to everyone who can read their Linear issue: these executors
-receive no personal Telegram history, owner memory, private skills or MCP grants.
-They have public web research, clarification and narrow task-bound delegation
-tools. Coding, terminal execution and private file integrations are out of scope.
+receive no personal Telegram history, owner memory or personal MCP grants.
+They have public web research, clarification, reviewed profile-local skills and
+narrow task-bound tools. `council_skill` reads only those skill instructions and
+Markdown references; it cannot execute scripts, edit skills or read credentials.
+Coding, terminal execution, private analytics and publishing are out of scope.
+The coordinator supplies a bounded brief and reviews results. Sequential work
+passes reviewed research to marketing; independent deliverables can run in parallel.
 
 ## Install
 
@@ -67,6 +74,29 @@ assistant's token files. The existing `configure-route` command applies the
 additive `/integrations/linear/` Nginx location with syntax checks, protected
 service verification and graceful reload. Its default upstream is loopback
 9121; if changing `COUNCIL_LINEAR_HTTP_PORT`, review that template too.
+
+### Add Lando to an existing installation
+
+Deploy a release with `agent-specialists-v1`, then repeat preparation with the
+same immutable owner/workspace/team IDs and both `--with-dexter --with-marketing`.
+Preparation allows additions and refuses identity changes or removals. It retains
+existing executor credentials, custom instructions and integration data.
+
+Create Lando's separate private app from the printed `marketing` manifest.
+Enter only its new credentials with `bash scripts/setup-linear.sh marketing`.
+This additive command preserves existing app secrets, grants, execution state
+and policy epoch; it cannot rotate an existing app. It permits Qui-Gon to use
+the newly registered specialist, but delegation remains blocked until that
+specialist's app is actually installed. Use
+`bash scripts/setup-model.sh marketing-executor` for its independent model login,
+then the short OAuth setup window to install its Linear app. Check `doctor`
+and model readiness before assigning real work.
+
+No default project, pilot, campaign or recurring task is created. Assign work
+through the tracker. GitHub writes, analytics accounts, Notion filing and
+publication require separately scoped integrations; skills do not grant access.
+
+### Install applications
 
 On the host, open the short setup window:
 

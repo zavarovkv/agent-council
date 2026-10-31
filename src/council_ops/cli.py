@@ -106,9 +106,15 @@ def parser():
         help="Explicit team ID; repeat for additional teams",
     )
     prepare_linear.add_argument("--with-dexter", action="store_true")
-    commands.add_parser(
+    prepare_linear.add_argument("--with-marketing", action="store_true")
+    configure_linear = commands.add_parser(
         "configure-linear-agents",
         help="Enter app credentials privately; execution remains disabled",
+    )
+    configure_linear.add_argument(
+        "--agent",
+        choices=["dexter", "marketing"],
+        help="Add only this new prepared agent; preserve existing grants and runs",
     )
     commands.add_parser(
         "connect-linear-agents", help="Open a 15-minute browser-bound OAuth installation window"
@@ -249,9 +255,10 @@ def operate(arguments, settings):
                 organization=arguments.organization,
                 teams=arguments.team,
                 with_dexter=arguments.with_dexter,
+                with_marketing=arguments.with_marketing,
             )
         elif arguments.action == "configure-linear-agents":
-            result = linear.configure(runtime)
+            result = linear.configure(runtime, selected=arguments.agent)
         elif arguments.action == "connect-linear-agents":
             result = linear.setup_window(runtime)
         elif arguments.action == "linear-execution":

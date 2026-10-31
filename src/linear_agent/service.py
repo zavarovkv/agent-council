@@ -7,6 +7,7 @@ import threading
 import time
 from pathlib import Path
 
+from .catalog import LIMITATIONS, ROLES
 from .config import Registry, identifier
 from .events import parse_event, verified_payload
 from .hermes import Hermes
@@ -434,6 +435,35 @@ class Service:
             }
             for child in self.store.children(slug, session["id"])
         ]
+
+    def agent_catalog(self, slug, payload):
+        if set(payload) != {"run", "session"}:
+            raise ValueError("Invalid task context.")
+        registry = self.registry()
+        agent = registry.agents[slug]
+        session = self.store.context(slug, payload["run"], payload["session"])
+        self.authorize(registry, agent, session["id"])
+        records = []
+        for target, role in ROLES.items():
+            installed = self.store.installation(target)
+            connected = bool(
+                target in registry.agents
+                and installed
+                and installed["organization"] == registry.organization
+            )
+            records.append(
+                {
+                    "slug": target,
+                    "name": role["name"],
+                    "specialty": role["specialty"],
+                    "deliverables": role["deliverables"],
+                    "registered": target in registry.agents,
+                    "installed": connected,
+                    "delegation_allowed": connected and target in agent.delegates,
+                    "model_readiness": "checked_at_run_start",
+                }
+            )
+        return {"agents": records, "limitations": LIMITATIONS}
 
     def _notify_children(self, registry):
         seen = set()
