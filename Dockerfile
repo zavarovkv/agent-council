@@ -13,10 +13,10 @@ RUN mkdir -p /vendor \
 
 FROM nousresearch/hermes-agent:v0.22.5@sha256:9c5561579f3ffdf333401797094ac3a743738d6c25d40f4331c7bf77b694238d AS telegram-reader
 COPY requirements-telegram-reader-build.txt requirements-telegram-reader.txt /tmp/
-RUN uv venv --python /opt/hermes/.venv/bin/python /opt/telegram-reader \
-    && uv pip install --python /opt/telegram-reader/bin/python --require-hashes -r /tmp/requirements-telegram-reader-build.txt \
-    && uv pip install --python /opt/telegram-reader/bin/python --require-hashes --no-build-isolation -r /tmp/requirements-telegram-reader.txt \
-    && uv pip uninstall --python /opt/telegram-reader/bin/python setuptools wheel packaging
+RUN /opt/hermes/.venv/bin/python -m venv /opt/telegram-reader \
+    && /opt/telegram-reader/bin/python -m pip install --no-cache-dir --require-hashes -r /tmp/requirements-telegram-reader-build.txt \
+    && /opt/telegram-reader/bin/python -m pip install --no-cache-dir --require-hashes --no-build-isolation -r /tmp/requirements-telegram-reader.txt \
+    && /opt/telegram-reader/bin/python -m pip uninstall --yes setuptools wheel packaging pip
 
 FROM nousresearch/hermes-agent:v0.22.5@sha256:9c5561579f3ffdf333401797094ac3a743738d6c25d40f4331c7bf77b694238d
 
