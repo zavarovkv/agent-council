@@ -5,6 +5,7 @@ import re
 from datetime import date
 
 from .config import identifier
+from .project_scope import ProjectScope
 from .store import stable_id
 from .transport import RemoteError
 
@@ -132,6 +133,8 @@ class Issues:
             "body",
             "result",
             "verification",
+            "offset",
+            "document",
         }:
             raise ValueError("Unsupported issue operation parameters.")
         registry = self.service.registry()
@@ -148,21 +151,22 @@ class Issues:
         action = payload.get("action")
         coordinator = slug == "qui-gon" and not session["depth"]
         reference = payload.get("issue") or session["issue"]
-        if not coordinator and (
-            reference != session["issue"]
-            or action not in {"context", "get", "start", "complete", "comment", "update"}
-        ):
-            raise PermissionError("Specialists manage only their own task's lifecycle.")
+        current = self.checked_issue(agent, registry, session["issue"])
+        scope = None if coordinator else ProjectScope(self, agent, registry, current)
         team = payload.get("team") or remote["issue"]["team"]["id"]
         if team not in registry.teams:
             raise PermissionError("Select a configured Linear team.")
-        if not coordinator and team != remote["issue"]["team"]["id"]:
+        if not coordinator and not scope.project and team != remote["issue"]["team"]["id"]:
             raise PermissionError("Specialists use only their task's team metadata.")
         if action == "context":
             return {
                 "current_issue": session["issue"],
                 "allowed_teams": sorted(registry.teams),
                 "coordinator": coordinator,
+                "shared_project": scope.project
+                if scope
+                else (current.get("project") or {}).get("id"),
+                "shared_task_root": scope.root if scope else current["id"],
                 "workflow": self.linear.workflow(agent, team),
             }
         if action == "list":
@@ -173,11 +177,23 @@ class Issues:
                 or (cursor is not None and (not isinstance(cursor, str) or len(cursor) > 512))
             ):
                 raise ValueError("Invalid bounded issue search.")
-            return self.linear.issues(agent, {team}, query=query, cursor=cursor)
+            return self.linear.issues(
+                agent, {team}, query=query, cursor=cursor, scope=scope.filter() if scope else None
+            )
         issue = None if action == "create" else self.checked_issue(agent, registry, reference)
+        if scope and issue:
+            scope.require(issue)
+        if action == "save_document":
+            return self.save_document(agent, registry, session, issue, payload)
+        if action in {"project", "document", "comments"}:
+            return self.materials(agent, registry, issue, payload)
         if action == "get":
             # Keep the tool response bounded even when historical comments are large.
-            issue["description"] = (issue.get("description") or "")[:12000]
+            issue.update(
+                self.excerpt(
+                    issue.get("description") or "", payload.get("offset", 0), "description"
+                )
+            )
             for comment in issue["comments"]["nodes"]:
                 comment["body"] = (comment.get("body") or "")[:2000]
             return issue
@@ -193,8 +209,8 @@ class Issues:
         if not isinstance(fields, dict):
             raise ValueError("Issue fields must be an object.")
         fields = dict(fields)
-        if not coordinator and action == "update" and set(fields) != {"stateId"}:
-            raise PermissionError("Specialists may update only their own workflow status.")
+        if scope:
+            scope.fields(fields, creating=action == "create")
         if issue and fields.get("parentId") == issue["id"]:
             raise ValueError("An issue cannot be its own parent.")
         if action == "create":
@@ -297,6 +313,101 @@ class Issues:
                     raise RemoteError()
         result = receipt(issue)
         self.store.finish_issue_operation(identity, result)
+        return result
+
+    @staticmethod
+    def excerpt(text, offset, field):
+        if type(offset) is not int or not 0 <= offset <= len(text):
+            raise ValueError("Invalid content offset.")
+        return {
+            field: text[offset : offset + 12000],
+            "next_offset": offset + 12000 if offset + 12000 < len(text) else None,
+        }
+
+    def materials(self, agent, registry, issue, payload):
+        action = payload["action"]
+        offset = payload.get("offset", 0)
+        scope = ProjectScope(self, agent, registry, issue)
+        if action == "comments":
+            cursor = payload.get("cursor")
+            if cursor is not None and (not isinstance(cursor, str) or len(cursor) > 512):
+                raise ValueError("Invalid comment cursor.")
+            # One complete comment per page; long text is readable with offset.
+            result = self.linear.issue_comments(agent, issue["id"], cursor)
+            for row in result["nodes"]:
+                row.update(self.excerpt(row.get("body") or "", offset, "body"))
+            return result
+        if action == "project":
+            if not scope.project:
+                return {
+                    "project": None,
+                    "shared_task_root": scope.root,
+                    "message": "No Linear project is assigned; use the shared parent task tree.",
+                }
+            result = self.linear.project_materials(agent, scope.project)
+        else:
+            result = self.linear.document(agent, identifier(payload.get("document")))
+            linked_issue = (result.get("issue") or {}).get("id")
+            if linked_issue:
+                scope.require(scope.get(linked_issue))
+            elif not scope.project or (result.get("project") or {}).get("id") != scope.project:
+                raise PermissionError("The document is outside this task's project.")
+        result.update(self.excerpt(result.get("content") or "", offset, "content"))
+        return result
+
+    def save_document(self, agent, registry, session, issue, payload):
+        fields = payload.get("fields")
+        key = payload.get("key")
+        if not isinstance(key, str) or not re.fullmatch(r"[a-zA-Z0-9_-]{1,80}", key):
+            raise ValueError("Document writes require a stable request key.")
+        if (
+            not isinstance(fields, dict)
+            or set(fields) != {"title", "content"}
+            or any(
+                not isinstance(fields[name], str)
+                or not fields[name].strip()
+                or len(fields[name]) > limit
+                for name, limit in (("title", 200), ("content", 12000))
+            )
+        ):
+            raise ValueError("Provide a title and bounded document content.")
+        document = payload.get("document")
+        if document:
+            self.materials(agent, registry, issue, {"action": "document", "document": document})
+        operation = self.store.issue_operation(
+            session,
+            key,
+            {
+                "action": "save_document",
+                "issue": issue["id"],
+                "document": document,
+                "fields": fields,
+            },
+        )
+        if operation["state"] == "done":
+            return json.loads(operation["result"])
+        identity = document or operation["id"]
+        try:
+            existing = self.linear.document(agent, identity)
+        except RemoteError:
+            existing = None
+        if existing and any(existing.get(name) != value for name, value in fields.items()):
+            if not document or not self.store.claim_issue_operation(operation["id"]):
+                raise RemoteError()  # Never overwrite a later human edit on an uncertain retry.
+            self.linear.save_document(agent, identity, fields)
+        elif not existing:
+            if document:
+                raise ValueError("The requested document no longer exists.")
+            self.linear.save_document(
+                agent, identity, {**fields, "issueId": issue["id"]}, create=True
+            )
+        saved = self.linear.document(agent, identity)
+        if not saved or any(saved.get(name) != value for name, value in fields.items()):
+            raise RemoteError()
+        if not document and (saved.get("issue") or {}).get("id") != issue["id"]:
+            raise PermissionError("Created document identity conflict.")
+        result = {name: saved.get(name) for name in ("id", "title", "url")}
+        self.store.finish_issue_operation(operation["id"], result)
         return result
 
     def begin_delegated(self, agent, remote):

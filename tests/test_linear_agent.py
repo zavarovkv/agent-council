@@ -80,7 +80,7 @@ class FakeLinear:
         self.sessions = {uid(10): session()}
         self.activities = {}
         self.posts = {}
-        self.issues = {}
+        self.issue_records = {}
         self.uncertain_post = False
         self.uncertain_child = False
         self.owner_url = "https://linear.app/fixture/profiles/owner"
@@ -121,7 +121,7 @@ class FakeLinear:
         }
 
     def issue_details(self, agent, issue):
-        value = self.issues.get(issue) or next(
+        value = self.issue_records.get(issue) or next(
             (s["issue"] for s in self.sessions.values() if s["issue"]["id"] == issue), None
         )
         if value is None:
@@ -132,9 +132,22 @@ class FakeLinear:
         value.setdefault("labels", {"nodes": []})
         return copy.deepcopy(value)
 
+    def issues(self, agent, teams, *, query="", cursor=None, scope=None):
+        rows = list(self.issue_records.values()) + [s["issue"] for s in self.sessions.values()]
+        rows = {r["id"]: r for r in rows if r["team"]["id"] in teams}
+        if scope and "id" in scope:
+            rows = {k: v for k, v in rows.items() if k in scope["id"]["in"]}
+        if scope and "project" in scope:
+            rows = {
+                k: v
+                for k, v in rows.items()
+                if (v.get("project") or {}).get("id") == scope["project"]["id"]["eq"]
+            }
+        return {"nodes": list(rows.values()), "pageInfo": {"hasNextPage": False}}
+
     def update_issue(self, agent, issue, fields):
         self.issue_writes.append((issue, fields))
-        value = self.issues.get(issue) or next(
+        value = self.issue_records.get(issue) or next(
             s["issue"] for s in self.sessions.values() if s["issue"]["id"] == issue
         )
         for name, field in fields.items():
@@ -151,14 +164,18 @@ class FakeLinear:
 
     def create_issue(self, agent, fields):
         identity = fields["id"]
-        if identity in self.issues:
+        if identity in self.issue_records:
             raise RemoteError()
-        self.issues[identity] = {
+        self.issue_records[identity] = {
             "id": identity,
             "identifier": "F-3",
             "url": "https://linear.app/fixture/issue/F-3",
             "team": {"id": fields["teamId"]},
-            "creator": {"id": uid(1000)},
+            "creator": {
+                "id": uid(
+                    {"qui-gon": 1000, "dexter": 1001, "marketing": 1002, "padme": 1003}[agent.slug]
+                )
+            },
         }
         self.update_issue(
             agent, identity, {k: v for k, v in fields.items() if k not in {"id", "teamId"}}
@@ -187,8 +204,8 @@ class FakeLinear:
             raise RemoteError()
 
     def ensure_child(self, agent, child, *, parent_issue, team, delegate):
-        if child["issue"] not in self.issues:
-            self.issues[child["issue"]] = {
+        if child["issue"] not in self.issue_records:
+            self.issue_records[child["issue"]] = {
                 "id": child["issue"],
                 "url": "https://linear.app/fixture/issue/F-2",
             }
@@ -196,11 +213,11 @@ class FakeLinear:
             value = session(target, sid=11, owner=0, parent=parent_issue, creator=1000)
             value["issue"]["id"] = child["issue"]
             self.sessions[uid(11)] = value
-            self.issues[child["issue"]] = value["issue"]
+            self.issue_records[child["issue"]] = value["issue"]
         if self.uncertain_child:
             self.uncertain_child = False
             raise RemoteError()
-        return self.issues[child["issue"]]
+        return self.issue_records[child["issue"]]
 
 
 class FakeHermes:
@@ -500,7 +517,7 @@ class LinearAgentTests(unittest.TestCase):
             self.service.delegate("qui-gon", payload)
         result = self.service.delegate("qui-gon", payload)
         self.assertEqual(result, self.service.delegate("qui-gon", payload))
-        self.assertEqual(len(self.linear.issues), 1)
+        self.assertEqual(len(self.linear.issue_records), 1)
         self.hermes.finish(self.run_for(), "Delegated the research")
         self.tick()
         self.assertEqual(self.store.jobs()[0]["state"], "waiting_children")

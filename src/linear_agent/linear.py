@@ -15,7 +15,7 @@ API = "https://api.linear.app/graphql"
 TOKEN = "https://api.linear.app/oauth/token"
 SESSION_QUERY = """query CouncilSession($id:String!){agentSession(id:$id){
 id appUser{id} creator{id} dismissedAt archivedAt status
-issue{id title description url team{id} parent{id} delegate{id} creator{id}}
+issue{id title description url team{id} project{id} parent{id} delegate{id} creator{id}}
 comment{body user{id}}}}"""
 ACTIVITY_QUERY = """query CouncilActivity($id:String!){agentActivity(id:$id){
 id agentSession{id} user{id} signal content{
@@ -265,12 +265,14 @@ class Linear:
     def issue_details(self, agent, issue):
         return self.query(
             agent,
-            "query CouncilIssueDetails($id:String!){issue(id:$id){id identifier title description url archivedAt priority dueDate team{id} creator{id} delegate{id} assignee{id} project{id} parent{id} state{id name type} labels{nodes{id name}} children(first:100){nodes{id identifier state{id type}} pageInfo{hasNextPage}} comments(last:10){nodes{id body user{id name}}}}}",
+            "query CouncilIssueDetails($id:String!){issue(id:$id){documents(first:50){nodes{id title url} pageInfo{hasNextPage endCursor}} attachments(first:50){nodes{id title url} pageInfo{hasNextPage endCursor}} id identifier title description url archivedAt priority dueDate team{id} creator{id} delegate{id} assignee{id} project{id} parent{id} state{id name type} labels{nodes{id name}} children(first:100){nodes{id identifier state{id type}} pageInfo{hasNextPage}} comments(last:10){nodes{id body user{id name}}}}}",
             {"id": issue},
         )["issue"]
 
-    def issues(self, agent, teams, *, query="", cursor=None):
+    def issues(self, agent, teams, *, query="", cursor=None, scope=None):
         filters = {"team": {"id": {"in": sorted(teams)}}}
+        if scope:
+            filters.update(scope)
         if query:
             filters["title"] = {"containsIgnoreCase": query}
         return self.query(
@@ -278,6 +280,41 @@ class Linear:
             "query CouncilIssues($filter:IssueFilter!,$after:String){issues(filter:$filter,first:25,after:$after){nodes{id identifier title url priority team{id} state{id name type} assignee{id} delegate{id} project{id}} pageInfo{hasNextPage endCursor}}}",
             {"filter": filters, "after": cursor},
         )["issues"]
+
+    def issue_comments(self, agent, issue, cursor):
+        return self.query(
+            agent,
+            "query CouncilComments($id:String!,$after:String){issue(id:$id){comments(first:1,after:$after){nodes{id body user{id name}} pageInfo{hasNextPage endCursor}}}}",
+            {"id": identifier(issue), "after": cursor},
+        )["issue"]["comments"]
+
+    def project_materials(self, agent, project):
+        return self.query(
+            agent,
+            "query CouncilProject($id:String!){project(id:$id){id name url description content documents(first:50){nodes{id title url} pageInfo{hasNextPage endCursor}} attachments(first:50){nodes{id title url} pageInfo{hasNextPage endCursor}}}}",
+            {"id": identifier(project)},
+        )["project"]
+
+    def document(self, agent, document):
+        return self.query(
+            agent,
+            "query CouncilDocument($id:String!){document(id:$id){id title url content project{id} issue{id}}}",
+            {"id": identifier(document)},
+        )["document"]
+
+    def save_document(self, agent, identity, fields, *, create=False):
+        operation = "documentCreate" if create else "documentUpdate"
+        query = (
+            "mutation CouncilDocumentCreate($input:DocumentCreateInput!){documentCreate(input:$input){success document{id}}}"
+            if create
+            else "mutation CouncilDocumentUpdate($id:String!,$input:DocumentUpdateInput!){documentUpdate(id:$id,input:$input){success document{id}}}"
+        )
+        variables = (
+            {"input": {"id": identity, **fields}} if create else {"id": identity, "input": fields}
+        )
+        result = self.query(agent, query, variables)[operation]
+        if result.get("success") is not True or result["document"]["id"] != identity:
+            raise RemoteError()
 
     def create_issue(self, agent, fields):
         result = self.query(
