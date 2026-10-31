@@ -285,6 +285,40 @@ services:
       options: {max-size: 5m, max-file: "2"}
     healthcheck: *linear-executor-health
 
+  telegram-reader:
+    profiles: [research-monitor]
+    init: true
+    image: ${COUNCIL_HERMES_IMAGE:-agent-council-hermes:local}
+    entrypoint: [/opt/telegram-reader/bin/python, -m, telegram_monitor]
+    working_dir: /opt/agent-council
+    user: "${HERMES_UID:-10000}:${HERMES_GID:-10000}"
+    restart: "no"
+    read_only: true
+    stop_grace_period: 15s
+    env_file:
+      - path: ${COUNCIL_TG_READER_ENV_FILE:-/etc/agent-council/telegram-reader.env}
+        format: raw
+        required: false
+    environment:
+      HOME: /tmp
+      PYTHONDONTWRITEBYTECODE: "1"
+      PYTHONUNBUFFERED: "1"
+    volumes:
+      - type: bind
+        source: ${HERMES_WORKSPACE_DIR:?Set an absolute workspace path}/monitoring/telegram/raw
+        target: /outbox
+        bind:
+          create_host_path: false
+    networks: [research-monitor]
+    tmpfs: ["/tmp:rw,nosuid,nodev,size=32m"]
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    cpus: "0.25"
+    mem_limit: 256m
+    pids_limit: 48
+    logging:
+      driver: none
+
   certbot:
     image: certbot/certbot:v5.8.0@sha256:f70ad0adbb7e117f0fe42a63c553f28ea451edabc0148757b6efcd9735acaa20
     profiles: [maintenance]
@@ -301,6 +335,8 @@ services:
       - /var/www/hermes-acme:/var/www/hermes-acme
 
 networks:
+  research-monitor:
+    driver: bridge
   linear:
     driver: bridge
   secretary:

@@ -28,6 +28,8 @@ from .runtime import Runtime
 from .secretary import prepare as prepare_secretary
 from .setup import configure_backups
 from .snapshots import snapshot
+from .telegram_reader import collect as collect_telegram
+from .telegram_reader import configure as configure_telegram
 
 
 def pause_instruction_updates(runtime):
@@ -53,6 +55,15 @@ def parser():
         default=os.environ.get("COUNCIL_BACKUP_DIR", "/var/backups/agent-council"),
     )
     commands = result.add_subparsers(dest="action", required=True)
+    telegram = commands.add_parser(
+        "configure-telegram-monitor",
+        help="Privately authorize one pinned Telegram source",
+    )
+    telegram.add_argument("source", help="Existing source username; no @ or URL")
+    telegram.add_argument("--reauthorize", action="store_true")
+    commands.add_parser(
+        "collect-telegram-monitor", help="Collect the pinned source without sending messages"
+    )
     instructions = commands.add_parser(
         "apply-instructions", help="Install a reviewed private instruction checkout"
     )
@@ -248,6 +259,12 @@ def operate(arguments, settings):
             doctor(runtime)
         if arguments.action == "doctor":
             result = doctor(runtime)
+        elif arguments.action == "configure-telegram-monitor":
+            result = configure_telegram(
+                runtime, arguments.source, reauthorize=arguments.reauthorize
+            )
+        elif arguments.action == "collect-telegram-monitor":
+            result = collect_telegram(runtime)
         elif arguments.action == "guest-mode":
             if arguments.enable:
                 doctor(runtime)

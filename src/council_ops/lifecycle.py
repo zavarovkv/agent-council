@@ -32,6 +32,13 @@ def smoke(runtime, backup, *, image=None, prepare_copy=None, instruction_mode=No
         runtime.run(["docker", "image", "load", "--input", str(backup / "image.tar")], timeout=900)
         runtime.run(["docker", "image", "inspect", image])
     settings = runtime.settings
+    if "telegram-reader.env" in manifest["files"]:
+        from telegram_monitor.config import Settings as ReaderSettings
+
+        from .instructions import verify_capabilities
+
+        ReaderSettings.load(read_settings(backup / "telegram-reader.env"))
+        verify_capabilities(runtime, ["telegram-reader-v1"], image=image)
     mode = instruction_mode or (
         read_settings(backup / "secretary.env").get("COUNCIL_SECRETARY_INSTRUCTIONS", "image")
         if "secretary.env" in manifest["files"]
@@ -133,6 +140,11 @@ def restore(runtime, backup, *, require_idle=True):
     old_secretary = (
         settings.secretary_file.read_bytes() if settings.secretary_file.exists() else None
     )
+    old_reader = (
+        settings.telegram_reader_file.read_bytes()
+        if settings.telegram_reader_file.exists()
+        else None
+    )
     stopped = False
     try:
         for name, target in roots.items():
@@ -174,6 +186,12 @@ def restore(runtime, backup, *, require_idle=True):
             atomic_write(settings.secretary_file, (backup / "secretary.env").read_bytes())
         else:
             settings.secretary_file.unlink(missing_ok=True)
+        if "telegram-reader.env" in manifest["files"]:
+            atomic_write(
+                settings.telegram_reader_file, (backup / "telegram-reader.env").read_bytes()
+            )
+        else:
+            settings.telegram_reader_file.unlink(missing_ok=True)
         runtime.start()
         runtime.ready()
         runtime.check_protected()
@@ -199,6 +217,10 @@ def restore(runtime, backup, *, require_idle=True):
                 atomic_write(settings.secretary_file, old_secretary)
             else:
                 settings.secretary_file.unlink(missing_ok=True)
+            if old_reader is not None:
+                atomic_write(settings.telegram_reader_file, old_reader)
+            else:
+                settings.telegram_reader_file.unlink(missing_ok=True)
             runtime.start()
             runtime.ready()
         raise

@@ -126,7 +126,7 @@ def load_manifest(backup):
     if not expected.issubset(manifest.get("files", {})):
         raise OperationError("The restore point is missing required files.")
     for name, digest in manifest["files"].items():
-        if name not in expected | {"image.tar", "secretary.env"}:
+        if name not in expected | {"image.tar", "secretary.env", "telegram-reader.env"}:
             raise OperationError("Unexpected snapshot manifest file.")
         item = backup / name
         if item.is_symlink() or not item.is_file() or checksum(item) != digest:
@@ -247,6 +247,16 @@ def snapshot(runtime, *, include_image=False, restart=True, portable=False, auto
             if settings.secretary_file.exists():
                 atomic_write(backup / "secretary.env", settings.secretary_file.read_bytes())
                 files["secretary.env"] = checksum(backup / "secretary.env")
+            if settings.telegram_reader_file.exists():
+                if (
+                    settings.telegram_reader_file.is_symlink()
+                    or not settings.telegram_reader_file.is_file()
+                ):
+                    raise OperationError("Refusing an invalid Telegram reader credential file.")
+                atomic_write(
+                    backup / "telegram-reader.env", settings.telegram_reader_file.read_bytes()
+                )
+                files["telegram-reader.env"] = checksum(backup / "telegram-reader.env")
             copy_state(settings.data_dir, backup / "hermes", portable=portable, deadline=deadline)
             copy_state(settings.workspace_dir, backup / "workspace", deadline=deadline)
         if running and restart:

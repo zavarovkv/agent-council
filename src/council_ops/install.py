@@ -114,6 +114,8 @@ def recover(runtime, backup, *, rebuild=False):
     atomic_write(settings.auth_file.with_suffix(".env.format"), b"raw\n")
     if "secretary.env" in manifest["files"]:
         atomic_write(settings.secretary_file, (backup / "secretary.env").read_bytes())
+    if "telegram-reader.env" in manifest["files"]:
+        atomic_write(settings.telegram_reader_file, (backup / "telegram-reader.env").read_bytes())
     settings.update_values(
         {
             "COUNCIL_HERMES_IMAGE": image,
@@ -135,6 +137,10 @@ def recover(runtime, backup, *, rebuild=False):
     runtime.start()
     runtime.ready()
     runtime.check_protected()
+    if "telegram-reader.env" in manifest["files"]:
+        from .telegram_reader import enable_timer
+
+        enable_timer(runtime)
     if manifest.get("revision"):
         atomic_write(
             settings.env_file.with_name("revision"), (manifest["revision"] + "\n").encode()

@@ -1,0 +1,18 @@
+[Unit]
+Description=Read the pinned Telegram source for the daily competitor report
+After=docker.service network-online.target
+Requires=docker.service
+ConditionPathExists=/etc/agent-council/telegram-reader.env
+StartLimitIntervalSec=5min
+StartLimitBurst=6
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/agent-council
+ExecStart=/usr/bin/python3 /opt/agent-council/scripts/manage.py collect-telegram-monitor
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+TimeoutStartSec=4min
+Restart=on-failure
+RestartSec=30s

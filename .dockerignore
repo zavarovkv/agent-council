@@ -3,6 +3,8 @@
 !LICENSE
 !package.json
 !package-lock.json
+!requirements-telegram-reader.txt
+!requirements-telegram-reader-build.txt
 !src/
 !src/**
 !assets/
