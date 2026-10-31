@@ -175,6 +175,15 @@ class Handler(BaseHTTPRequestHandler):
                     result = self.server.service.child_tasks(slug, payload)
                 elif action == "agents":
                     result = self.server.service.agent_catalog(slug, payload)
+                elif action == "issues":
+                    try:
+                        result = self.server.service.issue_tasks(slug, payload)
+                    except (ValueError, PermissionError) as error:
+                        self.respond(
+                            403 if isinstance(error, PermissionError) else 400,
+                            {"error": str(error)},
+                        )
+                        return
                 else:
                     self.respond(404, {"error": "not_found"})
                     return

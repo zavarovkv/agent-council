@@ -62,6 +62,11 @@ class Store:
                     origin_job TEXT NOT NULL DEFAULT '',
                     notified INTEGER NOT NULL DEFAULT 0, created REAL NOT NULL
                 );
+                CREATE TABLE IF NOT EXISTS issue_operations (
+                    id TEXT PRIMARY KEY, agent TEXT NOT NULL, session TEXT NOT NULL,
+                    request TEXT NOT NULL, state TEXT NOT NULL DEFAULT 'pending',
+                    result TEXT NOT NULL DEFAULT '', created REAL NOT NULL
+                );
             """)
             self._prune(db)
         self.path.chmod(0o600)
@@ -94,6 +99,50 @@ class Store:
             "DELETE FROM sessions WHERE updated<? AND NOT EXISTS(SELECT 1 FROM jobs WHERE jobs.agent=sessions.agent AND jobs.session=sessions.id)",
             (self.clock() - 30 * 86400,),
         )
+        db.execute("DELETE FROM issue_operations WHERE created<?", (self.clock() - 30 * 86400,))
+
+    def issue_operation(self, session, key, request):
+        identity = stable_id(session["agent"] + ":" + session["id"] + ":issue:" + key)
+        body = json.dumps(request, sort_keys=True, ensure_ascii=False)
+        with self.database() as db:
+            db.execute("BEGIN IMMEDIATE")
+            row = db.execute("SELECT * FROM issue_operations WHERE id=?", (identity,)).fetchone()
+            if row:
+                if row["request"] != body:
+                    raise ValueError("Request key already belongs to a different issue operation.")
+                return dict(row)
+            if (
+                db.execute(
+                    "SELECT count(*) FROM issue_operations WHERE agent=? AND session=?",
+                    (session["agent"], session["id"]),
+                ).fetchone()[0]
+                >= 100
+            ):
+                raise PermissionError("Issue operation limit reached for this session.")
+            db.execute(
+                "INSERT INTO issue_operations(id,agent,session,request,created) VALUES(?,?,?,?,?)",
+                (identity, session["agent"], session["id"], body, self.clock()),
+            )
+            return dict(
+                db.execute("SELECT * FROM issue_operations WHERE id=?", (identity,)).fetchone()
+            )
+
+    def claim_issue_operation(self, identity):
+        with self.database() as db:
+            return (
+                db.execute(
+                    "UPDATE issue_operations SET state='attempted' WHERE id=? AND state='pending'",
+                    (identity,),
+                ).rowcount
+                == 1
+            )
+
+    def finish_issue_operation(self, identity, result):
+        with self.database() as db:
+            db.execute(
+                "UPDATE issue_operations SET state='done',result=? WHERE id=?",
+                (json.dumps(result, ensure_ascii=False), identity),
+            )
 
     def install(self, agent, app_user, organization, access, refresh, expires):
         with self.database() as db:

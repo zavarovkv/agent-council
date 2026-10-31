@@ -94,7 +94,7 @@ inventory=call('/v1/toolsets')['data']
 enabled={v['name'] for v in inventory if v['enabled']}
 assert enabled=={'web','clarify','council-linear'}, enabled
 tools={tool for v in inventory if v['enabled'] for tool in v['tools']}
-assert {'linear_delegate','linear_child_tasks','linear_agents','council_skill','clarify'}<=tools, tools
+assert {'linear_delegate','linear_child_tasks','linear_agents','linear_issues','council_skill','clarify'}<=tools, tools
 assert not {'terminal','read_file','execute_code','memory','delegate_task'}&tools
 first=call('/v1/runs',{'session_id':'linear_offline_fixture','input':'Offline fixture. Reply with one word; do not call tools.'},key='fixture-admission')
 second=call('/v1/runs',{'session_id':'linear_offline_fixture','input':'Offline fixture. Reply with one word; do not call tools.'},key='fixture-admission')

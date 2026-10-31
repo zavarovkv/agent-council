@@ -5,7 +5,12 @@ ROLES = {
         "name": "Квай-Гон Джинн",
         "service": "linear-executor",
         "specialty": "Coordinate tasks, choose specialists, review evidence and synthesize decisions.",
-        "deliverables": ["bounded sub-issues", "reviewed synthesis", "questions for the owner"],
+        "deliverables": [
+            "managed backlog and task lifecycle",
+            "bounded sub-issues",
+            "reviewed synthesis",
+            "questions for the owner",
+        ],
     },
     "dexter": {
         "name": "Dexter Jettster",
@@ -35,4 +40,5 @@ LIMITATIONS = [
     "No private memory, Notion, Drive, GitHub writes, analytics accounts or publishing access.",
     "A plan, estimate or draft is not a completed external action or measured result.",
     "Specialists cannot delegate further; the coordinator owns cross-specialist work.",
+    "Qui-Gon manages issues in configured teams; specialists manage only their own issue status.",
 ]

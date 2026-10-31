@@ -35,16 +35,75 @@ def call(path, args):
             if len(body) > 65536:
                 raise ValueError("Oversized tool response")
             return json.dumps(json.loads(body), ensure_ascii=False)
-    except Exception:
+    except urllib.error.HTTPError as error:
+        if error.code in {400, 403}:
+            try:
+                return json.dumps(json.loads(error.read(4096)), ensure_ascii=False)
+            except (ValueError, OSError):
+                pass
         return json.dumps(
             {
-                "error": "Sub-issue operation is unavailable. Reuse the same request key when retrying."
+                "error": "Linear operation was not confirmed. Reuse the same request key; do not claim success."
             }
+        )
+    except Exception:
+        return json.dumps(
+            {"error": "Linear operation is unavailable. Reuse the same request key when retrying."}
         )
 
 
 def register(ctx):
     for name, description, properties, required, path in (
+        (
+            "linear_issues",
+            "Manage Linear tasks: context lists team states/projects/members/labels; list searches titles; get reads an issue and comments; create makes ordinary Backlog tasks without delegating them; update changes task fields; comment posts a note; start moves to In Progress; complete marks Done only with a verified deliverable and no open children. Qui-Gon manages allowed teams; specialists manage only their current task. Mutations require a stable key, reused on retries. Never claim a completed action without its receipt.",
+            {
+                "action": {
+                    "type": "string",
+                    "enum": [
+                        "context",
+                        "list",
+                        "get",
+                        "create",
+                        "update",
+                        "comment",
+                        "start",
+                        "complete",
+                    ],
+                },
+                "issue": {
+                    "type": "string",
+                    "description": "Issue UUID or identifier; defaults to current task.",
+                },
+                "team": {
+                    "type": "string",
+                    "description": "Allowed team UUID; defaults to current task's team.",
+                },
+                "query": {"type": "string", "maxLength": 200},
+                "cursor": {"type": "string"},
+                "key": {"type": "string", "maxLength": 80},
+                "fields": {
+                    "type": "object",
+                    "properties": {
+                        "title": {"type": "string", "maxLength": 200},
+                        "description": {"type": "string", "maxLength": 12000},
+                        "priority": {"type": "integer", "minimum": 0, "maximum": 4},
+                        "stateId": {"type": "string"},
+                        "projectId": {"type": ["string", "null"]},
+                        "parentId": {"type": ["string", "null"]},
+                        "assigneeId": {"type": ["string", "null"]},
+                        "labelIds": {"type": "array", "items": {"type": "string"}, "maxItems": 30},
+                        "dueDate": {"type": ["string", "null"]},
+                    },
+                    "additionalProperties": False,
+                },
+                "body": {"type": "string", "maxLength": 10000},
+                "result": {"type": "string", "maxLength": 4000},
+                "verification": {"type": "string", "maxLength": 4000},
+            },
+            ["action"],
+            "issues",
+        ),
         (
             "linear_delegate",
             "Create or retrieve one idempotent sub-issue under the current Linear task for an allowed specialist. Reuse key when retrying; the coordinator receives the result automatically.",
