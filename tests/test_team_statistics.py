@@ -2,6 +2,7 @@
 
 import json
 import sqlite3
+import struct
 import sys
 import tempfile
 import unittest
@@ -12,11 +13,22 @@ from unittest.mock import Mock
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from council_team.catalog import ROLES
-from council_team.view import PROFILES, issue_counts, snapshot, token_counts
+from council_team.view import AVATARS, PROFILES, issue_counts, snapshot, token_counts
 from linear_agent.statistics import collect, publish
 
 
 class TeamStatisticsTests(unittest.TestCase):
+    def test_published_portraits_share_png_format_and_square_dimensions(self):
+        assets = Path(__file__).resolve().parents[1] / "assets/agents"
+        self.assertEqual(set(AVATARS), {"qui-gon", "dexter", "lando", "padme"})
+        for name in AVATARS.values():
+            with self.subTest(name=name):
+                self.assertEqual(Path(name).suffix, ".png")
+                header = (assets / name).read_bytes()[:24]
+                self.assertEqual(header[:8], b"\x89PNG\r\n\x1a\n")
+                self.assertEqual(header[12:16], b"IHDR")
+                self.assertEqual(struct.unpack(">II", header[16:24]), (256, 256))
+
     def setUp(self):
         temporary = tempfile.TemporaryDirectory()
         self.addCleanup(temporary.cleanup)
