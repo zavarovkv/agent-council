@@ -60,7 +60,7 @@ def register(ctx):
     for name, description, properties, required, path in (
         (
             "linear_issues",
-            "Manage Linear tasks: context lists team states/projects/members/labels; list searches titles; get reads an issue and comments; create makes ordinary Backlog tasks without delegating them; update changes task fields; comment posts a note; start moves to In Progress; complete marks Done only with a verified deliverable and no open children. Qui-Gon manages allowed teams; all specialists can read, create and update tasks throughout their current project or shared parent task tree. project reads project materials, document reads a linked document, save_document creates or updates one using fields.title/content (document UUID only for updates), comments pages complete comments; use cursor and offset/next_offset for long content. Mutations require a stable key, reused on retries. Never claim a completed action without its receipt.",
+            "Manage Linear tasks: context lists team states/projects/members/labels; list searches titles; get reads an issue and comments; create makes ordinary Backlog tasks without delegating them; update changes task fields; comment posts a note; start moves to In Progress; review submits a verified deliverable to In Review after child work finishes; only the human owner marks Done. Use start to return to In Progress before revisions. Legacy complete is a review alias, never Done. Qui-Gon manages allowed teams; all specialists can read, create and update tasks throughout their current project or shared parent task tree. project reads project materials, document reads a linked document, save_document creates or updates one using fields.title/content (document UUID only for updates), comments pages complete comments; use cursor and offset/next_offset for long content. Mutations require a stable key, reused on retries. Never claim a completed action without its receipt.",
             {
                 "action": {
                     "type": "string",
@@ -76,6 +76,7 @@ def register(ctx):
                         "update",
                         "comment",
                         "start",
+                        "review",
                         "complete",
                     ],
                 },

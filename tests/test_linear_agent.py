@@ -102,6 +102,7 @@ class FakeLinear:
                             ("In Progress", "started"),
                             ("Done", "completed"),
                             ("Canceled", "canceled"),
+                            ("In Review", "started"),
                         )
                     )
                 ]

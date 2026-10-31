@@ -23,10 +23,31 @@ FIELDS = {
 
 
 def first_state(workflow, category):
-    states = [s for s in workflow["states"]["nodes"] if s["type"] == category]
+    states = [
+        s
+        for s in workflow["states"]["nodes"]
+        if s["type"] == category and (category != "started" or not is_review(s))
+    ]
     if not states:
         raise ValueError("The team has no workflow state of the requested type.")
     return min(states, key=lambda s: (s["position"], s["id"]))
+
+
+def is_review(state):
+    return state.get("name", "").strip().casefold() in {
+        "in review",
+        "review",
+        "на проверке",
+        "на ревью",
+        "на согласовании",
+    }
+
+
+def review_state(workflow):
+    states = [s for s in workflow["states"]["nodes"] if s["type"] == "started" and is_review(s)]
+    if len(states) != 1:
+        raise ValueError("Configure one unambiguous In Review state; only the owner marks Done.")
+    return states[0]
 
 
 def matches(issue, fields):
@@ -149,6 +170,8 @@ class Issues:
             raise PermissionError("This task's execution policy changed.")
         _, remote = self.service.authorize(registry, agent, session["id"])
         action = payload.get("action")
+        if action == "complete":
+            action = "review"  # Compatibility: older sessions cannot close an issue either.
         coordinator = slug == "qui-gon" and not session["depth"]
         reference = payload.get("issue") or session["issue"]
         current = self.checked_issue(agent, registry, session["issue"])
@@ -184,6 +207,8 @@ class Issues:
         if scope and issue:
             scope.require(issue)
         if action == "save_document":
+            if is_review(issue["state"]):
+                raise ValueError("Move the task to In Progress before revising its material.")
             return self.save_document(agent, registry, session, issue, payload)
         if action in {"project", "document", "comments"}:
             return self.materials(agent, registry, issue, payload)
@@ -197,7 +222,7 @@ class Issues:
             for comment in issue["comments"]["nodes"]:
                 comment["body"] = (comment.get("body") or "")[:2000]
             return issue
-        if action not in {"create", "update", "comment", "start", "complete"}:
+        if action not in {"create", "update", "comment", "start", "review"}:
             raise ValueError("Unknown issue action.")
         key = payload.get("key")
         if not isinstance(key, str) or not re.fullmatch(r"[a-zA-Z0-9_-]{1,80}", key):
@@ -219,35 +244,54 @@ class Issues:
                 raise ValueError("An ordinary issue needs a title.")
         elif action == "start":
             fields = {"stateId": first_state(workflow, "started")["id"]}
-        elif action == "complete":
+        elif action == "review":
             for name, limit in (("result", 500), ("verification", 160)):
                 if (
                     not isinstance(payload.get(name), str)
                     or not 1 <= len(payload[name].strip()) <= limit
                 ):
                     raise ValueError(
-                        f"Completion requires {name} in 1–{limit} characters. "
+                        f"Review submission requires {name} in 1–{limit} characters. "
                         "Summarize the outcome and link the full deliverable saved with "
                         "save_document; do not include a work log or omit material uncertainty."
                     )
             if issue["id"] == session["issue"] and any(
                 child["state"] != "done" for child in self.store.children(slug, session["id"])
             ):
-                raise ValueError("Wait for delegated results before completing the parent task.")
+                raise ValueError(
+                    "Wait for delegated results before submitting the parent for review."
+                )
+            review = review_state(workflow)
             children = issue["children"]
             if children["pageInfo"]["hasNextPage"] or any(
                 c["state"]["type"] not in {"completed", "canceled", "duplicate"}
+                and c["state"].get("id") != review["id"]
                 for c in children["nodes"]
             ):
-                raise ValueError("Complete or resolve open sub-issues before closing their parent.")
-            fields = {"stateId": first_state(workflow, "completed")["id"]}
+                raise ValueError(
+                    "Finish active sub-issues before submitting their parent for review."
+                )
+            if issue["state"]["type"] in {"completed", "canceled", "duplicate"}:
+                raise ValueError("Do not automatically reopen a terminal issue.")
+            fields = {"stateId": review["id"]}
         if action != "comment":
             self.validate_fields(agent, registry, workflow, fields)
             state = next(
                 (s for s in workflow["states"]["nodes"] if s["id"] == fields.get("stateId")), None
             )
-            if state and state["type"] == "completed" and action != "complete":
-                raise ValueError("Use complete with the verified deliverable to mark a task Done.")
+            if state and state["type"] == "completed":
+                raise ValueError("Only the owner may mark a task Done; submit it for review.")
+            if state and is_review(state) and action != "review":
+                raise ValueError(
+                    "Use review with the result and verification to request acceptance."
+                )
+            if (
+                issue
+                and is_review(issue["state"])
+                and {"title", "description"} & fields.keys()
+                and (not state or state["type"] != "started" or is_review(state))
+            ):
+                raise ValueError("Move the task to In Progress before revising its material.")
         if action == "create" and any(
             s["id"] == fields["stateId"] and s["type"] == "canceled"
             for s in workflow["states"]["nodes"]
@@ -260,11 +304,11 @@ class Issues:
             if action == "comment"
             else (
                 payload["result"].strip() + "\n\n**Проверено:** " + payload["verification"].strip()
-                if action == "complete"
+                if action == "review"
                 else None
             )
         )
-        if action in {"comment", "complete"} and (
+        if action in {"comment", "review"} and (
             not isinstance(body, str) or not body.strip() or len(body) > 10000
         ):
             raise ValueError("A bounded non-empty comment is required.")
