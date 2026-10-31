@@ -55,4 +55,16 @@ local repository, verifies wrong-password rejection, restores a real Hermes sess
 database and checks its contents through the pinned runtime. No R2 keys are used.
 
 
+## Dependency updates
+
+Keep GitHub Actions pinned to full release commit SHAs. Dependabot groups minor
+and patch updates for official actions; major action updates remain separate
+proposals and require compatibility review and CI.
+
+The asset build, npm engine and CI use Node 24 together. Docker digest and
+compatible updates remain eligible, while automatic Node major bumps are ignored.
+Upgrade that major deliberately across the image, `package.json`, CI and docs,
+choosing a supported LTS release. Review runtime/dependency updates independently
+of private instruction releases and deployment credentials.
+
 See [CONTRIBUTING.md](../CONTRIBUTING.md) for contribution guidelines.
