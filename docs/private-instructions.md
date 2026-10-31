@@ -82,6 +82,11 @@ checkpoint and installation. Git hooks are disabled for these operations. Dirty
 or ignored working-copy files are rejected. New files adopt byte-identical runtime
 copies; conflicting unmanaged files and unsaved managed edits stop installation.
 Matching local edits already reviewed in the selected commit can be adopted.
+For an existing unmanaged default that the reviewed candidate intentionally
+replaces, pass `--adopt RELATIVE_RUNTIME_PATH=EXPECTED_CURRENT_SHA256` for each
+file. Review those current bytes first. A missing/mismatched file or already
+managed path is rejected; this cannot bypass managed-file drift. Adoption is
+validated again on the copied profile and included in the normal rollback.
 
 The installer applies the plan to a copied profile and verifies it offline in
 the recorded image before changing live files. It installs only named artifacts,

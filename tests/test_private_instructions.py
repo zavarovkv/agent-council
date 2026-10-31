@@ -107,6 +107,37 @@ class PrivateInstructionTests(unittest.TestCase):
         self.assertEqual((self.home / "history.txt").read_text(), "original history")
         self.assertEqual(json.loads((self.home / MARKER).read_text())["revision"], REVISION)
 
+    def test_explicit_adoption_requires_reviewed_current_bytes_and_cannot_bypass_managed_drift(
+        self,
+    ):
+        import hashlib
+
+        path = self.home / "SOUL.md"
+        path.write_text("Previous unmanaged default")
+        checksum = hashlib.sha256(path.read_bytes()).hexdigest()
+        files = collect(self.source, self.home)
+        with self.assertRaises(OperationError):
+            install_files(self.home, files, REVISION, self.uid, self.gid)
+        with self.assertRaises(OperationError):
+            install_files(
+                self.home, files, REVISION, self.uid, self.gid, adoptions={"SOUL.md": "0" * 64}
+            )
+        self.assertEqual(path.read_text(), "Previous unmanaged default")
+        install_files(
+            self.home, files, REVISION, self.uid, self.gid, adoptions={"SOUL.md": checksum}
+        )
+        self.assertEqual(path.read_text(), "Private assistant identity")
+        path.write_text("New unreviewed local edit")
+        with self.assertRaises(OperationError):
+            install_files(
+                self.home,
+                files,
+                REVISION,
+                self.uid,
+                self.gid,
+                adoptions={"SOUL.md": hashlib.sha256(path.read_bytes()).hexdigest()},
+            )
+
     def test_combined_code_instruction_release_rolls_back_both_and_uses_one_cutover(self):
         self.install()
         (self.source / "assistant/SOUL.md").write_text("Reviewed next identity")

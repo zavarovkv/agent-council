@@ -59,6 +59,13 @@ def parser():
     instructions.add_argument("source", type=Path)
     instructions.add_argument("--revision", required=True, help="Full reviewed commit SHA")
     instructions.add_argument(
+        "--adopt",
+        action="append",
+        default=[],
+        metavar="PATH=SHA256",
+        help="Adopt one reviewed unmanaged instruction at its exact current checksum",
+    )
+    instructions.add_argument(
         "--fetch",
         action="store_true",
         help="Fetch and select this exact revision under the maintenance lock",
@@ -272,8 +279,18 @@ def operate(arguments, settings):
         elif arguments.action == "flush-research":
             result = flush_research(runtime)
         elif arguments.action == "apply-instructions":
+            adoptions = {}
+            for item in arguments.adopt:
+                name, separator, checksum = item.partition("=")
+                if not separator or name in adoptions:
+                    raise OperationError("Use distinct PATH=SHA256 instruction adoptions.")
+                adoptions[name] = checksum
             result = apply_instructions(
-                runtime, arguments.source, arguments.revision, fetch=arguments.fetch
+                runtime,
+                arguments.source,
+                arguments.revision,
+                fetch=arguments.fetch,
+                adoptions=adoptions,
             )
         elif arguments.action == "export-instructions":
             result = export_instructions(

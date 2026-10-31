@@ -198,8 +198,20 @@ def previous_files(home):
     return value["files"]
 
 
-def validate_existing(home, files):
+def validate_existing(home, files, *, adoptions=None):
     previous = previous_files(home)
+    for name, checksum in (adoptions or {}).items():
+        path = destination(home, name)
+        if (
+            name in previous
+            or name not in files
+            or not isinstance(checksum, str)
+            or not re.fullmatch(r"[a-f0-9]{64}", checksum)
+            or not path.is_file()
+            or digest(path.read_bytes()) != checksum
+        ):
+            raise OperationError("Adopt only an unmanaged candidate file at its reviewed checksum.")
+        previous[name] = checksum
     for name in previous.keys() | files.keys():
         path = destination(home, name)
         if name in previous:
@@ -268,8 +280,8 @@ def verify_capabilities(runtime, required, *, image=None):
         )
 
 
-def install_files(home, files, revision, uid, gid, *, capabilities=()):
-    previous = validate_existing(home, files)
+def install_files(home, files, revision, uid, gid, *, capabilities=(), adoptions=None):
+    previous = validate_existing(home, files, adoptions=adoptions)
     for name, artifact in files.items():
         path = destination(home, name)
         missing = [
@@ -395,13 +407,13 @@ def sync(runtime, source):
         raise
 
 
-def apply(runtime, source, revision, *, fetch=False):
+def apply(runtime, source, revision, *, fetch=False, adoptions=None):
     source = source.absolute()
     checkout(runtime, source, revision, fetch=fetch)
     files = collect(source, runtime.settings.data_dir)
     capabilities = source_requirements(source)
     verify_capabilities(runtime, capabilities)
-    validate_existing(runtime.settings.data_dir, files)
+    validate_existing(runtime.settings.data_dir, files, adoptions=adoptions)
     checkout(runtime, source, revision)
     marker = runtime.settings.data_dir / MARKER
     has_secretary = any(name.startswith(".council/secretary/instructions/") for name in files)
@@ -486,13 +498,19 @@ def apply(runtime, source, revision, *, fetch=False):
             runtime,
             backup,
             prepare_copy=lambda home: install_files(
-                home, files, revision, uid, gid, capabilities=capabilities
+                home, files, revision, uid, gid, capabilities=capabilities, adoptions=adoptions
             ),
             instruction_mode="profile" if has_secretary else "image",
         )
         changed = True
         install_files(
-            runtime.settings.data_dir, files, revision, uid, gid, capabilities=capabilities
+            runtime.settings.data_dir,
+            files,
+            revision,
+            uid,
+            gid,
+            capabilities=capabilities,
+            adoptions=adoptions,
         )
         if has_secretary or had_secretary:
             values = read_settings(runtime.settings.secretary_file)
