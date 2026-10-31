@@ -112,6 +112,140 @@ services:
       timeout: 5s
       retries: 3
 
+  linear-adapter:
+    init: true
+    profiles: [linear]
+    image: ${COUNCIL_HERMES_IMAGE:-agent-council-hermes:local}
+    entrypoint: [/opt/hermes/.venv/bin/python, -m, linear_agent]
+    working_dir: /opt/agent-council
+    user: "${HERMES_UID:-10000}:${HERMES_GID:-10000}"
+    restart: unless-stopped
+    stop_grace_period: 20s
+    read_only: true
+    environment:
+      HERMES_HOME: /opt/data
+      PYTHONDONTWRITEBYTECODE: "1"
+      PYTHONUNBUFFERED: "1"
+    volumes:
+      - type: bind
+        source: ${HERMES_DATA_DIR:?Set an absolute data path}/.council/linear/bridge
+        target: /opt/data
+        bind:
+          create_host_path: false
+    ports:
+      - "127.0.0.1:${COUNCIL_LINEAR_HTTP_PORT:-9121}:9121"
+    networks: [linear]
+    tmpfs: ["/tmp:rw,nosuid,nodev,size=32m"]
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    cpus: "0.25"
+    mem_limit: 256m
+    pids_limit: 48
+    logging:
+      driver: local
+      options: {max-size: 5m, max-file: "2"}
+    healthcheck:
+      test: [CMD, /opt/hermes/.venv/bin/python, -c, "import json,urllib.request; assert json.load(urllib.request.urlopen('http://127.0.0.1:9121/health', timeout=3))['status']=='ok'"]
+      start_period: 10s
+      interval: 15s
+      timeout: 5s
+      retries: 3
+
+  linear-executor:
+    init: true
+    profiles: [linear]
+    image: ${COUNCIL_HERMES_IMAGE:-agent-council-hermes:local}
+    entrypoint: [/opt/hermes/.venv/bin/hermes]
+    command: [gateway, run]
+    user: "${HERMES_UID:-10000}:${HERMES_GID:-10000}"
+    restart: unless-stopped
+    stop_grace_period: 30s
+    read_only: true
+    env_file:
+      - path: ${HERMES_DATA_DIR:?Set an absolute data path}/.council/linear/bridge/qui-gon.env
+        format: raw
+        required: false
+    environment: &linear-executor-environment
+      HERMES_HOME: /opt/data
+      HERMES_WRITE_SAFE_ROOT: /workspace
+      HERMES_DASHBOARD: "0"
+      API_SERVER_ENABLED: "true"
+      API_SERVER_HOST: 0.0.0.0
+      API_SERVER_PORT: "8642"
+      HOME: /opt/data/home
+      USER: hermes
+      LOGNAME: hermes
+      XDG_CACHE_HOME: /tmp/cache
+      PYTHONDONTWRITEBYTECODE: "1"
+      PYTHONUNBUFFERED: "1"
+    volumes:
+      - type: bind
+        source: ${HERMES_DATA_DIR:?Set an absolute data path}/.council/linear/qui-gon
+        target: /opt/data
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ${HERMES_DATA_DIR:?Set an absolute data path}/.council/linear/qui-gon/workspace
+        target: /workspace
+        bind:
+          create_host_path: false
+    working_dir: /workspace
+    networks: [linear]
+    tmpfs: ["/tmp:rw,nosuid,nodev,size=128m"]
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    cpus: "0.5"
+    mem_limit: 768m
+    pids_limit: 96
+    logging:
+      driver: local
+      options: {max-size: 5m, max-file: "2"}
+    healthcheck: &linear-executor-health
+      test: [CMD, /opt/hermes/.venv/bin/python, -c, "import os,json,urllib.request; r=urllib.request.Request('http://127.0.0.1:8642/v1/capabilities',headers={'Authorization':'Bearer '+os.environ['API_SERVER_KEY']}); assert isinstance(json.load(urllib.request.urlopen(r,timeout=3)),dict)"]
+      start_period: 30s
+      interval: 15s
+      timeout: 5s
+      retries: 4
+
+  dexter-executor:
+    init: true
+    profiles: [linear-dexter]
+    image: ${COUNCIL_HERMES_IMAGE:-agent-council-hermes:local}
+    entrypoint: [/opt/hermes/.venv/bin/hermes]
+    command: [gateway, run]
+    user: "${HERMES_UID:-10000}:${HERMES_GID:-10000}"
+    restart: unless-stopped
+    stop_grace_period: 30s
+    read_only: true
+    env_file:
+      - path: ${HERMES_DATA_DIR:?Set an absolute data path}/.council/linear/bridge/dexter.env
+        format: raw
+        required: false
+    environment: *linear-executor-environment
+    volumes:
+      - type: bind
+        source: ${HERMES_DATA_DIR:?Set an absolute data path}/.council/linear/dexter
+        target: /opt/data
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ${HERMES_DATA_DIR:?Set an absolute data path}/.council/linear/dexter/workspace
+        target: /workspace
+        bind:
+          create_host_path: false
+    working_dir: /workspace
+    networks: [linear]
+    tmpfs: ["/tmp:rw,nosuid,nodev,size=128m"]
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    cpus: "0.5"
+    mem_limit: 768m
+    pids_limit: 96
+    logging:
+      driver: local
+      options: {max-size: 5m, max-file: "2"}
+    healthcheck: *linear-executor-health
+
   certbot:
     image: certbot/certbot:v5.8.0@sha256:f70ad0adbb7e117f0fe42a63c553f28ea451edabc0148757b6efcd9735acaa20
     profiles: [maintenance]
@@ -128,6 +262,8 @@ services:
       - /var/www/hermes-acme:/var/www/hermes-acme
 
 networks:
+  linear:
+    driver: bridge
   secretary:
     driver: bridge
   hermes:

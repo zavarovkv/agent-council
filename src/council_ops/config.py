@@ -119,6 +119,23 @@ class Settings:
         port = values.get("HERMES_HTTP_PORT", "9119")
         if not port.isdigit() or not 1024 <= int(port) <= 65535:
             raise OperationError("HERMES_HTTP_PORT must be between 1024 and 65535.")
+        linear_port = values.get("COUNCIL_LINEAR_HTTP_PORT", "9121")
+        if (
+            not linear_port.isdigit()
+            or not 1024 <= int(linear_port) <= 65535
+            or int(linear_port) == int(port)
+        ):
+            raise OperationError(
+                "Use a distinct loopback COUNCIL_LINEAR_HTTP_PORT between 1024 and 65535."
+            )
+        for name in ("COUNCIL_LINEAR_ENABLED", "COUNCIL_LINEAR_DEXTER_ENABLED"):
+            if values.get(name, "false") not in {"true", "false"}:
+                raise OperationError("Use true or false for optional Linear services.")
+        if (
+            values.get("COUNCIL_LINEAR_DEXTER_ENABLED") == "true"
+            and values.get("COUNCIL_LINEAR_ENABLED") != "true"
+        ):
+            raise OperationError("The specialist requires the Linear adapter and coordinator.")
         if not values.get("COUNCIL_HERMES_IMAGE"):
             raise OperationError("Set COUNCIL_HERMES_IMAGE explicitly.")
         return settings

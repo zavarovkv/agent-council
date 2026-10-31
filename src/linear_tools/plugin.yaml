@@ -1,0 +1,8 @@
+name: council-linear
+label: Council Linear Tasks
+kind: standalone
+version: 1.0.0
+requires_hermes: ">=0.22.5"
+description: Task-bound sub-issue delegation through the isolated Linear adapter.
+provides_tools: [linear_delegate, linear_child_tasks]
+provides_hooks: []

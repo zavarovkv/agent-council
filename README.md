@@ -82,5 +82,7 @@ independent HTTPS checks.
 Notion reports and their parent-page index.
 
 [Linear setup](docs/linear.md) connects the personal assistant to issues and projects.
+The optional [Linear agents](docs/linear-agents.md) receive delegated issues,
+ask for clarification and route sub-issues to isolated executors.
 
 [MIT](LICENSE). Dependencies retain their own licenses.

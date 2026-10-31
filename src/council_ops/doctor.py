@@ -259,6 +259,8 @@ def research_status(settings):
 
 
 def doctor(runtime):
+    from .linear_state import inspect_services
+
     runtime.compose("config", "--quiet")
     inspected = runtime.inspect()
     expected = {
@@ -414,4 +416,5 @@ def doctor(runtime):
         "backups": backups,
         "instructions": instructions,
         "research": research,
+        "linear": inspect_services(runtime),
     }

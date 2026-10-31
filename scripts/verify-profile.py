@@ -53,6 +53,37 @@ def main():
     if home != Path("/opt/data") or os.geteuid() == 0:
         raise ValueError("Verify a mounted copy as the unprivileged runtime user.")
     read_user_config_raw(home / "config.yaml")
+    linear = home / ".council/linear"
+    if (linear / ".managed").exists():
+        sys.path.insert(0, "/opt/agent-council")
+        from linear_agent.config import Registry, private_json
+
+        plan = private_json(linear / "bridge/plan.json")
+        if (linear / "bridge/agents.json").exists():
+            Registry.load(linear / "bridge")
+        for slug in plan["agents"]:
+            profile = linear / slug
+            config = read_user_config_raw(profile / "config.yaml")
+            if (
+                profile.resolve() != profile
+                or set(config.get("platform_toolsets", {}).get("api_server", []))
+                != {"web", "clarify", "council-linear"}
+                or config.get("mcp_servers") != {}
+                or config.get("plugins", {}).get("enabled") != ["council-linear"]
+                or not (profile / "SOUL.md").is_file()
+            ):
+                raise ValueError("Invalid isolated Linear executor policy.")
+            for path in profile.rglob("*.db"):
+                if path.resolve() != path:
+                    raise ValueError("Refusing a symlinked executor store.")
+                with closing(sqlite3.connect(path.as_uri() + "?mode=ro", uri=True)) as db:
+                    if db.execute("PRAGMA quick_check").fetchall() != [("ok",)]:
+                        raise ValueError("Linear executor store integrity check failed.")
+        store = linear / "bridge/linear.sqlite3"
+        if store.exists():
+            with closing(sqlite3.connect(store.as_uri() + "?mode=ro", uri=True)) as db:
+                if db.execute("PRAGMA quick_check").fetchall() != [("ok",)]:
+                    raise ValueError("Linear bridge store integrity check failed.")
     verify_managed_skills(home)
     guest_policy = home / "plugin-data/council-secretary/guest.json"
     if guest_policy.exists() or guest_policy.is_symlink():

@@ -18,7 +18,7 @@ LABEL org.opencontainers.image.source="https://github.com/zavarovkv/agent-counci
 LABEL org.opencontainers.image.description="Hermes integration for Agent Council"
 LABEL org.opencontainers.image.revision="${COUNCIL_REVISION}"
 LABEL org.opencontainers.image.licenses="MIT"
-LABEL io.agent-council.capabilities="private-instructions-v1,research-filing-v1,telegram-guests-v1,telegram-guest-owner-v1"
+LABEL io.agent-council.capabilities="private-instructions-v1,research-filing-v1,telegram-guests-v1,telegram-guest-owner-v1,linear-agents-v1"
 
 COPY LICENSE /opt/agent-council/LICENSE
 COPY scripts/healthcheck.py scripts/verify-profile.py /opt/agent-council/
@@ -43,8 +43,11 @@ RUN chmod -R a+rX,go-w /opt/hermes/plugins/dashboard_auth/telegram_owner
 # Native SDK hook, plus a separate tool-free HTTP worker. No upstream source patches.
 COPY src/telegram_secretary/ /opt/hermes/plugins/council-secretary/
 COPY src/secretary_worker/ /opt/agent-council/secretary_worker/
+COPY src/linear_agent/ /opt/agent-council/linear_agent/
+COPY src/linear_tools/ /opt/hermes/plugins/council-linear/
 COPY src/research_filing/ /opt/hermes/plugins/council-research/
 RUN chmod -R a+rX,go-w /opt/hermes/plugins/council-secretary /opt/hermes/plugins/council-research /opt/agent-council/secretary_worker
+RUN chmod -R a+rX,go-w /opt/agent-council/linear_agent /opt/hermes/plugins/council-linear
 
 COPY assets/login/ /opt/agent-council-theme/
 COPY --from=web-assets /styles/node_modules/beauty-css/dist/beauty.min.css /opt/agent-council-theme/dependencies/beauty.min.css

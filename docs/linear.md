@@ -1,5 +1,9 @@
 # Linear
 
+For native agents that receive delegation, @mentions and sub-issues inside
+Linear, see [Linear agents](linear-agents.md). The MCP connection below lets the
+personal assistant operate Linear; it does not create a visible agent identity.
+
 Connect the personal coordinator to Linear through Hermes' built-in `linear`
 catalog entry and [Linear's official MCP](https://linear.app/docs/mcp).
 The existing pinned Hermes image includes the client: no extra container,

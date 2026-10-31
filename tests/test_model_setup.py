@@ -21,12 +21,12 @@ class SetupModelTests(unittest.TestCase):
                 "PATH": str(root) + os.pathsep + os.environ["PATH"],
                 "COUNCIL_TEST_SSH_COMMAND": str(output),
             }
-            for arguments in ([], ["secretary"]):
+            for arguments in ([], ["secretary"], ["linear-executor"], ["dexter-executor"]):
                 subprocess.run(["bash", str(script), *arguments], env=environment, check=True)
                 command = output.read_text().splitlines()[-1]
                 self.assertIn("flock -n /etc/agent-council/operations.lock", command)
                 if arguments:
                     self.assertNotIn("--user hermes", command)
-                    self.assertIn("exec secretary", command)
+                    self.assertIn("exec " + arguments[0], command)
                 else:
                     self.assertIn("exec --user hermes hermes", command)

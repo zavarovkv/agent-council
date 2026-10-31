@@ -120,6 +120,12 @@ def recover(runtime, backup, *, rebuild=False):
             "COUNCIL_SECRETARY_ENABLED": "true"
             if "secretary" in manifest.get("running_services", [])
             else "false",
+            "COUNCIL_LINEAR_ENABLED": "true"
+            if "linear-adapter" in manifest.get("running_services", [])
+            else "false",
+            "COUNCIL_LINEAR_DEXTER_ENABLED": "true"
+            if "dexter-executor" in manifest.get("running_services", [])
+            else "false",
         }
     )
     runtime.activate_source(backup / "compose.yaml")
