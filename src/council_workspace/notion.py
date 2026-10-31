@@ -11,6 +11,19 @@ def revision(content):
     return hashlib.sha256(content.encode()).hexdigest()
 
 
+def content_signature(content):
+    # Notion escapes literal underscores and auto-links domain-shaped prose.
+    # Collapse only links whose visible domain exactly matches the destination;
+    # ordinary links must retain their target in the readback comparison.
+    content = content.replace(r"\_", "_")
+    content = re.sub(
+        r"\[([A-Za-z0-9][A-Za-z0-9.-]*\.[A-Za-z]{2,})\]\(https?://\1/?\)",
+        r"\1",
+        content,
+    )
+    return canonical(content)
+
+
 class Pages:
     def __init__(self, call, root):
         self.notion, self.root = Notion(call), root
@@ -99,7 +112,7 @@ class Pages:
 
     def verified(self, identity, expected):
         page = self.fetch(identity)
-        if canonical(page["content"]) != canonical(expected):
+        if content_signature(page["content"]) != content_signature(expected):
             raise ValueError("Notion readback differs from the submitted text; inspect the page.")
         return {
             "id": identity,
