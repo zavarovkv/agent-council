@@ -68,6 +68,12 @@ class Store:
                     result TEXT NOT NULL DEFAULT '', created REAL NOT NULL
                 );
             """)
+            if "parent_issue" not in {
+                row[1] for row in db.execute("PRAGMA table_info(delegations)")
+            }:
+                db.execute(
+                    "ALTER TABLE delegations ADD COLUMN parent_issue TEXT NOT NULL DEFAULT ''"
+                )
             self._prune(db)
         self.path.chmod(0o600)
 
@@ -420,7 +426,10 @@ class Store:
                 )
             return dict(rows[0])
 
-    def reserve_child(self, parent, target, key, title, description, *, issue=None):
+    def reserve_child(
+        self, parent, target, key, title, description, *, issue=None, parent_issue=None
+    ):
+        parent_issue = parent_issue or parent["issue"]
         identity = stable_id(parent["agent"] + ":" + parent["id"] + ":" + key)
         with self.database() as db:
             db.execute("BEGIN IMMEDIATE")
@@ -432,18 +441,22 @@ class Store:
                     description,
                 ):
                     raise ValueError("Delegation identity conflict.")
+                if (row["parent_issue"] or parent["issue"]) != parent_issue:
+                    raise ValueError("Delegation parent conflict.")
                 return dict(row)
             if (
                 parent["depth"]
                 or db.execute(
-                    "SELECT count(*) FROM delegations WHERE parent_agent=? AND parent_session=?",
+                    "SELECT count(*) FROM delegations WHERE parent_agent=? AND parent_session=? AND state!='done'",
                     (parent["agent"], parent["id"]),
                 ).fetchone()[0]
                 >= 4
             ):
-                raise PermissionError("Delegation depth or child limit reached.")
+                raise PermissionError(
+                    "Delegation depth or four concurrent specialist tasks limit reached."
+                )
             db.execute(
-                "INSERT INTO delegations(id,parent_agent,parent_session,child_agent,issue,title,description,created,origin_job) VALUES(?,?,?,?,?,?,?,?,?)",
+                "INSERT INTO delegations(id,parent_agent,parent_session,child_agent,issue,title,description,created,origin_job,parent_issue) VALUES(?,?,?,?,?,?,?,?,?,?)",
                 (
                     identity,
                     parent["agent"],
@@ -454,6 +467,7 @@ class Store:
                     description,
                     self.clock(),
                     parent.get("origin_job", ""),
+                    parent_issue,
                 ),
             )
         return self.delegation(target, issue or stable_id(identity + ":issue"))

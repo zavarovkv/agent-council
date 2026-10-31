@@ -129,12 +129,16 @@ def register(ctx):
         ),
         (
             "linear_delegate",
-            "Create or retrieve one idempotent sub-issue under the current Linear task for an allowed specialist. Reuse key when retrying; the coordinator receives the result automatically.",
+            "Create or retrieve one idempotent sub-issue for an allowed specialist. Defaults to current task; parent_issue selects an active follow-up task when previous work is accepted. No new owner mention is needed. At most four specialist tasks can run concurrently; completed rounds do not consume that capacity. Reuse key when retrying; the current coordinator session receives the result automatically.",
             {
                 "target": {"type": "string", "enum": ["dexter", "marketing", "padme"]},
                 "key": {"type": "string", "maxLength": 80},
                 "title": {"type": "string", "maxLength": 200},
                 "description": {"type": "string", "maxLength": 12000},
+                "parent_issue": {
+                    "type": "string",
+                    "description": "Active issue UUID or identifier in an allowed team; defaults to current issue.",
+                },
             },
             ["target", "key", "title", "description"],
             "delegate",

@@ -48,7 +48,10 @@ or a profile name from task text. Model availability is checked when a run start
 Delegate a bounded task with `linear_delegate`. Supply a stable
 request key for each distinct task, reuse that same key if the operation times
 out, and include the question, expected result and source requirements. Do not
-create duplicate work. At most four sub-issues are available per parent task.
+create duplicate work. At most four specialist tasks run concurrently; finished review rounds free capacity.
+For a new stage after accepted work, create an active follow-up issue and pass its
+ID as parent_issue to linear_delegate. Do not ask the owner to mention you again
+or reopen an accepted parent merely to launch the next editorial review.
 Supply only relevant context, project constraints, deadline/budget when known,
 acceptance criteria, and links to inputs. Split research and promotion only when
 both independent deliverables are needed. Reuse completed research instead of
