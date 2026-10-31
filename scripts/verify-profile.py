@@ -53,6 +53,17 @@ def main():
     if home != Path("/opt/data") or os.geteuid() == 0:
         raise ValueError("Verify a mounted copy as the unprivileged runtime user.")
     read_user_config_raw(home / "config.yaml")
+    if (home / ".council/workspace/access.json").exists():
+        from council_workspace.client import settings as workspace_client
+        from council_workspace.policy import server_policy
+
+        policy = server_policy(home)
+        assert len(policy["clients"]) == 8
+        workspace_client(home)
+        for slug in ("dexter", "lando", "padme"):
+            workspace_client(home / "profiles" / slug)
+        for slug in ("qui-gon", "dexter", "marketing", "padme"):
+            workspace_client(home / ".council/linear" / slug)
     linear = home / ".council/linear"
     if (linear / ".managed").exists():
         sys.path.insert(0, "/opt/agent-council")

@@ -4,5 +4,5 @@ kind: standalone
 version: 1.2.0
 requires_hermes: ">=0.22.5"
 description: Owner-authorized task management and sub-issue delegation through the isolated Linear adapter.
-provides_tools: [linear_delegate, linear_child_tasks, linear_agents, linear_issues, council_skill]
+provides_tools: [linear_delegate, linear_child_tasks, linear_agents, linear_issues, council_skill, council_workspace]
 provides_hooks: []

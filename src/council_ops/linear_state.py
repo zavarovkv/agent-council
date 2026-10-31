@@ -21,6 +21,8 @@ def root(settings):
 def require_capability(runtime, *homes, image=None):
     from .instructions import verify_capabilities
 
+    if any((home / ".council/workspace/access.json").exists() for home in homes):
+        verify_capabilities(runtime, ["workspace-access-v1"], image=image)
     if any((home / ".council/linear/.managed").exists() for home in homes):
         verify_capabilities(runtime, ["linear-agents-v1"], image=image)
     if any((home / ".council/linear/marketing/config.yaml").exists() for home in homes):
