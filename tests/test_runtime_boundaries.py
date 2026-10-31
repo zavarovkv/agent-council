@@ -48,5 +48,12 @@ class RuntimeBoundaryTests(unittest.TestCase):
         )
 
     def test_linear_bridge_cannot_import_the_personal_agent_or_host_operations(self):
-        self.check_imports("linear_agent", {})
+        self.check_imports(
+            "linear_agent",
+            {
+                "catalog.py": {"council_team.catalog"},
+                "statistics.py": {"council_team.catalog"},
+            },
+        )
+        self.check_imports("council_team", {})
         self.check_imports("linear_tools", {"__init__.py": {"gateway.session_context"}})

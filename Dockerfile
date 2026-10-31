@@ -3,6 +3,7 @@ WORKDIR /styles
 COPY package.json package-lock.json ./
 RUN npm ci --omit=dev --ignore-scripts --no-audit --no-fund
 COPY assets/login/telegram-widget.js assets/login/telegram-widget.js
+COPY assets/login/team.js assets/login/team.js
 RUN npm run check
 
 # Reviewed official delegation plugin, pinned by commit and archive checksum.
@@ -52,6 +53,8 @@ RUN chmod -R a+rX,go-w /opt/hermes/plugins/dashboard_auth/telegram_owner
 COPY src/telegram_secretary/ /opt/hermes/plugins/council-secretary/
 COPY src/secretary_worker/ /opt/agent-council/secretary_worker/
 COPY src/linear_agent/ /opt/agent-council/linear_agent/
+COPY src/council_team/ /opt/agent-council/council_team/
+COPY src/council_team/ /opt/hermes/council_team/
 COPY src/telegram_monitor/ /opt/agent-council/telegram_monitor/
 COPY --from=telegram-reader /opt/telegram-reader/ /opt/telegram-reader/
 COPY src/linear_tools/ /opt/hermes/plugins/council-linear/
@@ -64,5 +67,5 @@ COPY --from=web-assets /styles/node_modules/beauty-css/dist/beauty.min.css /opt/
 COPY --from=web-assets /styles/node_modules/beauty-css/LICENSE /opt/agent-council-theme/dependencies/beauty-css.LICENSE
 COPY --from=web-assets /styles/node_modules/beauty-css/package.json /opt/agent-council-theme/dependencies/beauty-package.json
 COPY scripts/install-login-theme.py /opt/agent-council-theme/install.py
-RUN python3 /opt/agent-council-theme/install.py /opt/hermes/hermes_cli/dashboard_auth/login_page.py /opt/agent-council-theme \
+RUN PYTHONPATH=/opt/hermes python3 /opt/agent-council-theme/install.py /opt/hermes/hermes_cli/dashboard_auth/login_page.py /opt/agent-council-theme \
     && chmod -R a+rX,go-w /opt/agent-council-theme

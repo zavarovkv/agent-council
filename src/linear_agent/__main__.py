@@ -8,6 +8,7 @@ from pathlib import Path
 
 from .http import Server
 from .service import Service
+from .statistics import loop as statistics_loop
 
 
 def main():
@@ -20,7 +21,12 @@ def main():
     internal = Server(("0.0.0.0", 9122), service, internal=True)
     threads = [
         threading.Thread(target=target, daemon=True)
-        for target in (public.serve_forever, internal.serve_forever, service.loop)
+        for target in (
+            public.serve_forever,
+            internal.serve_forever,
+            service.loop,
+            lambda: statistics_loop(service),
+        )
     ]
     for thread in threads:
         thread.start()
