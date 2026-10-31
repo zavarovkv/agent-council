@@ -1,11 +1,12 @@
 """App-actor OAuth and the small, parameterized GraphQL surface this adapter needs."""
 
 import hashlib
+import re
 import secrets
 import threading
 import time
 from base64 import urlsafe_b64encode
-from urllib.parse import urlencode
+from urllib.parse import unquote, urlencode, urlsplit
 
 from .config import SCOPES, identifier
 from .transport import RemoteError, request_json
@@ -182,6 +183,43 @@ class Linear:
 
     def activity(self, agent, aid):
         return self.query(agent, ACTIVITY_QUERY, {"id": identifier(aid)})["agentActivity"]
+
+    def owner_mention(self, agent, registry):
+        user = self.query(
+            agent,
+            "query CouncilQuestionOwner($id:String!){user(id:$id){id url active app isMentionable organization{id urlKey}}}",
+            {"id": registry.owner},
+        )["user"]
+        if not isinstance(user, dict):
+            raise PermissionError("The configured owner is unavailable.")
+        organization = user.get("organization") or {}
+        url = user.get("url")
+        if (
+            user.get("id") != registry.owner
+            or user.get("active") is not True
+            or user.get("app") is not False
+            or user.get("isMentionable") is not True
+            or not isinstance(organization, dict)
+            or organization.get("id") != registry.organization
+            or not isinstance(organization.get("urlKey"), str)
+            or not isinstance(url, str)
+            or len(url) > 512
+        ):
+            raise PermissionError(
+                "Only the verified human owner may receive clarification requests."
+            )
+        parsed = urlsplit(url)
+        if (
+            parsed.scheme != "https"
+            or parsed.netloc != "linear.app"
+            or parsed.query
+            or parsed.fragment
+            or not re.fullmatch(r"/[A-Za-z0-9_-]+/profiles/[A-Za-z0-9_.~%-]+", parsed.path)
+            or not parsed.path.startswith("/" + organization.get("urlKey", "") + "/profiles/")
+            or any(char.isspace() for char in unquote(parsed.path))
+        ):
+            raise PermissionError("Unrecognized owner profile URL.")
+        return url
 
     def ensure_activity(self, agent, record):
         try:

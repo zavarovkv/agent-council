@@ -151,6 +151,45 @@ class LinearProtocolTests(unittest.TestCase):
         with self.assertRaises(PermissionError):
             linear.raw("fixture-access", "query Fixture{viewer{id}}", {})
 
+    def test_question_mentions_only_the_active_owner_resolved_by_immutable_id(self):
+        self.store.install(
+            "qui-gon", uid(1000), uid(1), "fixture-access", "fixture-refresh", NOW + 86400
+        )
+        owner = {
+            "id": uid(2),
+            "url": "https://linear.app/fixture/profiles/owner",
+            "active": True,
+            "app": False,
+            "isMentionable": True,
+            "organization": {"id": uid(1), "urlKey": "fixture"},
+        }
+        requests = []
+
+        def request(_url, **kwargs):
+            requests.append(kwargs["body"])
+            return {"data": {"user": copy.deepcopy(owner)}}
+
+        linear = Linear(self.store, request=request, clock=lambda: NOW)
+        self.assertEqual(linear.owner_mention(self.agent, self.registry), owner["url"])
+        owner["url"] = "https://linear.app/fixture/profiles/renamed-owner"
+        self.assertEqual(linear.owner_mention(self.agent, self.registry), owner["url"])
+        self.assertTrue(all(item["variables"] == {"id": uid(2)} for item in requests))
+        for change in (
+            {"id": uid(99)},
+            {"active": False},
+            {"app": True},
+            {"isMentionable": False},
+            {"organization": {"id": uid(999), "urlKey": "fixture"}},
+            {"url": "https://evil.example/profiles/owner"},
+            {"url": "https://linear.app/another-workspace/profiles/owner"},
+            {"url": "https://linear.app/fixture/profiles/owner?next=elsewhere"},
+        ):
+            previous = copy.deepcopy(owner)
+            owner.update(change)
+            with self.subTest(change=change), self.assertRaises(PermissionError):
+                linear.owner_mention(self.agent, self.registry)
+            owner = previous
+
     def test_public_http_cannot_reach_internal_tools_or_leak_callback_details(self):
         service = Service(self.home, store=self.store, linear=FakeLinear(), hermes=FakeHermes())
         for internal in (False, True):

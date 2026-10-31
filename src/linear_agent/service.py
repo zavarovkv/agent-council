@@ -330,13 +330,16 @@ class Service:
             if not isinstance(question, str) or not question.strip() or len(question) > 12000:
                 raise ValueError("Invalid clarification.")
             current = {**control, "execution_generation": result["execution_generation"]}
-            self.store.publish(
-                agent.slug,
-                job["session"],
-                job["key"] + ":clarify:" + control["prompt_id"],
-                "elicitation",
-                question,
-            )
+            identity = job["key"] + ":clarify:" + control["prompt_id"]
+            if not self.store.publication_exists(stable_id(identity)):
+                mention = self.linear.owner_mention(agent, registry)
+                self.store.publish(
+                    agent.slug,
+                    job["session"],
+                    identity,
+                    "elicitation",
+                    f"{mention}, нужен ваш ответ:\n\n{question}\n\nОтветьте в этой ветке — продолжу после вашего ответа.",
+                )
             self.store.update_job(job["key"], state="waiting", control=json.dumps(current))
             return
         if job["state"] == "waiting" and result.get("status") in {"running", "queued"}:
@@ -354,7 +357,7 @@ class Service:
                     job["session"],
                     job["key"] + ":children",
                     "thought",
-                    "Подзадачи переданы исполнителям. Соберу результаты после завершения.",
+                    "Жду результаты подзадач от исполнителей.",
                 )
                 self.store.update_job(job["key"], state="waiting_children", output=output[:16000])
                 return
