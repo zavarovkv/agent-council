@@ -21,6 +21,7 @@ LABELS = {
     "secretary": "Сервис ответов недоступен или его политика не готова.",
     "business_queue": "Очередь личных ответов недоступна или задерживается.",
     "public_queue": "Очередь публичного бота недоступна или задерживается.",
+    "guest_queue": "Очередь гостевых вызовов недоступна или задерживается.",
     "provider_business": "Последняя генерация в личном канале завершилась ошибкой провайдера.",
     "provider_public": "Последняя генерация публичного бота завершилась ошибкой провайдера.",
     "backup": "Нет свежей проверенной резервной копии R2 или отключено расписание.",
@@ -34,6 +35,7 @@ NAMES = {
     "secretary": "Сервис ответов",
     "business_queue": "Очередь личных ответов",
     "public_queue": "Очередь публичного бота",
+    "guest_queue": "Гостевые вызовы",
     "provider_business": "Провайдер личных ответов",
     "provider_public": "Провайдер публичного бота",
     "backup": "Резервные копии R2",
@@ -159,12 +161,14 @@ def issues(report, configuration, *, free_bytes, total_bytes):
     if secretary.get("enabled"):
         if not secretary.get("policy_valid") or secretary.get("worker_health") != "healthy":
             result["secretary"] = "not_ready"
-        for route in ("business", "public"):
+        if not secretary.get("guest_policy_valid", True):
+            result["secretary"] = "not_ready"
+        for route in ("business", "public", "guest"):
             queue = secretary.get("queues", {}).get(route, {})
             if queue.get("enabled") and (
                 not queue.get("available")
                 or queue.get("oldest_pending_age_seconds", 0)
-                > (180 if route == "business" else 600)
+                > {"business": 180, "public": 600, "guest": 150}[route]
             ):
                 result[route + "_queue"] = "delayed"
             outcome = secretary.get("generation", {}).get("last_outcomes", {}).get(route, {})

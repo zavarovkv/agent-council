@@ -6,6 +6,16 @@ from pathlib import Path
 AUDIENCES = frozenset({"spouse", "contacts", "new-users"})
 
 
+def guest_instructions(root=Path("/opt/agent-council/instructions/guest")):
+    path = Path(root) / "POLICY.md"
+    if path.resolve() != path or not path.is_file():
+        raise ValueError("A regular bundled guest policy is required.")
+    text = path.read_text().strip()
+    if not 0 < len(text) <= 16000:
+        raise ValueError("A nonempty bundled guest policy is required.")
+    return text
+
+
 def configured_instructions(home, environment):
     source = environment.get("COUNCIL_SECRETARY_INSTRUCTIONS", "image")
     if source == "image":

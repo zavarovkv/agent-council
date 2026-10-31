@@ -5,6 +5,8 @@ import logging
 import os
 
 from .bridge import BUSINESS_FIELDS, Bridge
+from .guest import GuestBridge, is_guest
+from .guest_store import GuestStore
 from .policy import Settings
 from .public import PublicBridge
 from .store import Store
@@ -32,7 +34,8 @@ def attach(application, adapter):
     if application.bot_data.get("council-secretary-registered"):
         return
     settings = Settings.load(os.environ)
-    bridges = {"business": None, "public": None}
+    bridges = {"business": None, "public": None, "guest": None}
+    public_capacity = asyncio.Semaphore(1)
     options = {
         "contacts": settings.contacts,
         "spouse_username": settings.spouse_username,
@@ -48,7 +51,7 @@ def attach(application, adapter):
         try:
             # One independent generation slot per route: public traffic cannot
             # queue ahead of or occupy the business route's reserved capacity.
-            extra = {"capacity": asyncio.Semaphore(1)}
+            extra = {"capacity": public_capacity if route == "public" else asyncio.Semaphore(1)}
             if route == "public":
                 extra["greeting"] = (
                     f"Я {settings.assistant_name}, цифровой помощник {settings.owner_name}. "
@@ -67,6 +70,21 @@ def attach(application, adapter):
             background(application, bridge.recover())
         except Exception:
             logger.error("Secretary route unavailable; its external updates remain closed.")
+    if settings.enabled:
+        try:
+            guest_bridge = GuestBridge(
+                application,
+                settings.owner,
+                settings.key,
+                GuestStore(settings.home / "plugin-data/council-secretary/guest-queue.sqlite3"),
+                home=settings.home,
+                capacity=public_capacity,
+            )
+            bridges["guest"] = guest_bridge
+            background(application, guest_bridge.recover())
+            background(application, guest_bridge.housekeeping())
+        except Exception:
+            logger.error("Guest route unavailable; guest updates remain closed.")
     if bridges["public"] is not None and adapter is not None:
         from .menus import configure_after_connect
 
@@ -74,14 +92,18 @@ def attach(application, adapter):
 
     class BusinessHandler(TypeHandler):
         def check_update(self, update):
-            return isinstance(update, Update) and any(
-                getattr(update, name, None) is not None for name in BUSINESS_FIELDS
+            return (
+                isinstance(update, Update)
+                and not is_guest(update)
+                and any(getattr(update, name, None) is not None for name in BUSINESS_FIELDS)
             )
 
     class PublicHandler(TypeHandler):
         def check_update(self, update):
-            if not isinstance(update, Update) or any(
-                getattr(update, name, None) is not None for name in BUSINESS_FIELDS
+            if (
+                not isinstance(update, Update)
+                or is_guest(update)
+                or any(getattr(update, name, None) is not None for name in BUSINESS_FIELDS)
             ):
                 return False
             query = getattr(update, "callback_query", None) or getattr(update, "inline_query", None)
@@ -96,6 +118,19 @@ def attach(application, adapter):
                     or getattr(getattr(message, "from_user", None), "id", None) != settings.owner
                 )
             )
+
+    class GuestHandler(TypeHandler):
+        def check_update(self, update):
+            return isinstance(update, Update) and is_guest(update)
+
+    async def guest(update, _context):
+        try:
+            if bridges["guest"] is not None:
+                await bridges["guest"].handle(update)
+        except Exception:
+            logger.warning("Guest update rejected; private details omitted.")
+        finally:
+            raise ApplicationHandlerStop
 
     async def business(update, _context):
         try:
@@ -119,6 +154,7 @@ def attach(application, adapter):
         finally:
             raise ApplicationHandlerStop
 
+    application.add_handler(GuestHandler(Update, guest), group=-1100)
     application.add_handler(BusinessHandler(Update, business), group=-1000)
     application.add_handler(PublicHandler(Update, public), group=-1001)
     application.bot_data["council-secretary-registered"] = True

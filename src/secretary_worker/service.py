@@ -1,6 +1,7 @@
 """Tool-free application service, composed from protocol, history and model boundaries."""
 
 import hmac
+import json
 import logging
 import os
 import re
@@ -10,12 +11,14 @@ from pathlib import Path
 
 from .history import History
 from .http import Server
-from .instructions import AUDIENCES, configured_instructions
+from .instructions import AUDIENCES, configured_instructions, guest_instructions
 from .protocol import ROUTES, ReplyRequest, request_id
 
 
 class Service:
-    def __init__(self, home, key, *, skills, generate=None, clock=time.time, prompt):
+    def __init__(
+        self, home, key, *, skills, generate=None, clock=time.time, prompt, guest_prompt=None
+    ):
         if not isinstance(key, str) or not re.fullmatch(r"[a-f0-9]{64}", key):
             raise ValueError("A dedicated 256-bit service key is required.")
         from .model import generate as model_generate
@@ -27,6 +30,11 @@ class Service:
         if not isinstance(prompt, str) or not prompt.strip():
             raise ValueError("A nonempty secretary policy is required.")
         self.key, self.skills, self.prompt = key, dict(skills), prompt
+        if guest_prompt is not None and (
+            not isinstance(guest_prompt, str) or not 0 < len(guest_prompt.strip()) <= 16000
+        ):
+            raise ValueError("A valid public guest policy is required.")
+        self.guest_prompt = guest_prompt
         self.generate = generate or model_generate
         self.history = History(home, clock=clock)
         self.capacity = {route: threading.BoundedSemaphore(1) for route in ROUTES}
@@ -38,6 +46,8 @@ class Service:
 
     def reply(self, payload):
         request = ReplyRequest.parse(payload)
+        if request.mode == "guest" and self.guest_prompt is None:
+            raise ValueError("Guest inference is unavailable.")
         capacity = self.capacity[request.route]
         if not capacity.acquire(blocking=False):
             raise BlockingIOError("Service capacity reached.")
@@ -46,7 +56,14 @@ class Service:
             if cached is not None:
                 return cached
             messages = [
-                {"role": "system", "content": self.prompt + "\n" + self.skills[request.audience]}
+                {
+                    "role": "system",
+                    "content": (
+                        self.guest_prompt
+                        if request.mode == "guest"
+                        else self.prompt + "\n" + self.skills[request.audience]
+                    ),
+                }
             ]
             for question, answer in history:
                 messages.extend(
@@ -55,7 +72,19 @@ class Service:
                         {"role": "assistant", "content": answer},
                     ]
                 )
-            messages.append({"role": "user", "content": request.text})
+            messages.append(
+                {
+                    "role": "user",
+                    "content": (
+                        json.dumps(
+                            {"invocation": request.text, "quoted_message": request.reply_context},
+                            ensure_ascii=False,
+                        )
+                        if request.mode == "guest"
+                        else request.text
+                    ),
+                }
+            )
             try:
                 answer = self.generate(messages)
             except Exception as error:
@@ -98,6 +127,7 @@ def main():
         skills=instructions.skills,
         prompt=f"Твоё имя: {assistant_name}. Ты личный помощник {owner_name}.\n"
         + instructions.policy,
+        guest_prompt=guest_instructions(),
     )
     Server(("0.0.0.0", 9120), service).serve_forever()
 

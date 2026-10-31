@@ -32,9 +32,10 @@ class History:
             # infer a privileged route from user text or a mutable username.
             if "route" not in {row[1] for row in db.execute("PRAGMA table_info(turns)")}:
                 db.execute("ALTER TABLE turns ADD COLUMN route TEXT NOT NULL DEFAULT 'public'")
+            if "mode" not in {row[1] for row in db.execute("PRAGMA table_info(turns)")}:
+                db.execute("ALTER TABLE turns ADD COLUMN mode TEXT NOT NULL DEFAULT 'chat'")
             db.execute("CREATE INDEX IF NOT EXISTS turns_route ON turns(route,created)")
-            db.execute("DELETE FROM turns WHERE created < ?", (clock() - 14 * 86400,))
-            db.execute("DELETE FROM generation_events WHERE created < ?", (clock() - 14 * 86400,))
+            self._prune(db, clock())
         self.path.chmod(0o600)
 
     @contextmanager
@@ -51,15 +52,19 @@ class History:
         with self.database() as db:
             db.execute("BEGIN IMMEDIATE")
             now = self.clock()
-            db.execute("DELETE FROM turns WHERE created < ?", (now - 14 * 86400,))
-            db.execute("DELETE FROM generation_events WHERE created < ?", (now - 14 * 86400,))
+            self._prune(db, now)
             previous = db.execute(
-                "SELECT conversation,question,answer,route FROM turns WHERE request_id=?",
+                "SELECT conversation,question,answer,route,mode FROM turns WHERE request_id=?",
                 (request.identifier,),
             ).fetchone()
             if previous:
-                if previous[:2] != (request.context, request.text) or previous[3] != request.route:
+                if previous[:2] != (request.context, request.storage_question) or previous[3:] != (
+                    request.route,
+                    request.mode,
+                ):
                     raise ValueError("Request identity conflict.")
+                if request.mode == "guest":
+                    raise BlockingIOError("Guest inference already admitted; do not replay.")
                 if previous[2] is None:
                     raise BlockingIOError("Request already in progress or interrupted.")
                 if (
@@ -79,21 +84,44 @@ class History:
             ).fetchone()[0]
             if recent >= 20 or total >= HOURLY_LIMITS[request.route]:
                 raise BlockingIOError("Hourly reply limit reached.")
-            history = db.execute(
-                "SELECT question,answer FROM turns WHERE conversation=? AND delivered=1 "
-                "ORDER BY created DESC,rowid DESC LIMIT 8",
-                (request.context,),
-            ).fetchall()[::-1]
+            history = (
+                []
+                if request.mode == "guest"
+                else db.execute(
+                    "SELECT question,answer FROM turns WHERE conversation=? AND delivered=1 AND mode='chat' "
+                    "ORDER BY created DESC,rowid DESC LIMIT 8",
+                    (request.context,),
+                ).fetchall()[::-1]
+            )
             db.execute(
-                "INSERT INTO turns(request_id,conversation,question,answer,created,route) "
-                "VALUES (?,?,?,?,?,?)",
-                (request.identifier, request.context, request.text, None, now, request.route),
+                "INSERT INTO turns(request_id,conversation,question,answer,created,route,mode) "
+                "VALUES (?,?,?,?,?,?,?)",
+                (
+                    request.identifier,
+                    request.context,
+                    request.storage_question,
+                    None,
+                    now,
+                    request.route,
+                    request.mode,
+                ),
             )
         return None, history
 
+    @staticmethod
+    def _prune(db, now):
+        db.execute(
+            "DELETE FROM turns WHERE created<? OR (mode='guest' AND created<?)",
+            (now - 14 * 86400, now - 3600),
+        )
+        db.execute("DELETE FROM generation_events WHERE created<?", (now - 14 * 86400,))
+
     def complete(self, identifier, answer):
         with self.database() as db:
-            db.execute("UPDATE turns SET answer=? WHERE request_id=?", (answer, identifier))
+            db.execute(
+                "UPDATE turns SET answer=CASE WHEN mode='guest' THEN NULL ELSE ? END WHERE request_id=?",
+                (answer, identifier),
+            )
             self._event(db, identifier, "ok")
 
     def failed(self, identifier, outcome):

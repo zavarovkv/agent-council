@@ -6,7 +6,8 @@ bot DMs from other people, go to a separate, tool-free secretary service.
 They never enter the owner's agent session or command/tool dispatcher.
 
 The implementation handles **text in private chats**. Media,
-groups/guest mode, calendar actions and cross-chat actions are not supported.
+calendar actions and cross-chat actions are not supported. Optional
+[guest calls](telegram-guests.md) have a separate public policy and no history.
 The secretary answers general questions and clarifies requests; it cannot access
 private documents, execute commands or claim to notify the owner. Its prompt
 identifies it as the configured owner's digital assistant. Names are deployment

@@ -3,6 +3,7 @@
 
 import json
 import os
+import runpy
 import sqlite3
 import sys
 from contextlib import closing
@@ -53,6 +54,25 @@ def main():
         raise ValueError("Verify a mounted copy as the unprivileged runtime user.")
     read_user_config_raw(home / "config.yaml")
     verify_managed_skills(home)
+    guest_policy = home / "plugin-data/council-secretary/guest.json"
+    if guest_policy.exists() or guest_policy.is_symlink():
+        state = runpy.run_path("/opt/hermes/plugins/council-secretary/guest_policy.py")[
+            "load_state"
+        ](home)
+        if state.error:
+            raise ValueError("Invalid restored guest policy.")
+        from telegram import Bot, Update, User
+
+        if "guest_message" not in Update.ALL_TYPES or not callable(
+            getattr(Bot, "answer_guest_query", None)
+        ):
+            raise ValueError("Guest-compatible SDK required.")
+        if not hasattr(User, "supports_guest_queries"):
+            raise ValueError("Guest capability verification is unavailable.")
+        sys.path.insert(0, "/opt/agent-council")
+        from secretary_worker.instructions import guest_instructions
+
+        guest_instructions()
     private_instructions = home / ".council/secretary/instructions"
     mode = os.environ.get("COUNCIL_VERIFY_SECRETARY_INSTRUCTIONS", "image")
     if mode not in {"image", "profile"}:
@@ -80,6 +100,7 @@ def main():
         home / "dashboard-sessions.sqlite3",
         home / "plugin-data/council-secretary/queue.sqlite3",
         home / "plugin-data/council-secretary/public-queue.sqlite3",
+        home / "plugin-data/council-secretary/guest-queue.sqlite3",
         home / ".council/secretary/secretary-history.sqlite3",
         home / ".council/research-filing/outbox.sqlite3",
     ):
