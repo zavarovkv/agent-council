@@ -62,6 +62,21 @@ class DeploymentHTTPTests(unittest.TestCase):
         self.assertEqual(data["auth_providers"], ["telegram-owner"])
         self.assertEqual(set(data), {"auth_required", "auth_providers", "auth_flows"})
 
+    def test_public_homepage_is_indexable_and_private_routes_are_not(self):
+        code, body, headers = self.request("/")
+        self.assertEqual(code, 200)
+        self.assertIn('rel="canonical" href="https://council.zavarov.com/"', body.decode())
+        self.assertIn('href="https://t.me/Qui_Gon_Jinn_ai"', body.decode())
+        self.assertTrue(headers["X-Robots-Tag"].startswith("index, follow"))
+        for path in ("/api/config", "/profiles"):
+            self.assertIn("noindex", self.request(path)[2]["X-Robots-Tag"])
+        code, sitemap, _ = self.request("/sitemap.xml")
+        self.assertEqual(code, 200)
+        self.assertIn(b"<loc>https://council.zavarov.com/</loc>", sitemap)
+        code, robots, _ = self.request("/robots.txt")
+        self.assertEqual(code, 200)
+        self.assertIn(b"Sitemap: https://council.zavarov.com/sitemap.xml", robots)
+
     def test_setup_login_page_is_served_as_html(self):
         status, body, headers = self.request("/auth/login?provider=telegram-owner&next=%2F")
         if status in (302, 303, 307):

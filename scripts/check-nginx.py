@@ -19,10 +19,16 @@ class Upstream(BaseHTTPRequestHandler):
         pass
 
     def do_GET(self):
-        code = 503 if self.path == "/provider-failure" else 401
+        code = (
+            200
+            if self.path == "/login?next=%2Fprofiles"
+            else 503
+            if self.path == "/provider-failure"
+            else 401
+        )
         self.send_response(code)
         self.end_headers()
-        self.wfile.write(b"application response")
+        self.wfile.write(b"public landing" if code == 200 else b"application response")
 
 
 def port():
@@ -85,6 +91,18 @@ def main():
                         raise RuntimeError("Fixture Nginx failed to start") from None
                     time.sleep(0.05)
             assert response[0] == 401 and response[2] == b"application response"
+            assert response[1]["X-Robots-Tag"] == "noindex, nofollow"
+            landing = request("/")
+            assert landing[0] == 200 and landing[2] == b"public landing"
+            assert landing[1]["X-Robots-Tag"].startswith("index, follow")
+            robots = request("/robots.txt")
+            assert (
+                robots[0] == 200
+                and b"Sitemap: https://council.zavarov.com/sitemap.xml" in robots[2]
+            )
+            sitemap = request("/sitemap.xml")
+            assert sitemap[0] == 200 and b"<loc>https://council.zavarov.com/</loc>" in sitemap[2]
+            assert b"<lastmod>" not in sitemap[2]
             assert request("/provider-failure")[0:3:2] == (503, b"application response")
             assert request("/__hermes_setup_pending")[0] == 404
             upstream.shutdown()
