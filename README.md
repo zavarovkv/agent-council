@@ -11,6 +11,8 @@ The project is in early development, built around
   reviewing and returning its results.
 - Supports ChatGPT / Codex model login and explicit Notion / Google Drive setup.
 - Connects to Linear through its official OAuth-backed MCP integration.
+- Supports isolated Linear specialists for product research and marketing/SEO,
+  with a live agent catalog, delegated sub-issues and reviewed local skills.
 - Provides an optional Telegram secretary for selected account chats and public
   bot conversations, with separate reply styles for spouse, contacts and new users.
 - Supports opt-in, owner-only [Telegram guest calls](docs/telegram-guests.md) in other chats,

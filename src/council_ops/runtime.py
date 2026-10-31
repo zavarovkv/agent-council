@@ -307,6 +307,8 @@ class Runtime:
             services.extend(["linear-adapter", "linear-executor"])
             if values.get("COUNCIL_LINEAR_DEXTER_ENABLED") == "true":
                 services.append("dexter-executor")
+            if values.get("COUNCIL_LINEAR_MARKETING_ENABLED") == "true":
+                services.append("marketing-executor")
         self.compose(
             "up",
             "-d",

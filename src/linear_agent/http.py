@@ -173,6 +173,8 @@ class Handler(BaseHTTPRequestHandler):
                     result = self.server.service.delegate(slug, payload)
                 elif action == "children":
                     result = self.server.service.child_tasks(slug, payload)
+                elif action == "agents":
+                    result = self.server.service.agent_catalog(slug, payload)
                 else:
                     self.respond(404, {"error": "not_found"})
                     return

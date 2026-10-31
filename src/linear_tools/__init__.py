@@ -15,7 +15,7 @@ def call(path, args):
     }
     slug = os.environ.get("COUNCIL_LINEAR_AGENT", "")
     key = os.environ.get("API_SERVER_KEY", "")
-    if slug not in {"qui-gon", "dexter"} or not key or not any(context.values()):
+    if slug not in {"qui-gon", "dexter", "marketing"} or not key or not any(context.values()):
         return json.dumps({"error": "This tool requires an active authorized Linear session."})
 
     class NoRedirect(urllib.request.HTTPRedirectHandler):
@@ -49,13 +49,20 @@ def register(ctx):
             "linear_delegate",
             "Create or retrieve one idempotent sub-issue under the current Linear task for an allowed specialist. Reuse key when retrying; the coordinator receives the result automatically.",
             {
-                "target": {"type": "string", "enum": ["dexter"]},
+                "target": {"type": "string", "enum": ["dexter", "marketing"]},
                 "key": {"type": "string", "maxLength": 80},
                 "title": {"type": "string", "maxLength": 200},
                 "description": {"type": "string", "maxLength": 12000},
             },
             ["target", "key", "title", "description"],
             "delegate",
+        ),
+        (
+            "linear_agents",
+            "Read the current registered agents, specializations, installation status and delegation policy before choosing a specialist.",
+            {},
+            [],
+            "agents",
         ),
         (
             "linear_child_tasks",
@@ -85,3 +92,21 @@ def register(ctx):
             },
             handler=handler,
         )
+    from .skills import view
+
+    description = "List reviewed local skills, or read one SKILL.md and its Markdown reference. Read-only; cannot install, edit or execute skills."
+    ctx.register_tool(
+        name="council_skill",
+        toolset="council-linear",
+        description=description,
+        schema={
+            "name": "council_skill",
+            "description": description,
+            "parameters": {
+                "type": "object",
+                "properties": {"name": {"type": "string"}, "path": {"type": "string"}},
+                "additionalProperties": False,
+            },
+        },
+        handler=lambda args, **_kwargs: view(args),
+    )

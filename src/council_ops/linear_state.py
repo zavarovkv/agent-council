@@ -7,9 +7,11 @@ import sqlite3
 from contextlib import closing, contextmanager
 from pathlib import Path
 
+from linear_agent.config import SLUGS
+
 from .config import OperationError, atomic_write
 
-SERVICES = ("linear-adapter", "linear-executor", "dexter-executor")
+SERVICES = ("linear-adapter", *SLUGS.values())
 
 
 def root(settings):
@@ -21,6 +23,8 @@ def require_capability(runtime, *homes, image=None):
 
     if any((home / ".council/linear/.managed").exists() for home in homes):
         verify_capabilities(runtime, ["linear-agents-v1"], image=image)
+    if any((home / ".council/linear/marketing/config.yaml").exists() for home in homes):
+        verify_capabilities(runtime, ["agent-specialists-v1"], image=image)
 
 
 @contextmanager
@@ -114,9 +118,7 @@ def inspect_services(runtime):
         profile = (
             "bridge"
             if service == "linear-adapter"
-            else "qui-gon"
-            if service == "linear-executor"
-            else "dexter"
+            else next(slug for slug, destination in SLUGS.items() if destination == service)
         )
         home = root(runtime.settings) / profile
         expected = {"/opt/data": home}

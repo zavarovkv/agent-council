@@ -59,6 +59,13 @@ def parser():
     instructions.add_argument("source", type=Path)
     instructions.add_argument("--revision", required=True, help="Full reviewed commit SHA")
     instructions.add_argument(
+        "--adopt",
+        action="append",
+        default=[],
+        metavar="PATH=SHA256",
+        help="Adopt one reviewed unmanaged instruction at its exact current checksum",
+    )
+    instructions.add_argument(
         "--fetch",
         action="store_true",
         help="Fetch and select this exact revision under the maintenance lock",
@@ -106,9 +113,15 @@ def parser():
         help="Explicit team ID; repeat for additional teams",
     )
     prepare_linear.add_argument("--with-dexter", action="store_true")
-    commands.add_parser(
+    prepare_linear.add_argument("--with-marketing", action="store_true")
+    configure_linear = commands.add_parser(
         "configure-linear-agents",
         help="Enter app credentials privately; execution remains disabled",
+    )
+    configure_linear.add_argument(
+        "--agent",
+        choices=["dexter", "marketing"],
+        help="Add only this new prepared agent; preserve existing grants and runs",
     )
     commands.add_parser(
         "connect-linear-agents", help="Open a 15-minute browser-bound OAuth installation window"
@@ -249,9 +262,10 @@ def operate(arguments, settings):
                 organization=arguments.organization,
                 teams=arguments.team,
                 with_dexter=arguments.with_dexter,
+                with_marketing=arguments.with_marketing,
             )
         elif arguments.action == "configure-linear-agents":
-            result = linear.configure(runtime)
+            result = linear.configure(runtime, selected=arguments.agent)
         elif arguments.action == "connect-linear-agents":
             result = linear.setup_window(runtime)
         elif arguments.action == "linear-execution":
@@ -265,8 +279,18 @@ def operate(arguments, settings):
         elif arguments.action == "flush-research":
             result = flush_research(runtime)
         elif arguments.action == "apply-instructions":
+            adoptions = {}
+            for item in arguments.adopt:
+                name, separator, checksum = item.partition("=")
+                if not separator or name in adoptions:
+                    raise OperationError("Use distinct PATH=SHA256 instruction adoptions.")
+                adoptions[name] = checksum
             result = apply_instructions(
-                runtime, arguments.source, arguments.revision, fetch=arguments.fetch
+                runtime,
+                arguments.source,
+                arguments.revision,
+                fetch=arguments.fetch,
+                adoptions=adoptions,
             )
         elif arguments.action == "export-instructions":
             result = export_instructions(
