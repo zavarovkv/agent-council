@@ -1,7 +1,9 @@
 """Real issue lifecycle is distinct from agent session completion and delegation."""
 
+import concurrent.futures
 import copy
 import json
+import threading
 import unittest
 
 import test_linear_agent as fixtures
@@ -149,6 +151,37 @@ class IssueManagementTests(unittest.TestCase):
         self.call(context, "comment", key="note", body="Next: coordinator reviews the result.")
         self.call(context, "comment", key="note", body="Next: coordinator reviews the result.")
         self.assertEqual(len(self.linear.comments), 1)
+
+    def test_concurrent_retry_does_not_repeat_an_in_flight_update(self):
+        context = self.start()
+        entered, release = threading.Event(), threading.Event()
+        update = self.linear.update_issue
+        calls = []
+
+        def delayed(*args):
+            calls.append(args)
+            entered.set()
+            if not release.wait(5):
+                raise AssertionError("Test did not release the mutation")
+            update(*args)
+
+        self.linear.update_issue = delayed
+        with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:
+            first = pool.submit(
+                self.call, context, "update", key="parallel", fields={"priority": 1}
+            )
+            try:
+                self.assertTrue(entered.wait(3))
+                with self.assertRaises(RemoteError):
+                    self.call(context, "update", key="parallel", fields={"priority": 1})
+                self.assertEqual(len(calls), 1)
+            finally:
+                release.set()
+            self.assertEqual(first.result(timeout=3)["priority"], 1)
+        self.assertEqual(
+            self.call(context, "update", key="parallel", fields={"priority": 1})["priority"], 1
+        )
+        self.assertEqual(len(calls), 1)
 
     def test_unauthorized_team_fields_and_policy_changes_are_rejected(self):
         context = self.start()
