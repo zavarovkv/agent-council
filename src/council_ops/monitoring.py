@@ -19,6 +19,7 @@ LABELS = {
     "deployment": "Не удалось проверить состояние Docker и изоляцию сервисов.",
     "gateway": "Основной сервис недоступен или не прошёл проверку готовности.",
     "secretary": "Сервис ответов недоступен или его политика не готова.",
+    "linear": "Исполнители Linear недоступны или их подключение не готово.",
     "business_queue": "Очередь личных ответов недоступна или задерживается.",
     "public_queue": "Очередь публичного бота недоступна или задерживается.",
     "guest_queue": "Очередь гостевых вызовов недоступна или задерживается.",
@@ -33,6 +34,7 @@ NAMES = {
     "deployment": "Проверка развёртывания",
     "gateway": "Основной сервис",
     "secretary": "Сервис ответов",
+    "linear": "Агенты Linear",
     "business_queue": "Очередь личных ответов",
     "public_queue": "Очередь публичного бота",
     "guest_queue": "Гостевые вызовы",
@@ -158,6 +160,22 @@ def issues(report, configuration, *, free_bytes, total_bytes):
     if report.get("health") != "healthy" or report.get("status") != "running":
         result["gateway"] = "not_ready"
     secretary = report.get("secretary", {})
+    linear = report.get("linear", {})
+    if linear.get("configured") and (
+        not linear.get("available")
+        or (
+            linear.get("enabled")
+            and (
+                not linear.get("available")
+                or linear.get("installed_agents") != linear.get("registered_agents")
+                or not linear.get("services")
+                or any(
+                    item.get("health") != "healthy" for item in linear.get("services", {}).values()
+                )
+            )
+        )
+    ):
+        result["linear"] = "not_ready"
     if secretary.get("enabled"):
         if not secretary.get("policy_valid") or secretary.get("worker_health") != "healthy":
             result["secretary"] = "not_ready"

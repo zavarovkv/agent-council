@@ -8,6 +8,7 @@ import sys
 import tempfile
 from pathlib import Path
 
+from . import linear
 from .config import OperationDeferred, OperationError, Settings
 from .doctor import doctor, unit_status
 from .guard import ServiceGuard
@@ -93,6 +94,31 @@ def parser():
     choices.add_argument("--enable", action="store_true")
     choices.add_argument("--disable", action="store_true")
     commands.add_parser("doctor", help="Read safe configuration, isolation and service status")
+    prepare_linear = commands.add_parser(
+        "prepare-linear-agents", help="Prepare isolated Linear executors without model credentials"
+    )
+    prepare_linear.add_argument("--owner", required=True, help="Immutable Linear human user ID")
+    prepare_linear.add_argument("--organization", required=True, help="Immutable workspace ID")
+    prepare_linear.add_argument(
+        "--team",
+        action="append",
+        required=True,
+        help="Explicit team ID; repeat for additional teams",
+    )
+    prepare_linear.add_argument("--with-dexter", action="store_true")
+    commands.add_parser(
+        "configure-linear-agents",
+        help="Enter app credentials privately; execution remains disabled",
+    )
+    commands.add_parser(
+        "connect-linear-agents", help="Open a 15-minute browser-bound OAuth installation window"
+    )
+    execution = commands.add_parser(
+        "linear-execution", help="Atomically enable or stop Linear execution"
+    )
+    execution_choice = execution.add_mutually_exclusive_group(required=True)
+    execution_choice.add_argument("--enable", action="store_true")
+    execution_choice.add_argument("--disable", action="store_true")
     commands.add_parser(
         "configure-research", help="Prepare coordinator-only Kanban and Notion filing"
     )
@@ -215,6 +241,21 @@ def operate(arguments, settings):
             result = configure_guests(
                 runtime, enabled=True if arguments.enable else False if arguments.disable else None
             )
+        elif arguments.action == "prepare-linear-agents":
+            doctor(runtime)
+            result = linear.prepare(
+                runtime,
+                owner=arguments.owner,
+                organization=arguments.organization,
+                teams=arguments.team,
+                with_dexter=arguments.with_dexter,
+            )
+        elif arguments.action == "configure-linear-agents":
+            result = linear.configure(runtime)
+        elif arguments.action == "connect-linear-agents":
+            result = linear.setup_window(runtime)
+        elif arguments.action == "linear-execution":
+            result = linear.execution(runtime, enabled=arguments.enable)
         elif arguments.action == "configure-route":
             result = configure_route(runtime)
         elif arguments.action == "configure-monitoring":

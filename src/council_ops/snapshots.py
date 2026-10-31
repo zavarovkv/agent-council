@@ -12,6 +12,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from .config import OperationError, atomic_write
+from .linear_state import maintenance
 
 # Only disposable directories at a Hermes profile root; workspace content is never filtered.
 DISPOSABLE = frozenset(
@@ -43,6 +44,12 @@ def disposable_path(relative):
         parts[0] in DISPOSABLE
         or (len(parts) >= 3 and parts[0] == "profiles" and parts[2] in DISPOSABLE)
         or (len(parts) >= 3 and parts[:2] == (".council", "secretary") and parts[2] in DISPOSABLE)
+        or (
+            len(parts) >= 4
+            and parts[:2] == (".council", "linear")
+            and parts[2] in {"bridge", "qui-gon", "dexter"}
+            and parts[3] in DISPOSABLE
+        )
     )
 
 
@@ -129,6 +136,7 @@ def load_manifest(backup):
     return backup, manifest
 
 
+@maintenance
 def snapshot(runtime, *, include_image=False, restart=True, portable=False):
     settings = runtime.settings
     settings.backup_dir.mkdir(mode=0o700, parents=True, exist_ok=True)
@@ -136,8 +144,10 @@ def snapshot(runtime, *, include_image=False, restart=True, portable=False):
     image, labels = runtime.image()
     running_services = runtime.running_services()
     running = runtime.inspect()["State"]["Running"]
-    if not running and "secretary" in running_services:
-        raise OperationError("Stop the secretary too before copying a stopped Hermes deployment.")
+    if not running and any(service != "hermes" for service in running_services):
+        raise OperationError(
+            "Stop all owned companion services before copying a stopped deployment."
+        )
     runtime.require_idle()
     size = 0
     for root in (settings.data_dir, settings.workspace_dir):

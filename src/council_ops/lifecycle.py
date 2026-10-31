@@ -9,6 +9,7 @@ import uuid
 from pathlib import Path
 
 from .config import OperationError, atomic_write, read_settings
+from .linear_state import maintenance, require_capability
 from .snapshots import copy_state, load_manifest, snapshot
 
 
@@ -54,6 +55,7 @@ def smoke(runtime, backup, *, image=None, prepare_copy=None, instruction_mode=No
         from .guests import require_compatible
 
         require_compatible(runtime, roots["hermes"], image=image)
+        require_capability(runtime, roots["hermes"], image=image)
         runtime.run(
             [
                 "docker",
@@ -101,6 +103,7 @@ def smoke(runtime, backup, *, image=None, prepare_copy=None, instruction_mode=No
     return manifest
 
 
+@maintenance
 def restore(runtime, backup, *, require_idle=True):
     """Restore only this deployment; retain displaced live directories for recovery."""
     backup, manifest = load_manifest(backup)
@@ -116,6 +119,7 @@ def restore(runtime, backup, *, require_idle=True):
     from .guests import require_compatible
 
     require_compatible(runtime, runtime.settings.data_dir, backup / "hermes", image=image)
+    require_capability(runtime, runtime.settings.data_dir, backup / "hermes", image=image)
     smoke(runtime, backup)
     settings = runtime.settings
     uid, gid = identity(settings)
@@ -152,6 +156,12 @@ def restore(runtime, backup, *, require_idle=True):
                 "COUNCIL_HERMES_IMAGE": image,
                 "COUNCIL_SECRETARY_ENABLED": "true"
                 if "secretary" in manifest.get("running_services", [])
+                else "false",
+                "COUNCIL_LINEAR_ENABLED": "true"
+                if "linear-adapter" in manifest.get("running_services", [])
+                else "false",
+                "COUNCIL_LINEAR_DEXTER_ENABLED": "true"
+                if "dexter-executor" in manifest.get("running_services", [])
                 else "false",
             }
         )
@@ -234,6 +244,7 @@ def build(runtime):
     return revision, image
 
 
+@maintenance
 def deploy(runtime, *, instruction_source=None, instruction_revision=None):
     files = None
     capabilities = []
@@ -275,6 +286,7 @@ def deploy(runtime, *, instruction_source=None, instruction_revision=None):
     from .guests import require_compatible
 
     require_compatible(runtime, runtime.settings.data_dir, image=image)
+    require_capability(runtime, runtime.settings.data_dir, image=image)
     if files is not None:
         verify_capabilities(runtime, capabilities, image=image)
     backup = snapshot(runtime, restart=False)

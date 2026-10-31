@@ -104,6 +104,23 @@ class Runtime:
         )
         if pending != "0":
             raise OperationDeferred("Secretary replies are pending; retry maintenance when idle.")
+        from .linear_state import root
+
+        path = root(self.settings) / "bridge/linear.sqlite3"
+        if path.exists():
+            import sqlite3
+            from contextlib import closing
+
+            if path.resolve() != path:
+                raise OperationError("Refusing a symlinked Linear store.")
+            with closing(sqlite3.connect(path.as_uri() + "?mode=ro", uri=True)) as db:
+                count = db.execute(
+                    "SELECT count(*) FROM jobs WHERE state NOT IN ('done','failed','cancelled')"
+                ).fetchone()[0]
+            if count:
+                raise OperationDeferred(
+                    "Linear tasks are active; finish or stop them before maintenance."
+                )
 
     def run(self, arguments, *, timeout=180, interactive=False, environment=None):
         try:
@@ -167,6 +184,9 @@ class Runtime:
         return identifier, metadata.get("Config", {}).get("Labels", {}) or {}
 
     def stop(self):
+        for _service, container, running in self.linear_companions():
+            if running:
+                self.run(["docker", "stop", "--time", "30", container])
         self.compose("stop", "--timeout", "30", "hermes")
         companion = self.companion()
         if companion:
@@ -181,6 +201,9 @@ class Runtime:
             state = json.loads(self.run(["docker", "inspect", companion]))[0]["State"]
             if state["Running"]:
                 containers.append(companion)
+        containers.extend(
+            container for _service, container, running in self.linear_companions() if running
+        )
         if any(not re.fullmatch(r"[a-f0-9]{12,64}", value) for value in containers):
             raise OperationError("Expected owned Docker container IDs.")
         unit = "agent-council-thaw-" + uuid.uuid4().hex
@@ -221,7 +244,11 @@ class Runtime:
                 # Leave the independent recovery timer armed.
                 raise OperationError("Could not thaw a container; recovery watchdog remains armed.")
 
-    def companion(self):
+    def companion(self, service="secretary"):
+        from .linear_state import SERVICES
+
+        if service not in ("secretary", *SERVICES):
+            raise OperationError("Unrecognized owned companion service.")
         identifiers = self.run(
             [
                 "docker",
@@ -231,12 +258,27 @@ class Runtime:
                 "--filter",
                 "label=com.docker.compose.project=agent-council",
                 "--filter",
-                "label=com.docker.compose.service=secretary",
+                "label=com.docker.compose.service=" + service,
             ]
         ).splitlines()
         if len(identifiers) > 1:
-            raise OperationError("Expected at most one secretary container.")
+            raise OperationError("Expected at most one owned service container.")
         return identifiers[0] if identifiers else None
+
+    def linear_companions(self):
+        from .linear_state import SERVICES, root
+
+        if not root(self.settings).exists():
+            return []
+        result = []
+        for service in SERVICES:
+            container = self.companion(service)
+            if container:
+                running = json.loads(self.run(["docker", "inspect", container]))[0]["State"][
+                    "Running"
+                ]
+                result.append((service, container, running))
+        return result
 
     def running_services(self):
         companion = self.companion()
@@ -244,8 +286,13 @@ class Runtime:
             companion
             and json.loads(self.run(["docker", "inspect", companion]))[0]["State"]["Running"]
         ):
-            return ["hermes", "secretary"]
-        return ["hermes"]
+            services = ["hermes", "secretary"]
+        else:
+            services = ["hermes"]
+        services.extend(
+            service for service, _container, running in self.linear_companions() if running
+        )
+        return services
 
     def start(self):
         values = read_settings(self.settings.env_file)
@@ -254,6 +301,12 @@ class Runtime:
             if "\n  secretary:\n" not in self.compose_source().read_text():
                 raise OperationError("The active release does not contain the secretary service.")
             services.append("secretary")
+        if values.get("COUNCIL_LINEAR_ENABLED") == "true":
+            if "\n  linear-adapter:\n" not in self.compose_source().read_text():
+                raise OperationError("The active release does not contain Linear services.")
+            services.extend(["linear-adapter", "linear-executor"])
+            if values.get("COUNCIL_LINEAR_DEXTER_ENABLED") == "true":
+                services.append("dexter-executor")
         self.compose(
             "up",
             "-d",
@@ -280,6 +333,10 @@ class Runtime:
             "--timeout",
             "60",
         )
+        if not getattr(self, "_linear_maintenance_depth", 0):
+            from .linear_state import root
+
+            (root(self.settings) / "bridge/runtime/maintenance").unlink(missing_ok=True)
 
     def revision(self):
         revision = self.run(["git", "rev-parse", "HEAD"])

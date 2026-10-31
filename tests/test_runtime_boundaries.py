@@ -46,3 +46,7 @@ class RuntimeBoundaryTests(unittest.TestCase):
                 "menus.py": {"telegram", "hermes_cli.commands_platforms"},
             },
         )
+
+    def test_linear_bridge_cannot_import_the_personal_agent_or_host_operations(self):
+        self.check_imports("linear_agent", {})
+        self.check_imports("linear_tools", {"__init__.py": {"gateway.session_context"}})
