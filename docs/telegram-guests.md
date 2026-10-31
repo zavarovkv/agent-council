@@ -47,45 +47,54 @@ schema-1 policies load with owner-only admission in the new image and migrate
 on the next operator change. Use current compatible images and post-enable backups when
 recovering a replacement host. Do not remove the policy to bypass this check.
 
-## Permissions, limits and storage
+## Extended owner assistant
 
-- The owner's guest calls use a public, tool-free
-  policy in [instructions/guest/POLICY.md](../instructions/guest/POLICY.md).
-  Personal requests belong in the direct private conversation with the bot.
-  Private prompts, reply skills, memory, tools and external integrations are not
-  supplied to guest inference. Replies never use the owner's business connection.
-  The bot still answers as a public assistant rather than performing private
-  owner actions. Guest access does not change ordinary public-DM/secretary policy.
-- Identity comes from Telegram's numeric sender ID. Bot senders, anonymous/channel
-  senders, missing identities and malformed updates are rejected. Usernames do not
-  grant rights. Guest contexts are separate from business and public-DM contexts.
-- Text only: invocation up to 4,000 characters, one quote up to 2,000 characters,
-  response up to 3,000 characters. Media receives a local text-only explanation.
-  Links do not trigger browsing or previews. Quoted instructions are untrusted.
-- Admission: one pending call per actor, four per chat, 16 globally; 20 calls per
-  chat/hour, 10 calls per actor/hour across
-  all chats, 60 globally/hour including local notices. Guest inference shares the
-  public-DM slot and 40-generation/hour budget. Business retains its own slot and
-  60-generation/hour budget. Over-limit calls are dropped without provider spend.
-- A local 120-second processing deadline bounds queued work; this is not a
-  Telegram API lifetime guarantee. Only `answerGuestQuery` is used. Duplicate,
-  expired, interrupted or ambiguously delivered requests are never retried and
-  never fall back to `sendMessage`. A new invocation is required.
-- The pinned native Hermes formatter converts model Markdown to Telegram
-  MarkdownV2 before the single send, including bold text, code and links. If
-  conversion is unavailable/invalid, that attempt uses plain text. A failed API
-  delivery is never retried merely to change formatting. Link previews stay off.
-- Private `plugin-data/council-secretary/guest-queue.sqlite3` retains raw invocation,
-  quote and reply token only while pending; it scrubs them at completion/rejection
-  or expiry (30-second housekeeping). Deduplication/rate-limit metadata lasts one
-  hour. The worker stores no guest question or answer text, only hashed reservations
-  for one hour, pruned at startup/next request; aggregate outcome records last 14 days.
-  Provider-side retention follows that model account's settings. Encrypted backups
-  can retain earlier queue state until their normal backup retention expires.
+Enable the main profile after deploying an image with `telegram-guest-agent-v1`:
 
-All guest updates are intercepted before private handlers even when replies are
-disabled or settings are invalid. The worker cannot call the private agent.
-Existing chats, private authentication and unrelated services are unchanged.
+```bash
+sudo python3 scripts/manage.py guest-mode --enable --owner-agent
+```
+
+This writes schema 3 after a copied-profile smoke check. Rollback/restore must
+retain this capability even after disabling Guest Mode. The immutable owner ID
+is checked at admission, before native execution, while waiting and before each
+Telegram edit. Neither spouse, contacts, usernames nor quotes grant this route.
+Ordinary public DMs and Secretary Mode keep their isolated policies.
+
+A call in either a private conversation or a group now uses the main Hermes
+profile's memory, skills, model and available tools. A deterministic, separate
+native session per owner/chat/thread preserves context between invocations; it
+never resumes the direct-DM transcript. Quoted messages are explicitly untrusted.
+Answers are visible to the conversation: relevant private context requested by
+the owner may be included, but unrelated memory and credentials must not be dumped.
+The bot sees the invocation and one quote, not the group's full history.
+
+The bot acknowledges via `answerGuestQuery`, stores its `inline_message_id`, and
+edits that response with progress, clarification or the final result. No
+`sendMessage` fallback, extra poller, model credential copy or approval bypass.
+Execution uses the pinned Hermes gateway's own session and prompt protocol.
+Clarification answers can be supplied by the owner with another invocation in
+the same conversation. Dangerous-action approvals remain in the Council session.
+Substantial delegated tasks are tracked by the assistant in Linear; an accepted
+request or draft is not automatically treated as a completed task.
+
+There is one active owner guest run globally, at most 60 accepted calls/hour,
+and a 30-minute wait limit. Native interruption is requested on revocation,
+timeout or transport failure; already performed tool effects are not rolled back.
+Uncertain sends/submissions and started jobs are never automatically replayed
+following a restart. The reply tells the owner to inspect Council before retrying.
+The native session retains the actual execution history. Raw queue inputs are
+scrubbed when the attempt ends, with deduplication metadata retained up to a day
+and pruned on the next request in the private 0600 `owner-guest.sqlite3` database.
+Encrypted backups follow normal retention. No private material enters the public
+landing snapshot.
+
+Without `--owner-agent`, the owner still gets the original stateless, tool-free
+public guest policy in `instructions/guest/POLICY.md`. Its queue retains a 120-second
+local deadline and lower public inference quotas. Disabling invalidates both
+routes immediately at their next check; an HTTP request already sent to Telegram
+cannot be recalled. All guest updates remain intercepted, including malformed
+updates and updates received while disabled.
 
 ## Verify
 

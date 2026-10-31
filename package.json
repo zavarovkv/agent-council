@@ -7,7 +7,7 @@
     "node": "24.x"
   },
   "scripts": {
-    "check": "node --check assets/login/telegram-widget.js && node --check assets/login/team.js"
+    "check": "node --check assets/login/telegram-widget.js && node --check assets/login/team.js && node --check assets/login/preferences.js"
   },
   "dependencies": {
     "beauty-css": "0.4.0"

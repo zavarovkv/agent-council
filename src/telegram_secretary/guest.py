@@ -12,6 +12,7 @@ logger = logging.getLogger(__name__)
 NOTICES = {
     "unsupported": "В гостевом режиме пока работаю с текстом. Напишите вопрос текстом.",
     "too_long": "Сократите вопрос до 4000 символов и вызовите меня снова.",
+    "busy": "Предыдущее задание ещё выполняется. Его статус обновляется в исходном сообщении; повторите новый запрос после завершения.",
 }
 
 
@@ -95,10 +96,11 @@ def incoming(update, now):
 class GuestBridge(Delivery):
     route = "public"
 
-    def __init__(self, *args, home, formatter=None, **kwargs):
+    def __init__(self, *args, home, formatter=None, owner_bridge=None, **kwargs):
         super().__init__(*args, **kwargs)
         self.home = home
         self.formatter = formatter
+        self.owner_bridge = owner_bridge
         self.capability_lock = asyncio.Lock()
         self.capable, self.checked_until = False, 0
 
@@ -138,6 +140,10 @@ class GuestBridge(Delivery):
         if not state.enabled:
             return
         job = incoming(update, self.clock())
+        if state.owner_agent:
+            if job is not None and self.eligible(job) and self.owner_bridge is not None:
+                await self.owner_bridge.handle(job, state.revision)
+            return
         if job is not None and self.eligible(job) and self.store.submit(job, state.revision):
             self.kick(state.revision, job["chat"])
 
@@ -191,7 +197,7 @@ class GuestBridge(Delivery):
                 link_preview_options=LinkPreviewOptions(is_disabled=True),
             ),
         )
-        await self.application.bot.answer_guest_query(
+        return await self.application.bot.answer_guest_query(
             guest_query_id=job["query_id"],
             result=result,
             read_timeout=10,

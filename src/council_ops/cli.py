@@ -106,11 +106,17 @@ def parser():
     )
     secretary.add_argument("--assistant-name", default="Ассистент")
     guests = commands.add_parser(
-        "guest-mode", help="Read or atomically enable/disable isolated guest replies"
+        "guest-mode", help="Read or configure owner-only Telegram guest replies"
     )
     choices = guests.add_mutually_exclusive_group()
     choices.add_argument("--enable", action="store_true")
     choices.add_argument("--disable", action="store_true")
+    guests.add_argument(
+        "--owner-agent",
+        action="store_true",
+        default=None,
+        help="Use the main assistant for the pinned owner's guest calls",
+    )
     commands.add_parser("doctor", help="Read safe configuration, isolation and service status")
     prepare_linear = commands.add_parser(
         "prepare-linear-agents", help="Prepare isolated Linear executors without model credentials"
@@ -270,7 +276,9 @@ def operate(arguments, settings):
             if arguments.enable:
                 doctor(runtime)
             result = configure_guests(
-                runtime, enabled=True if arguments.enable else False if arguments.disable else None
+                runtime,
+                enabled=True if arguments.enable else False if arguments.disable else None,
+                owner_agent=arguments.owner_agent,
             )
         elif arguments.action == "prepare-linear-agents":
             doctor(runtime)

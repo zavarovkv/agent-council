@@ -90,3 +90,5 @@ The optional [Linear agents](docs/linear-agents.md) receive delegated issues,
 ask for clarification and route sub-issues to isolated executors.
 
 [MIT](LICENSE). Dependencies retain their own licenses.
+
+На публичном лендинге доступны RU/EN и светлая/тёмная тема; выбор сохраняется локально. Портреты — PNG 256×256 с прозрачным внешним фоном, мобильный вход использует штатный Telegram Icon.

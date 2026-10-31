@@ -14,6 +14,7 @@ class GuestState:
     revision: str = ""
     error: bool = False
     schema: int = 2
+    owner_agent: bool = False
 
 
 def load_state(home):
@@ -31,14 +32,25 @@ def load_state(home):
         value = json.loads(path.read_text())
         if (
             not isinstance(value, dict)
-            or set(value) != {"schema", "enabled", "revision"}
+            or set(value)
+            != (
+                {"schema", "enabled", "revision", "owner_agent"}
+                if value.get("schema") == 3
+                else {"schema", "enabled", "revision"}
+            )
             or type(value["schema"]) is not int
-            or value["schema"] not in {1, 2}
+            or value["schema"] not in {1, 2, 3}
+            or type(value.get("owner_agent", False)) is not bool
             or type(value["enabled"]) is not bool
             or not isinstance(value["revision"], str)
             or not re.fullmatch(r"[a-f0-9]{32}", value["revision"])
         ):
             raise ValueError("Invalid guest policy.")
-        return GuestState(value["enabled"], value["revision"], schema=value["schema"])
+        return GuestState(
+            value["enabled"],
+            value["revision"],
+            schema=value["schema"],
+            owner_agent=value.get("owner_agent", False),
+        )
     except (OSError, ValueError, TypeError, KeyError):
         return GuestState(error=True)

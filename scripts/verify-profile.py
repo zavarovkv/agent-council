@@ -104,6 +104,13 @@ def main():
         from secretary_worker.instructions import guest_instructions
 
         guest_instructions()
+        if state.owner_agent:
+            from hermes_cli.gateway_client import connect_gateway
+
+            if not callable(connect_gateway) or not callable(
+                getattr(Bot, "edit_message_text", None)
+            ):
+                raise ValueError("Owner guest execution interfaces are unavailable.")
     private_instructions = home / ".council/secretary/instructions"
     mode = os.environ.get("COUNCIL_VERIFY_SECRETARY_INSTRUCTIONS", "image")
     if mode not in {"image", "profile"}:
@@ -132,6 +139,7 @@ def main():
         home / "plugin-data/council-secretary/queue.sqlite3",
         home / "plugin-data/council-secretary/public-queue.sqlite3",
         home / "plugin-data/council-secretary/guest-queue.sqlite3",
+        home / "plugin-data/council-secretary/owner-guest.sqlite3",
         home / ".council/secretary/secretary-history.sqlite3",
         home / ".council/research-filing/outbox.sqlite3",
     ):

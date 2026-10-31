@@ -21,6 +21,24 @@ AVATARS = {
     "lando": "lando.png",
     "padme": "padme.png",
 }
+ENGLISH = {
+    "qui-gon": (
+        "Assistant and coordinator",
+        "Manages tasks through completion, delegates work, reviews results and clarifies decisions with the owner.",
+    ),
+    "dexter": (
+        "Product researcher",
+        "Studies competitors, markets, products, pricing and customer needs; verifies primary sources and separates facts from hypotheses.",
+    ),
+    "marketing": (
+        "Marketing and SEO",
+        "Positioning, audience research, SEO, content, distribution and growth experiments with measured results.",
+    ),
+    "padme": (
+        "Editor",
+        "Edits Russian texts, preserves the author's voice and prepares clear, natural copy for websites, publications and executives.",
+    ),
+}
 PUBLIC_SLUGS = {slug: "lando" if slug == "marketing" else slug for slug in ROLES}
 MODELS = {
     "gpt-6.1-sol": "GPT-6.1 Sol",
@@ -143,11 +161,12 @@ def markup():
         cards.append(
             f'<article data-agent="{PUBLIC_SLUGS[slug]}">'
             f'<img data-avatar="{PUBLIC_SLUGS[slug]}" width="96" height="96" alt="{html.escape(role["name"])}" loading="lazy">'
-            f"<h2>{html.escape(role['name'])}</h2><p><strong>{TITLES[slug]}</strong></p>"
-            f"<p>{html.escape(role['specialty'])}</p>"
-            '<p>Модель: <strong data-field="model">—</strong></p>'
-            '<p>Завершено задач: <strong data-field="closed_tasks">—</strong> · '
-            'Токены: <strong data-field="tokens">—</strong></p>'
+            f"<h2>{html.escape(role['name'])}</h2><p>"
+            f'<strong data-en="{html.escape(ENGLISH[slug][0])}">{TITLES[slug]}</strong></p>'
+            f'<p data-en="{html.escape(ENGLISH[slug][1])}">{html.escape(role["specialty"])}</p>'
+            '<p><span data-en="Model:">Модель:</span> <strong data-field="model">—</strong></p>'
+            '<p><span data-en="Completed tasks:">Завершено задач:</span> <strong data-field="closed_tasks">—</strong> · '
+            '<span data-en="Tokens:">Токены:</span> <strong data-field="tokens">—</strong></p>'
             '<p><small data-field="connection"></small></p></article>'
         )
     return "\n".join(cards)

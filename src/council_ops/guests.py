@@ -17,6 +17,7 @@ from .snapshots import snapshot
 
 CAPABILITY = "telegram-guests-v1"
 OWNER_CAPABILITY = "telegram-guest-owner-v1"
+AGENT_CAPABILITY = "telegram-guest-agent-v1"
 
 
 def require_compatible(runtime, *homes, image=None):
@@ -32,6 +33,8 @@ def require_compatible(runtime, *homes, image=None):
             for home in homes
         ):
             required.append(OWNER_CAPABILITY)
+        if any(load_state(home).schema >= 3 for home in homes):
+            required.append(AGENT_CAPABILITY)
         verify_capabilities(runtime, required, image=image)
 
 
@@ -59,18 +62,24 @@ def platform_enabled(settings):
         ) from None
 
 
-def configure(runtime, *, enabled=None):
+def configure(runtime, *, enabled=None, owner_agent=None):
     settings = runtime.settings
     state = load_state(settings.data_dir)
-    if enabled is None:
+    if enabled is None and owner_agent is None:
         return {
             "enabled": state.enabled,
             "policy_valid": not state.error,
             "restart_required": False,
             "owner_only": True,
+            "owner_agent": state.owner_agent,
         }
+    enabled = state.enabled if enabled is None else enabled
+    owner_agent = state.owner_agent if owner_agent is None else owner_agent
+    schema = 3 if owner_agent or state.schema == 3 else 2
     if enabled:
-        verify_capabilities(runtime, [CAPABILITY, OWNER_CAPABILITY])
+        verify_capabilities(
+            runtime, [CAPABILITY, OWNER_CAPABILITY] + ([AGENT_CAPABILITY] if schema == 3 else [])
+        )
         inspected = runtime.inspect()
         environment = dict(item.split("=", 1) for item in inspected["Config"]["Env"] if "=" in item)
         policy = SecretarySettings.load({**environment, "HERMES_HOME": str(settings.data_dir)})
@@ -88,12 +97,26 @@ def configure(runtime, *, enabled=None):
         if not platform_enabled(settings):
             raise OperationError("Enable Guest Mode for this bot in BotFather first.")
     path = settings.data_dir / RELATIVE_POLICY
-    if not state.error and state.enabled is enabled and state.schema == 2 and path.is_file():
-        return {"enabled": enabled, "changed": False, "restart_required": False, "owner_only": True}
+    if (
+        not state.error
+        and state.enabled is enabled
+        and state.owner_agent is owner_agent
+        and state.schema == schema
+        and path.is_file()
+    ):
+        return {
+            "enabled": enabled,
+            "changed": False,
+            "restart_required": False,
+            "owner_only": True,
+            "owner_agent": owner_agent,
+        }
     if path.parent.resolve() != path.parent:
         raise OperationError("Refusing a symlinked guest configuration directory.")
     checkpoint = None
-    value = {"schema": 2, "enabled": enabled, "revision": secrets.token_hex(16)}
+    value = {"schema": schema, "enabled": enabled, "revision": secrets.token_hex(16)}
+    if schema == 3:
+        value["owner_agent"] = owner_agent
     body = (json.dumps(value) + "\n").encode()
     uid, gid = identity(settings)
 
@@ -110,6 +133,7 @@ def configure(runtime, *, enabled=None):
     # A fresh epoch also invalidates all work admitted before a disable/re-enable.
     write_policy(settings.data_dir)
     result = {"enabled": enabled, "changed": True, "restart_required": False, "owner_only": True}
+    result["owner_agent"] = owner_agent
     if checkpoint is not None:
         result["checkpoint"] = str(checkpoint)
     return result

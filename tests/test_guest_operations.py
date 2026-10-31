@@ -74,6 +74,23 @@ class GuestOperationsTests(unittest.TestCase):
             platform.assert_called()
             self.runtime.start.assert_not_called()
 
+    def test_extended_policy_retains_compatibility_floor_after_disable(self):
+        path = self.home / RELATIVE_POLICY
+        path.parent.mkdir(parents=True)
+        path.write_text(
+            json.dumps({"schema": 3, "enabled": True, "owner_agent": True, "revision": "a" * 32})
+        )
+        path.chmod(0o600)
+        with patch("council_ops.guests.identity", return_value=(os.getuid(), os.getgid())):
+            result = configure(self.runtime, enabled=False)
+        self.assertFalse(result["enabled"])
+        self.assertTrue(result["owner_agent"])
+        self.assertEqual(load_state(self.home).schema, 3)
+        with patch("council_ops.guests.verify_capabilities") as verify:
+            require_compatible(self.runtime, self.home, image="old")
+            self.assertIn("telegram-guest-agent-v1", verify.call_args.args[1])
+        self.runtime.run.assert_not_called()
+
     def test_old_image_is_rejected_before_a_deployment_stops_anything(self):
         from council_ops.lifecycle import deploy
 
