@@ -96,7 +96,7 @@ class Runtime:
             "import sqlite3; from pathlib import Path; "
             "root=Path('/opt/data/plugin-data/council-secretary'); "
             "counts=[sqlite3.connect(p.as_uri()+'?mode=ro',uri=True).execute(\"SELECT count(*) FROM jobs WHERE status IN ('queued','working','sending')\").fetchone()[0] "
-            "for p in (root/'queue.sqlite3',root/'public-queue.sqlite3') if p.exists()]; "
+            "for p in (root/'queue.sqlite3',root/'public-queue.sqlite3',root/'guest-queue.sqlite3') if p.exists()]; "
             "print(sum(counts))"
         )
         pending = self.compose(

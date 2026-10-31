@@ -13,6 +13,8 @@ The project is in early development, built around
 - Connects to Linear through its official OAuth-backed MCP integration.
 - Provides an optional Telegram secretary for selected account chats and public
   bot conversations, with separate reply styles for spouse, contacts and new users.
+- Supports opt-in [Telegram guest calls](docs/telegram-guests.md) in other chats,
+  with stateless public answers and no private tools or history.
 - Includes Docker deployment, persistent storage, verified rollback and encrypted
   Cloudflare R2 backup tooling.
 
@@ -45,7 +47,7 @@ state before switching releases. Off-server backups require separate
 ## Instructions and skills
 
 Start with the [instruction index](instructions/README.md). Shared instructions
-are grouped by role: `assistant/`, `dexter/` and `secretary/`. The secretary's
+are grouped by role: `assistant/`, `dexter/`, `secretary/` and `guest/`. The secretary's
 common policy and three reply scenarios are editable Markdown files.
 
 Personal rules can live in a [private instruction repository](docs/private-instructions.md),

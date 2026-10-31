@@ -110,6 +110,7 @@ def secretary_status(settings, inspected):
     Optional-route faults are reported rather than preventing deploy/restore from
     repairing them. Container isolation failures below remain hard failures.
     """
+    from telegram_secretary.guest_policy import load_state
     from telegram_secretary.policy import Settings as SecretarySettings
 
     environment = dict(
@@ -119,9 +120,11 @@ def secretary_status(settings, inspected):
         return {"enabled": False}
     policy = SecretarySettings.load({**environment, "HERMES_HOME": str(settings.data_dir)})
     queues = {}
+    guests = load_state(settings.data_dir)
     for route, enabled, filename in (
         ("business", policy.enabled, "queue.sqlite3"),
         ("public", policy.public_enabled, "public-queue.sqlite3"),
+        ("guest", guests.enabled, "guest-queue.sqlite3"),
     ):
         if not enabled:
             queues[route] = {"enabled": False}
@@ -137,7 +140,16 @@ def secretary_status(settings, inspected):
                 oldest = db.execute(
                     "SELECT min(created) FROM jobs WHERE status IN ('queued','working','sending')"
                 ).fetchone()[0]
-            allowed = {"queued", "working", "sending", "sent", "failed", "cancelled", "uncertain"}
+            allowed = {
+                "queued",
+                "working",
+                "sending",
+                "sent",
+                "failed",
+                "cancelled",
+                "uncertain",
+                "expired",
+            }
             if not set(states) <= allowed:
                 raise ValueError("Invalid queue state")
             queues[route] = {
@@ -150,7 +162,12 @@ def secretary_status(settings, inspected):
             }
         except (OSError, sqlite3.Error, ValueError):
             queues[route] = {"enabled": True, "available": False}
-    return {"enabled": True, "policy_valid": policy.enabled, "queues": queues}
+    return {
+        "enabled": True,
+        "policy_valid": policy.enabled,
+        "queues": queues,
+        "guest_policy_valid": not guests.error,
+    }
 
 
 def generation_status(home):

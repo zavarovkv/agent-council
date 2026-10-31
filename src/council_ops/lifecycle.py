@@ -51,6 +51,9 @@ def smoke(runtime, backup, *, image=None, prepare_copy=None, instruction_mode=No
         from .instructions import installed_requirements, verify_capabilities
 
         verify_capabilities(runtime, installed_requirements(roots["hermes"]), image=image)
+        from .guests import require_compatible
+
+        require_compatible(runtime, roots["hermes"], image=image)
         runtime.run(
             [
                 "docker",
@@ -110,6 +113,9 @@ def restore(runtime, backup, *, require_idle=True):
                 "Load the recorded image or use a backup containing image.tar."
             ) from None
         runtime.run(["docker", "image", "load", "--input", str(backup / "image.tar")], timeout=900)
+    from .guests import require_compatible
+
+    require_compatible(runtime, runtime.settings.data_dir, backup / "hermes", image=image)
     smoke(runtime, backup)
     settings = runtime.settings
     uid, gid = identity(settings)
@@ -266,6 +272,9 @@ def deploy(runtime, *, instruction_source=None, instruction_revision=None):
         ):
             raise OperationError("Apply the private secretary selector before a combined release.")
     revision, image = build(runtime)
+    from .guests import require_compatible
+
+    require_compatible(runtime, runtime.settings.data_dir, image=image)
     if files is not None:
         verify_capabilities(runtime, capabilities, image=image)
     backup = snapshot(runtime, restart=False)

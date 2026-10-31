@@ -11,6 +11,7 @@ from pathlib import Path
 from .config import OperationDeferred, OperationError, Settings
 from .doctor import doctor, unit_status
 from .guard import ServiceGuard
+from .guests import configure as configure_guests
 from .install import install, recover
 from .instructions import apply as apply_instructions
 from .instructions import export as export_instructions
@@ -85,6 +86,12 @@ def parser():
         help="Explicit account-owner display name; no implicit repository owner",
     )
     secretary.add_argument("--assistant-name", default="Ассистент")
+    guests = commands.add_parser(
+        "guest-mode", help="Read or atomically enable/disable isolated guest replies"
+    )
+    choices = guests.add_mutually_exclusive_group()
+    choices.add_argument("--enable", action="store_true")
+    choices.add_argument("--disable", action="store_true")
     commands.add_parser("doctor", help="Read safe configuration, isolation and service status")
     commands.add_parser(
         "configure-research", help="Prepare coordinator-only Kanban and Notion filing"
@@ -202,6 +209,12 @@ def operate(arguments, settings):
             doctor(runtime)
         if arguments.action == "doctor":
             result = doctor(runtime)
+        elif arguments.action == "guest-mode":
+            if arguments.enable:
+                doctor(runtime)
+            result = configure_guests(
+                runtime, enabled=True if arguments.enable else False if arguments.disable else None
+            )
         elif arguments.action == "configure-route":
             result = configure_route(runtime)
         elif arguments.action == "configure-monitoring":

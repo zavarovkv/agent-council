@@ -42,6 +42,7 @@ class RuntimeBoundaryTests(unittest.TestCase):
                 "plugin.py": {"telegram", "telegram.ext"},
                 "bridge.py": {"telegram"},
                 "public.py": {"telegram"},
+                "guest.py": {"telegram"},
                 "menus.py": {"telegram", "hermes_cli.commands_platforms"},
             },
         )
