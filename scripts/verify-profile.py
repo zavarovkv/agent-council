@@ -115,7 +115,7 @@ def main():
         from secretary_worker.instructions import guest_instructions
 
         guest_instructions()
-        if state.owner_agent:
+        if getattr(state, "owner_agent", False):
             from hermes_cli.gateway_client import connect_gateway
 
             if not callable(connect_gateway) or not callable(
