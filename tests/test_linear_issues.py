@@ -256,6 +256,14 @@ class IssueManagementTests(unittest.TestCase):
         )
         self.assertEqual(result["id"], child["issue_id"])
         self.assertEqual(result["state"]["type"], "completed")
+        with self.assertRaises(ValueError):
+            self.call(
+                context,
+                "complete",
+                key="too-soon",
+                result="Parent done",
+                verification="Sub-issue Done",
+            )
         for action in ("create", "list"):
             with self.subTest(action=action), self.assertRaises(PermissionError):
                 self.service.issue_tasks(

@@ -210,6 +210,10 @@ class Issues:
                     or not 1 <= len(payload[name].strip()) <= 4000
                 ):
                     raise ValueError("Completion requires the actual result and its verification.")
+            if issue["id"] == session["issue"] and any(
+                child["state"] != "done" for child in self.store.children(slug, session["id"])
+            ):
+                raise ValueError("Wait for delegated results before completing the parent task.")
             children = issue["children"]
             if children["pageInfo"]["hasNextPage"] or any(
                 c["state"]["type"] not in {"completed", "canceled", "duplicate"}
