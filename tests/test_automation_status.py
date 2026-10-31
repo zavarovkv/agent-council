@@ -80,7 +80,9 @@ class AutomationStatusTests(unittest.TestCase):
 
     def test_unit_diagnostics_keep_only_fixed_status_properties(self):
         runtime = SimpleNamespace(
-            run=lambda _: "ActiveState=active\nUnitFileState=enabled\nResult=success\nEnvironment=private-value\nExecMainStatus=0\n"
+            run=lambda _: (
+                "ActiveState=active\nUnitFileState=enabled\nResult=success\nEnvironment=private-value\nExecMainStatus=0\n"
+            )
         )
         self.assertEqual(
             unit_status(runtime, "agent-council-skills.timer"),
