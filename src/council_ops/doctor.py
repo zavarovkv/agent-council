@@ -167,6 +167,7 @@ def secretary_status(settings, inspected):
         "policy_valid": policy.enabled,
         "queues": queues,
         "guest_policy_valid": not guests.error,
+        "guest_owner_only": True,
     }
 
 

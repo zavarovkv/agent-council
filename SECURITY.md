@@ -45,6 +45,16 @@ a spouse username is not verified family identity. This does not
 authorize general guest execution or access to private Notion/Drive integrations.
 See [secretary setup and delivery limits](docs/secretary.md).
 
+Optional [guest invocations](docs/telegram-guests.md) are limited to the pinned
+numeric owner ID even in a shared conversation. Admission and delivery both
+check that identity; usernames and quoted instructions grant no access. The
+answer is visible to participants, so guest inference receives only a generic
+public policy, invocation and one bounded quote, with no private instructions,
+history or tools. Completed guest text is scrubbed from the queue and no guest
+question/answer text is stored by the worker. Model wording can still be wrong
+or fabricated; isolation prevents access to private data, not every possible
+inappropriate statement. Do not put private facts in shared secretary instructions.
+
 ## Deployment controls
 
 - Keep the application port on host loopback behind HTTPS Nginx.

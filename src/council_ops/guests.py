@@ -16,6 +16,7 @@ from .monitoring import literal_value
 from .snapshots import snapshot
 
 CAPABILITY = "telegram-guests-v1"
+OWNER_CAPABILITY = "telegram-guest-owner-v1"
 
 
 def require_compatible(runtime, *homes, image=None):
@@ -24,7 +25,14 @@ def require_compatible(runtime, *homes, image=None):
     if any(
         (home / RELATIVE_POLICY).exists() or (home / RELATIVE_POLICY).is_symlink() for home in homes
     ):
-        verify_capabilities(runtime, [CAPABILITY], image=image)
+        required = [CAPABILITY]
+        if any(
+            ((home / RELATIVE_POLICY).exists() or (home / RELATIVE_POLICY).is_symlink())
+            and load_state(home).schema >= 2
+            for home in homes
+        ):
+            required.append(OWNER_CAPABILITY)
+        verify_capabilities(runtime, required, image=image)
 
 
 def platform_enabled(settings):
@@ -59,9 +67,10 @@ def configure(runtime, *, enabled=None):
             "enabled": state.enabled,
             "policy_valid": not state.error,
             "restart_required": False,
+            "owner_only": True,
         }
     if enabled:
-        verify_capabilities(runtime, [CAPABILITY])
+        verify_capabilities(runtime, [CAPABILITY, OWNER_CAPABILITY])
         inspected = runtime.inspect()
         environment = dict(item.split("=", 1) for item in inspected["Config"]["Env"] if "=" in item)
         policy = SecretarySettings.load({**environment, "HERMES_HOME": str(settings.data_dir)})
@@ -79,12 +88,12 @@ def configure(runtime, *, enabled=None):
         if not platform_enabled(settings):
             raise OperationError("Enable Guest Mode for this bot in BotFather first.")
     path = settings.data_dir / RELATIVE_POLICY
-    if not state.error and state.enabled is enabled and path.is_file():
-        return {"enabled": enabled, "changed": False, "restart_required": False}
+    if not state.error and state.enabled is enabled and state.schema == 2 and path.is_file():
+        return {"enabled": enabled, "changed": False, "restart_required": False, "owner_only": True}
     if path.parent.resolve() != path.parent:
         raise OperationError("Refusing a symlinked guest configuration directory.")
     checkpoint = None
-    value = {"schema": 1, "enabled": enabled, "revision": secrets.token_hex(16)}
+    value = {"schema": 2, "enabled": enabled, "revision": secrets.token_hex(16)}
     body = (json.dumps(value) + "\n").encode()
     uid, gid = identity(settings)
 
@@ -100,7 +109,7 @@ def configure(runtime, *, enabled=None):
     # Revocation deliberately needs neither an idle queue nor a model/network call.
     # A fresh epoch also invalidates all work admitted before a disable/re-enable.
     write_policy(settings.data_dir)
-    result = {"enabled": enabled, "changed": True, "restart_required": False}
+    result = {"enabled": enabled, "changed": True, "restart_required": False, "owner_only": True}
     if checkpoint is not None:
         result["checkpoint"] = str(checkpoint)
     return result

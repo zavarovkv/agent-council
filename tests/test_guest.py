@@ -29,7 +29,7 @@ def policy(home, enabled=True, revision=REVISION):
     return path
 
 
-def update(*, actor=67890, chat=-100123, number=1, text="@bot Question", query=None, now=1_000_000):
+def update(*, actor=12345, chat=-100123, number=1, text="@bot Question", query=None, now=1_000_000):
     return Object(
         guest_message=Object(
             guest_query_id=query or f"guest-query-{number}",
@@ -107,6 +107,7 @@ class GuestTests(unittest.IsolatedAsyncioTestCase):
         patched.start()
         self.addCleanup(patched.stop)
         policy(self.home)
+        (self.home / "telegram-owner.json").write_text('{"telegram_id":12345}')
 
         def schedule(coroutine):
             task = asyncio.create_task(coroutine)
@@ -131,10 +132,17 @@ class GuestTests(unittest.IsolatedAsyncioTestCase):
     async def settle(self):
         await asyncio.gather(*self.tasks)
 
-    async def test_owner_spouse_and_foreign_calls_all_use_public_guest_mode(self):
-        conversations = []
-        for number, actor in enumerate((12345, 67890, 99999), 1):
+    async def test_only_numeric_owner_can_invoke_guest_in_private_and_group_chats(self):
+        for number, actor in enumerate((67890, 99999), 1):
             event = update(actor=actor, chat=12345, number=number)
+            event.guest_message.from_user.username = "zavarov"
+            await self.bridge.handle(event)
+        await self.settle()
+        self.assertFalse(self.requests)
+        self.bot.get_me.assert_not_called()
+        self.bot.answer_guest_query.assert_not_called()
+        for number, chat in enumerate((12345, -100123), 10):
+            event = update(actor=12345, chat=chat, number=number)
             event.guest_message.from_user.username = "Lilpersic"
             await self.bridge.handle(event)
             await self.settle()
@@ -143,13 +151,9 @@ class GuestTests(unittest.IsolatedAsyncioTestCase):
                 (payload["route"], payload["mode"], payload["audience"]),
                 ("public", "guest", "new-users"),
             )
-            conversations.append(payload["conversation"])
-        self.assertEqual(len(set(conversations)), 3)
-        self.assertEqual(self.bot.answer_guest_query.call_count, 3)
+        self.assertEqual(len(self.requests), 2)
+        self.assertEqual(self.bot.answer_guest_query.call_count, 2)
         self.bot.send_message.assert_not_called()
-        call = self.bot.answer_guest_query.call_args.kwargs
-        self.assertEqual(call["guest_query_id"], "guest-query-3")
-        self.assertFalse(hasattr(call["result"], "chat_id"))
         with self.store.database() as db:
             self.assertEqual(
                 db.execute("SELECT count(*) FROM jobs WHERE text!='' OR query_id!=''").fetchone()[
@@ -157,6 +161,38 @@ class GuestTests(unittest.IsolatedAsyncioTestCase):
                 ],
                 0,
             )
+
+    async def test_recovered_foreign_job_and_changed_owner_pin_cannot_generate_or_send(self):
+        job = incoming(update(actor=77777), self.now[0])
+        self.assertTrue(self.store.submit(job, REVISION))
+        self.bridge.kick(REVISION, job["chat"])
+        await self.settle()
+        self.assertFalse(self.requests)
+        (self.home / "telegram-owner.json").write_text('{"telegram_id":54321}')
+        await self.bridge.handle(update(number=2))
+        await self.settle()
+        self.assertFalse(self.requests)
+        self.bot.answer_guest_query.assert_not_called()
+
+    async def test_formatting_is_prepared_before_the_single_send_with_plain_fallback(self):
+        self.bridge.formatter = lambda text: text.replace("**", "*")
+        self.bridge.request = lambda *_: "**Логика**"
+        await self.bridge.handle(update())
+        await self.settle()
+        content = self.bot.answer_guest_query.call_args.kwargs["result"].input_message_content
+        self.assertEqual(content.args[0], "*Логика*")
+        self.assertEqual(content.parse_mode, "MarkdownV2")
+
+        def invalid(_text):
+            raise ValueError("Fixture converter unavailable")
+
+        self.bridge.formatter = invalid
+        await self.bridge.handle(update(number=2))
+        await self.settle()
+        self.assertEqual(self.bot.answer_guest_query.call_count, 2)
+        content = self.bot.answer_guest_query.call_args.kwargs["result"].input_message_content
+        self.assertEqual(content.args[0], "**Логика**")
+        self.assertIsNone(content.parse_mode)
 
     async def test_duplicate_and_ambiguous_sends_never_repeat_generation_or_delivery(self):
         self.bot.answer_guest_query.side_effect = TimeoutError("private transport details")

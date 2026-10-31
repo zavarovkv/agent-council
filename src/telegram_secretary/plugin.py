@@ -78,6 +78,7 @@ def attach(application, adapter):
                 settings.key,
                 GuestStore(settings.home / "plugin-data/council-secretary/guest-queue.sqlite3"),
                 home=settings.home,
+                formatter=getattr(adapter, "format_message", None),
                 capacity=public_capacity,
             )
             bridges["guest"] = guest_bridge

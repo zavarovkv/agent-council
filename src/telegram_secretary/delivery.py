@@ -65,8 +65,10 @@ class Delivery(ABC):
                 sent = False
                 try:
                     async with self.capacity:
-                        if not await self.refresh(connection) or not self.store.can_generate(
-                            job["id"]
+                        if (
+                            not self.eligible(job)
+                            or not await self.refresh(connection)
+                            or not self.store.can_generate(job["id"])
                         ):
                             self.store.finish(job["id"], "cancelled")
                             continue
@@ -78,7 +80,11 @@ class Delivery(ABC):
                         ):
                             raise ValueError("Invalid reply.")
                         # Recheck after generation too: rights/human takeover may have changed.
-                        if not await self.refresh(connection) or not self.store.reserve(job["id"]):
+                        if (
+                            not self.eligible(job)
+                            or not await self.refresh(connection)
+                            or not self.store.reserve(job["id"])
+                        ):
                             self.store.finish(job["id"], "cancelled")
                             continue
                         sent = True  # A lost Telegram HTTP response must never trigger a retry.
@@ -111,6 +117,9 @@ class Delivery(ABC):
             "route": self.route,
         }
         return Reply(await asyncio.to_thread(self.request, self.key, payload), requires_ack=True)
+
+    def eligible(self, job):
+        return True
 
     @abstractmethod
     async def refresh(self, identifier):
