@@ -118,7 +118,7 @@ def stage(ctx, store, task_id, relative):
     date = datetime.fromtimestamp(run.ended_at, UTC).date().isoformat()
     key = identifier(board_for(ctx), task_id)
     body = (
-        f"# {html.escape(title)}\n\nДата: {date}\n\nАвтор: Dexter Jettster\n\nПроверил: Qui-Gon Jinn\n\n"
+        f"# {html.escape(title)}\n\nДата: {date}\n\nАвтор: Декстер Джеттстер\n\nПроверил: Квай-Гон Джинн\n\n"
         f"Задача: {task_id} / запуск: {run.id}\n\nCouncil Research ID: {key}\n\n"
         + report.strip()
         + "\n"
@@ -188,7 +188,7 @@ def process(ctx, store, record):
     )
     with connect_closing(board=record["board"]) as db:
         if not any(item.body == comment for item in kb.list_comments(db, record["task_id"])):
-            kb.add_comment(db, record["task_id"], "Qui-Gon Jinn", comment)
+            kb.add_comment(db, record["task_id"], "Квай-Гон Джинн", comment)
     store.save({**store.get(record["id"]), "state": "done"})
     return result
 

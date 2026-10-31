@@ -40,7 +40,7 @@ class ResearcherIntegrationTests(unittest.TestCase):
             # Native profile initialization may create a blank .env template.
             if (profile / ".env").exists():
                 self.assertNotIn("not-a-real-token", (profile / ".env").read_text())
-            self.assertIn("Dexter Jettster", (profile / "SOUL.md").read_text())
+            self.assertIn("Декстер Джеттстер", (profile / "SOUL.md").read_text())
             self.assertNotIn("private coordinator", (profile / "SOUL.md").read_text())
             memory = profile / "memories" / "MEMORY.md"
             if memory.exists():

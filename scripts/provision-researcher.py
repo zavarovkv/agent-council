@@ -16,7 +16,7 @@ from pathlib import Path
 
 PROFILE = "dexter"
 PLUGIN = "advanced-delegation"
-DESCRIPTION = "Dexter Jettster: public competitor and market research with sources."
+DESCRIPTION = "Декстер Джеттстер: public competitor and market research with sources."
 MARKER = ".council-researcher.json"
 
 

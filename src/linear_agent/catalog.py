@@ -4,7 +4,7 @@ ROLES = {
     "qui-gon": {
         "name": "Квай-Гон Джинн",
         "service": "linear-executor",
-        "specialty": "Coordinate tasks, choose specialists, review evidence and synthesize decisions.",
+        "specialty": "Личный ассистент и координатор: ведёт задачи до результата, распределяет работу между агентами, проверяет результаты и уточняет решения у владельца.",
         "deliverables": [
             "managed backlog and task lifecycle",
             "bounded sub-issues",
@@ -13,9 +13,9 @@ ROLES = {
         ],
     },
     "dexter": {
-        "name": "Dexter Jettster",
+        "name": "Декстер Джеттстер",
         "service": "dexter-executor",
-        "specialty": "Product research: competitors, markets, pricing, customer evidence and discovery.",
+        "specialty": "Продуктовый исследователь: анализирует конкурентов, рынки, продукты, цены и потребности клиентов; проверяет первоисточники и отделяет факты от гипотез.",
         "deliverables": [
             "sourced comparisons",
             "market estimates with assumptions",
@@ -25,7 +25,7 @@ ROLES = {
     "marketing": {
         "name": "Лэндо Калриссиан",
         "service": "marketing-executor",
-        "specialty": "Project promotion: positioning, SEO, content, distribution and growth experiments.",
+        "specialty": "Специалист по продвижению: позиционирование, аудитория, SEO, контент, каналы распространения и эксперименты роста с оценкой результатов.",
         "deliverables": [
             "marketing briefs",
             "SEO recommendations",

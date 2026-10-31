@@ -50,7 +50,7 @@ def main():
         kb.create_board(
             "research",
             name="Исследования",
-            description="Задачи Dexter Jettster, проверка и результаты исследований",
+            description="Задачи Декстер Джеттстер, проверка и результаты исследований",
         )
     temporary = None
     try:

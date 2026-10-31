@@ -267,7 +267,7 @@ Task status stays on the task board; Drive stores supporting files. Missing
 access or a failed write must leave the local report intact and must not create
 duplicate sections or reports on retries.
 
-## Dexter Jettster: internal competitor researcher
+## Декстер Джеттстер: internal competitor researcher
 
 The image includes the official `advanced-delegation` plugin at reviewed commit
 `e404b6816b20237a82f6fbe2749b5a576cf75dba`, verified by archive checksum.
