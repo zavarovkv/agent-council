@@ -97,7 +97,9 @@ class Runtime:
             "root=Path('/opt/data/plugin-data/council-secretary'); "
             "counts=[sqlite3.connect(p.as_uri()+'?mode=ro',uri=True).execute(\"SELECT count(*) FROM jobs WHERE status IN ('queued','working','sending')\").fetchone()[0] "
             "for p in (root/'queue.sqlite3',root/'public-queue.sqlite3',root/'guest-queue.sqlite3') if p.exists()]; "
-            "print(sum(counts))"
+            "owner=root/'owner-guest.sqlite3'; "
+            "pending_owner=sqlite3.connect(owner.as_uri()+'?mode=ro',uri=True).execute(\"SELECT count(*) FROM owner_jobs WHERE status IN ('ack','running')\").fetchone()[0] if owner.exists() else 0; "
+            "print(sum(counts)+pending_owner)"
         )
         pending = self.compose(
             "exec", "-T", "--user", "hermes", "hermes", "/opt/hermes/.venv/bin/python", "-c", source

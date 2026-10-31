@@ -158,6 +158,36 @@ class AutomationStatusTests(unittest.TestCase):
                     runtime.require_idle()
                 self.assertIs(type(raised.exception), expected)
 
+    def test_owner_guest_acknowledgement_blocks_maintenance_before_native_execution(self):
+        from telegram_secretary.owner_store import OwnerStore
+
+        root = self.fixture.data / "plugin-data/council-secretary"
+        queue = OwnerStore(root / "owner-guest.sqlite3")
+        queue.admit({"id": "fixture"}, "a" * 32)
+        runtime = Runtime(self.fixture.settings())
+        runtime.inspect = lambda: {"State": {"Running": True}}
+        runtime.run = lambda *args, **kwargs: ""
+        runtime.container = lambda: "fixture"
+
+        def compose(*args):
+            source = args[-1]
+            if "read_runtime_status" in source:
+                return json.dumps({"fresh": True, "agents": 0, "work": False})
+            source = source.replace(
+                "Path('/opt/data/plugin-data/council-secretary')", "Path(" + repr(str(root)) + ")"
+            )
+            with redirect_stdout(io.StringIO()) as output:
+                exec(source, {})
+            return output.getvalue().strip()
+
+        runtime.compose = compose
+        for status in ("ack", "running"):
+            queue.update("fixture", status=status)
+            with self.subTest(status=status), self.assertRaises(OperationDeferred):
+                runtime.require_idle()
+        queue.update("fixture", status="done")
+        runtime.require_idle()
+
     def test_generation_and_filing_diagnostics_read_only_safe_aggregate_fields(self):
         home = self.fixture.data
         history = History(home / ".council/secretary")
