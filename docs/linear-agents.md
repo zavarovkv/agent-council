@@ -34,6 +34,23 @@ receive no personal Telegram history, owner memory or personal MCP grants.
 They have public web research, clarification, reviewed profile-local skills and
 narrow task-bound tools. `council_skill` reads only those skill instructions and
 Markdown references; it cannot execute scripts, edit skills or read credentials.
+With `linear-task-management-v1`, `linear_issues` lets Qui-Gon read, search,
+create and edit ordinary issues in the explicitly allowed teams, write comments,
+set priority, project, human assignee, labels and due date, and manage workflow
+states. New ordinary issues default to Backlog and have no delegate or automatic
+execution. Use `linear_delegate` for actual specialist execution. Specialists can
+read, comment, start and complete only their own authorized issue. No additional
+OAuth grant is needed: the existing app already has read/write scope.
+
+Delegated issues enter the team's first `started` state when execution begins;
+a comment-only mention does not move an unrelated issue. Agents own routine
+closure through `complete`, which requires a result and verification and refuses
+open child issues. Done is distinct from a completed agent session. A blocking
+decision uses resumable `clarify` with an owner mention; every unfinished action
+must identify its next step and responsible person. Failures are not completion.
+Writes have durable request keys. Create/comment retries reconcile stable UUIDs;
+an uncertain update is read back and never blindly overwrites a later human edit.
+Reference IDs come from the team's actual metadata, including renamed statuses.
 Coding, terminal execution, private analytics and publishing are out of scope.
 The coordinator supplies a bounded brief and reviews results. Sequential work
 passes reviewed research to marketing; independent deliverables can run in parallel.

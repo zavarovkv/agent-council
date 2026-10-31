@@ -255,6 +255,64 @@ class Linear:
     def issue(self, agent, issue):
         return self.query(agent, ISSUE_QUERY, {"id": identifier(issue)})["issue"]
 
+    def workflow(self, agent, team):
+        return self.query(
+            agent,
+            "query CouncilWorkflow($id:String!){team(id:$id){id name states{nodes{id name type position}} projects(first:100){nodes{id name} pageInfo{hasNextPage}} members(first:100){nodes{id name active app} pageInfo{hasNextPage}} labels(first:100){nodes{id name} pageInfo{hasNextPage}}}}",
+            {"id": identifier(team)},
+        )["team"]
+
+    def issue_details(self, agent, issue):
+        return self.query(
+            agent,
+            "query CouncilIssueDetails($id:String!){issue(id:$id){id identifier title description url archivedAt priority dueDate team{id} creator{id} delegate{id} assignee{id} project{id} parent{id} state{id name type} labels{nodes{id name}} children(first:100){nodes{id identifier state{id type}} pageInfo{hasNextPage}} comments(last:10){nodes{id body user{id name}}}}}",
+            {"id": issue},
+        )["issue"]
+
+    def issues(self, agent, teams, *, query="", cursor=None):
+        filters = {"team": {"id": {"in": sorted(teams)}}}
+        if query:
+            filters["title"] = {"containsIgnoreCase": query}
+        return self.query(
+            agent,
+            "query CouncilIssues($filter:IssueFilter!,$after:String){issues(filter:$filter,first:25,after:$after){nodes{id identifier title url priority team{id} state{id name type} assignee{id} delegate{id} project{id}} pageInfo{hasNextPage endCursor}}}",
+            {"filter": filters, "after": cursor},
+        )["issues"]
+
+    def create_issue(self, agent, fields):
+        result = self.query(
+            agent,
+            "mutation CouncilIssueCreate($input:IssueCreateInput!){issueCreate(input:$input){success issue{id}}}",
+            {"input": fields},
+        )["issueCreate"]
+        if result.get("success") is not True or result["issue"]["id"] != fields["id"]:
+            raise RemoteError()
+
+    def update_issue(self, agent, issue, fields):
+        result = self.query(
+            agent,
+            "mutation CouncilIssueUpdate($id:String!,$input:IssueUpdateInput!){issueUpdate(id:$id,input:$input){success issue{id}}}",
+            {"id": identifier(issue), "input": fields},
+        )["issueUpdate"]
+        if result.get("success") is not True or result["issue"]["id"] != issue:
+            raise RemoteError()
+
+    def comment(self, agent, identity):
+        return self.query(
+            agent,
+            "query CouncilComment($id:String!){comment(id:$id){id body issue{id}}}",
+            {"id": identifier(identity)},
+        )["comment"]
+
+    def create_comment(self, agent, identity, issue, body):
+        result = self.query(
+            agent,
+            "mutation CouncilCommentCreate($input:CommentCreateInput!){commentCreate(input:$input){success comment{id}}}",
+            {"input": {"id": identity, "issueId": issue, "body": body}},
+        )["commentCreate"]
+        if result.get("success") is not True or result["comment"]["id"] != identity:
+            raise RemoteError()
+
     def ensure_child(self, agent, child, *, parent_issue, team, delegate):
         try:
             existing = self.issue(agent, child["issue"])

@@ -11,6 +11,7 @@ from .catalog import LIMITATIONS, ROLES
 from .config import Registry, identifier
 from .events import parse_event, verified_payload
 from .hermes import Hermes
+from .issues import Issues
 from .linear import Linear
 from .store import Store, stable_id
 from .transport import RemoteError
@@ -289,6 +290,7 @@ class Service:
         if self.ready_until.get(agent.slug, 0) <= self.clock():
             self.hermes.ready(agent)
             self.ready_until[agent.slug] = self.clock() + 30
+        Issues(self).begin_delegated(agent, remote)
         text = job["text"]
         if job["action"] == "created" and not text.strip():
             text = json.dumps(
@@ -418,6 +420,9 @@ class Service:
             delegate=installation["app_user"],
         )
         return {"issue_id": issue["id"], "url": issue["url"], "agent": target.slug}
+
+    def issue_tasks(self, slug, payload):
+        return Issues(self).execute(slug, payload)
 
     def child_tasks(self, slug, payload):
         if set(payload) != {"run", "session"}:

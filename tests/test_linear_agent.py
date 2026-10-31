@@ -85,6 +85,90 @@ class FakeLinear:
         self.uncertain_child = False
         self.owner_url = "https://linear.app/fixture/profiles/owner"
         self.owner_mention_calls = 0
+        self.issue_writes = []
+        self.comments = {}
+
+    def workflow(self, agent, team):
+        return {
+            "id": team,
+            "name": "Fixture",
+            "states": {
+                "nodes": [
+                    {"id": uid(200 + i), "name": name, "type": category, "position": i}
+                    for i, (name, category) in enumerate(
+                        (
+                            ("Backlog", "backlog"),
+                            ("Todo", "unstarted"),
+                            ("In Progress", "started"),
+                            ("Done", "completed"),
+                            ("Canceled", "canceled"),
+                        )
+                    )
+                ]
+            },
+            "projects": {
+                "nodes": [{"id": uid(300), "name": "Fixture"}],
+                "pageInfo": {"hasNextPage": False},
+            },
+            "members": {
+                "nodes": [{"id": uid(2), "name": "Owner", "active": True, "app": False}],
+                "pageInfo": {"hasNextPage": False},
+            },
+            "labels": {
+                "nodes": [{"id": uid(400), "name": "Fixture"}],
+                "pageInfo": {"hasNextPage": False},
+            },
+        }
+
+    def issue_details(self, agent, issue):
+        value = self.issues.get(issue) or next(
+            (s["issue"] for s in self.sessions.values() if s["issue"]["id"] == issue), None
+        )
+        if value is None:
+            return None
+        value.setdefault("state", self.workflow(agent, uid(3))["states"]["nodes"][0])
+        value.setdefault("children", {"nodes": [], "pageInfo": {"hasNextPage": False}})
+        value.setdefault("comments", {"nodes": []})
+        value.setdefault("labels", {"nodes": []})
+        return copy.deepcopy(value)
+
+    def update_issue(self, agent, issue, fields):
+        self.issue_writes.append((issue, fields))
+        value = self.issues.get(issue) or next(
+            s["issue"] for s in self.sessions.values() if s["issue"]["id"] == issue
+        )
+        for name, field in fields.items():
+            if name == "stateId":
+                value["state"] = next(
+                    s for s in self.workflow(agent, uid(3))["states"]["nodes"] if s["id"] == field
+                )
+            elif name in {"projectId", "parentId", "assigneeId"}:
+                value[name[:-2]] = {"id": field} if field else None
+            elif name == "labelIds":
+                value["labels"] = {"nodes": [{"id": label} for label in field]}
+            else:
+                value[name] = field
+
+    def create_issue(self, agent, fields):
+        identity = fields["id"]
+        if identity in self.issues:
+            raise RemoteError()
+        self.issues[identity] = {
+            "id": identity,
+            "identifier": "F-3",
+            "url": "https://linear.app/fixture/issue/F-3",
+            "team": {"id": fields["teamId"]},
+            "creator": {"id": uid(1000)},
+        }
+        self.update_issue(
+            agent, identity, {k: v for k, v in fields.items() if k not in {"id", "teamId"}}
+        )
+
+    def comment(self, agent, identity):
+        return copy.deepcopy(self.comments.get(identity))
+
+    def create_comment(self, agent, identity, issue, body):
+        self.comments.setdefault(identity, {"id": identity, "issue": {"id": issue}, "body": body})
 
     def owner_mention(self, agent, registry):
         self.owner_mention_calls += 1
@@ -112,6 +196,7 @@ class FakeLinear:
             value = session(target, sid=11, owner=0, parent=parent_issue, creator=1000)
             value["issue"]["id"] = child["issue"]
             self.sessions[uid(11)] = value
+            self.issues[child["issue"]] = value["issue"]
         if self.uncertain_child:
             self.uncertain_child = False
             raise RemoteError()
