@@ -16,6 +16,10 @@ Follow the selected language's standard conventions and keep indentation consist
 
 Use descriptive module, function, and variable names. Keep modules focused on one responsibility. Match existing naming patterns as the codebase develops, and avoid mixing unrelated cleanup with functional changes.
 
+## Agent Profiles
+
+Follow [docs/agent-profiles.md](docs/agent-profiles.md) when adding or changing an agent. Display names and specialization descriptions use Russian; stable technical IDs use lowercase Latin character names, such as `dexter` and `lando`. Keep existing installed OAuth identities stable. Canonical visible names and descriptions live in `src/linear_agent/catalog.py`. Use one canonical private skill source per agent for native and Linear execution. New agents need a consistent illustrated avatar based on the reference portraits in `assets/agents/`; preserve the original image and generation prompt. Verify the actual profile, model availability, routing, mentionability and permissions before reporting readiness. Do not assign a default project or campaign unless requested.
+
 ## Testing Guidelines
 
 Use `unittest`. Authorization tests must cover an unauthorized account, immutable-ID pinning, username reassignment, corrupted state and concurrency. Live deployment tests are opt-in via `HERMES_LIVE_URL`; they must not use real credentials or modify application data. Verify the existing service's response, process and configuration checksums around routing changes.

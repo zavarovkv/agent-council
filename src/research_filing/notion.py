@@ -124,9 +124,9 @@ def index_row(header, record, url):
         elif any(word in name for word in ("ссыл", "отчёт", "отчет", "результат")):
             value = f"[Открыть]({url})"
         elif any(word in name for word in ("провер", "реценз")):
-            value = "Qui-Gon Jinn"
+            value = "Квай-Гон Джинн"
         elif any(word in name for word in ("автор", "исполн")):
-            value = "Dexter Jettster"
+            value = "Декстер Джеттстер"
         elif any(word in name for word in ("задач", "запуск", "task", "run")):
             value = f"{record['task_id']} / {record['run_id']}"
         elif "статус" in name:

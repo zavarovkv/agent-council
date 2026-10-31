@@ -16,7 +16,7 @@ the personal assistant's existing MCP connection.
    exact run. Repeated polling or delivery retries do not post the question twice.
    Later follow-ups use the same task session.
 4. Qui-Gon reads the live `linear_agents` roster and can create up to four
-   sub-issues for **Dexter Jettster** (product/market/customer research) or
+   sub-issues for **Декстер Джеттстер** (product/market/customer research) or
    **Лэндо Калриссиан**, slug `marketing` (promotion/SEO/content/experiments).
    Only registered, installed targets allowed by policy can receive work.
    You can also create a sub-issue under a known Qui-Gon task and delegate it
