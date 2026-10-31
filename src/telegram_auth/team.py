@@ -12,7 +12,7 @@ from starlette.concurrency import run_in_threadpool
 
 from council_team.view import AVATARS, snapshot
 
-router = APIRouter(prefix="/auth/council")
+router = APIRouter(prefix="/auth/login/council")
 lock = threading.Lock()
 cached = None
 expires = 0

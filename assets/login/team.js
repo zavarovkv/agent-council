@@ -6,14 +6,14 @@
   const number = new Intl.NumberFormat("ru-RU");
   const status = document.querySelector("[data-team-status]");
   for (const image of document.querySelectorAll("img[data-avatar]")) {
-    image.src = `${prefix}/auth/council/avatars/${encodeURIComponent(image.dataset.avatar)}`;
+    image.src = `${prefix}/auth/login/council/avatars/${encodeURIComponent(image.dataset.avatar)}`;
   }
   function count(value) {
     return Number.isSafeInteger(value) && value >= 0 ? number.format(value) : "—";
   }
   async function update() {
     try {
-      const response = await fetch(`${prefix}/auth/council/team`, {
+      const response = await fetch(`${prefix}/auth/login/council/team`, {
         credentials: "omit", cache: "no-store", signal: AbortSignal.timeout(10000),
       });
       if (!response.ok) throw new Error("unavailable");
