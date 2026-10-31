@@ -79,6 +79,24 @@ class DeploymentHTTPTests(unittest.TestCase):
             with self.subTest(path=path):
                 self.assertEqual(self.request(path)[0], 401)
 
+    def test_public_team_and_portraits_pass_the_real_auth_gate(self):
+        status, body, headers = self.request("/auth/login/council/team")
+        self.assertEqual(status, 200)
+        self.assertEqual(headers["Cache-Control"], "no-store")
+        data = json.loads(body)
+        self.assertEqual(set(data), {"schema", "agents"})
+        self.assertEqual(data["schema"], 1)
+        self.assertEqual(
+            {agent["slug"] for agent in data["agents"]},
+            {"qui-gon", "dexter", "lando", "padme"},
+        )
+        for slug in ("qui-gon", "dexter", "lando", "padme"):
+            with self.subTest(slug=slug):
+                code, portrait, metadata = self.request("/auth/login/council/avatars/" + slug)
+                self.assertEqual(code, 200)
+                self.assertEqual(metadata.get_content_type(), "image/png")
+                self.assertEqual(portrait[:8], b"\x89PNG\r\n\x1a\n")
+
     def test_forged_credentials_do_not_unlock_configuration(self):
         status, _, _ = self.request(
             "/api/config",

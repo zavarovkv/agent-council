@@ -331,7 +331,7 @@ existing app grant; counts include archived completed issues in configured teams
 A delegated issue is credited once to its delegate, otherwise to its assignee.
 No issue titles, comments, user IDs or credentials enter the public response.
 
-`/auth/council/team` serves a five-minute snapshot assembled from these counts and
+`/auth/login/council/team` serves a five-minute snapshot assembled from these counts and
 read-only profile configuration/session databases. Tokens are saved-session input
 plus output, with session-ID deduplication and attribution by recorded profile.
 Cached/reasoning subsets are not added twice. Pruned history and tool-free secretary

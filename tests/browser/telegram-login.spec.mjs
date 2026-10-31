@@ -23,14 +23,14 @@ async function mount(page, { deny = false, sdkUnavailable = false } = {}) {
       submissions.push(request.postDataJSON());
       return route.fulfill({ status: deny ? 403 : 200, json: deny ? { detail: "Доступ не разрешен." } : { next: "/sessions" } });
     }
-    if (url.pathname === "/auth/council/team") {
+    if (url.pathname === "/auth/login/council/team") {
       const roles = [["qui-gon", "GPT-6.1 Sol"], ["dexter", "GPT-6 Astra"], ["lando", "GPT-6.1 Sol"], ["padme", "GPT-6 Astra"]];
       return route.fulfill({ json: { schema: 1, agents: roles.map(([slug, name]) => ({
         slug, model: { name, effort: "high" }, closed_tasks: slug === "padme" ? null : 3,
         tokens: 123456, linear_connected: slug !== "padme",
       })) } });
     }
-    if (url.pathname.startsWith("/auth/council/avatars/")) {
+    if (url.pathname.startsWith("/auth/login/council/avatars/")) {
       const slug = url.pathname.split("/").pop();
       const filename = { "qui-gon": "qui-gon.png", dexter: "dexter.png", lando: "lando.png", padme: "padme.png" }[slug];
       return route.fulfill({ contentType: "image/png", body: await readFile(`assets/agents/${filename}`) });
