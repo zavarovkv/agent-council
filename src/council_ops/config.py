@@ -80,8 +80,16 @@ class Settings:
             raise OperationError("Deployment settings and authentication must use separate files.")
         if settings.secretary_file in (env_file, settings.auth_file):
             raise OperationError("The secretary service key must use a separate file.")
+        if settings.telegram_reader_file in (env_file, settings.auth_file, settings.secretary_file):
+            raise OperationError("The Telegram reader session must use a separate private file.")
         locations = [settings.data_dir, settings.workspace_dir, backup_dir]
-        for path in [*locations, env_file, settings.auth_file, settings.secretary_file]:
+        for path in [
+            *locations,
+            env_file,
+            settings.auth_file,
+            settings.secretary_file,
+            settings.telegram_reader_file,
+        ]:
             if not path.is_absolute() or path.resolve() != path:
                 raise OperationError("Use absolute paths without symlinks or parent traversal.")
             if any(character in str(path) for character in ",:\n\r"):
@@ -94,7 +102,12 @@ class Settings:
             for other in locations[index + 1 :]:
                 if contained(path, other) or contained(other, path):
                     raise OperationError("Data, workspace and backup directories must not overlap.")
-            for config in (env_file, settings.auth_file, settings.secretary_file):
+            for config in (
+                env_file,
+                settings.auth_file,
+                settings.secretary_file,
+                settings.telegram_reader_file,
+            ):
                 if contained(config, path):
                     raise OperationError("Host configuration must be outside the runtime volumes.")
         for name in ("HERMES_UID", "HERMES_GID"):
@@ -163,6 +176,14 @@ class Settings:
         return Path(
             self.values.get(
                 "COUNCIL_SECRETARY_ENV_FILE", str(self.env_file.with_name("secretary.env"))
+            )
+        )
+
+    @property
+    def telegram_reader_file(self):
+        return Path(
+            self.values.get(
+                "COUNCIL_TG_READER_ENV_FILE", str(self.env_file.with_name("telegram-reader.env"))
             )
         )
 

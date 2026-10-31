@@ -1,0 +1,11 @@
+[Unit]
+Description=Collect the Telegram research source at 07:15 Moscow
+
+[Timer]
+OnCalendar=*-*-* 07:15:00 Europe/Moscow
+AccuracySec=10s
+Persistent=true
+Unit=agent-council-telegram-reader.service
+
+[Install]
+WantedBy=timers.target

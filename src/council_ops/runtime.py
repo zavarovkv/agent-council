@@ -140,7 +140,7 @@ class Runtime:
                 f"Command failed ({arguments[0]}, {type(error).__name__}); inspect private server diagnostics."
             ) from None
 
-    def compose(self, *arguments, timeout=180, image=None):
+    def compose(self, *arguments, timeout=180, image=None, interactive=False):
         if arguments and arguments[0] == "config" and arguments != ("config", "--quiet"):
             raise OperationError("Resolved production Compose configuration must not be printed.")
         environment = dict(os.environ)
@@ -166,6 +166,7 @@ class Runtime:
             ],
             timeout=timeout,
             environment=environment,
+            interactive=interactive,
         )
 
     def container(self):
@@ -184,6 +185,9 @@ class Runtime:
         return identifier, metadata.get("Config", {}).get("Labels", {}) or {}
 
     def stop(self):
+        reader = self.companion("telegram-reader")
+        if reader:
+            self.run(["docker", "stop", "--time", "10", reader])
         for _service, container, running in self.linear_companions():
             if running:
                 self.run(["docker", "stop", "--time", "30", container])
@@ -196,11 +200,12 @@ class Runtime:
     def frozen(self):
         """Freeze owned writers briefly; a host timer thaws them if this CLI dies."""
         containers = [self.container()]
-        companion = self.companion()
-        if companion:
-            state = json.loads(self.run(["docker", "inspect", companion]))[0]["State"]
-            if state["Running"]:
-                containers.append(companion)
+        for service in ("secretary", "telegram-reader"):
+            companion = self.companion(service)
+            if companion:
+                state = json.loads(self.run(["docker", "inspect", companion]))[0]["State"]
+                if state["Running"]:
+                    containers.append(companion)
         containers.extend(
             container for _service, container, running in self.linear_companions() if running
         )
@@ -247,7 +252,7 @@ class Runtime:
     def companion(self, service="secretary"):
         from .linear_state import SERVICES
 
-        if service not in ("secretary", *SERVICES):
+        if service not in ("secretary", "telegram-reader", *SERVICES):
             raise OperationError("Unrecognized owned companion service.")
         identifiers = self.run(
             [

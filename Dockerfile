@@ -11,6 +11,13 @@ RUN mkdir -p /vendor \
     && tar -xzf /tmp/hermes-plugins.tar.gz -C /vendor --strip-components=1 \
        hermes-official-plugins-e404b6816b20237a82f6fbe2749b5a576cf75dba/advanced-delegation
 
+FROM nousresearch/hermes-agent:v0.22.5@sha256:9c5561579f3ffdf333401797094ac3a743738d6c25d40f4331c7bf77b694238d AS telegram-reader
+COPY requirements-telegram-reader-build.txt requirements-telegram-reader.txt /tmp/
+RUN uv venv --python /opt/hermes/.venv/bin/python /opt/telegram-reader \
+    && uv pip install --python /opt/telegram-reader/bin/python --require-hashes -r /tmp/requirements-telegram-reader-build.txt \
+    && uv pip install --python /opt/telegram-reader/bin/python --require-hashes --no-build-isolation -r /tmp/requirements-telegram-reader.txt \
+    && uv pip uninstall --python /opt/telegram-reader/bin/python setuptools wheel packaging
+
 FROM nousresearch/hermes-agent:v0.22.5@sha256:9c5561579f3ffdf333401797094ac3a743738d6c25d40f4331c7bf77b694238d
 
 ARG COUNCIL_REVISION=development
@@ -18,7 +25,7 @@ LABEL org.opencontainers.image.source="https://github.com/zavarovkv/agent-counci
 LABEL org.opencontainers.image.description="Hermes integration for Agent Council"
 LABEL org.opencontainers.image.revision="${COUNCIL_REVISION}"
 LABEL org.opencontainers.image.licenses="MIT"
-LABEL io.agent-council.capabilities="private-instructions-v1,research-filing-v1,telegram-guests-v1,telegram-guest-owner-v1,linear-agents-v1,agent-specialists-v1,linear-task-management-v1"
+LABEL io.agent-council.capabilities="private-instructions-v1,research-filing-v1,telegram-guests-v1,telegram-guest-owner-v1,linear-agents-v1,agent-specialists-v1,linear-task-management-v1,telegram-monitor-v1"
 
 COPY LICENSE /opt/agent-council/LICENSE
 COPY scripts/healthcheck.py scripts/verify-profile.py /opt/agent-council/
@@ -44,6 +51,8 @@ RUN chmod -R a+rX,go-w /opt/hermes/plugins/dashboard_auth/telegram_owner
 COPY src/telegram_secretary/ /opt/hermes/plugins/council-secretary/
 COPY src/secretary_worker/ /opt/agent-council/secretary_worker/
 COPY src/linear_agent/ /opt/agent-council/linear_agent/
+COPY src/telegram_monitor/ /opt/agent-council/telegram_monitor/
+COPY --from=telegram-reader /opt/telegram-reader/ /opt/telegram-reader/
 COPY src/linear_tools/ /opt/hermes/plugins/council-linear/
 COPY src/research_filing/ /opt/hermes/plugins/council-research/
 RUN chmod -R a+rX,go-w /opt/hermes/plugins/council-secretary /opt/hermes/plugins/council-research /opt/agent-council/secretary_worker

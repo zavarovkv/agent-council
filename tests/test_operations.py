@@ -241,7 +241,7 @@ class OperationTests(unittest.TestCase):
 
     def test_snapshot_freezes_all_linear_writers_and_thaws_them_in_reverse_order(self):
         runtime = Runtime(self.fixture.settings())
-        identifiers = [letter * 64 for letter in "abcde"]
+        identifiers = [letter * 64 for letter in "abcdef0"]
         calls = []
 
         def run(arguments, **_kwargs):
@@ -252,15 +252,27 @@ class OperationTests(unittest.TestCase):
 
         with (
             patch.object(runtime, "container", return_value=identifiers[0]),
-            patch.object(runtime, "companion", return_value=identifiers[1]),
+            patch.object(
+                runtime,
+                "companion",
+                side_effect=lambda service="secretary": {
+                    "secretary": identifiers[1],
+                    "telegram-reader": identifiers[2],
+                }.get(service),
+            ),
             patch.object(
                 runtime,
                 "linear_companions",
                 return_value=[
                     (name, cid, True)
                     for name, cid in zip(
-                        ("linear-adapter", "linear-executor", "dexter-executor"),
-                        identifiers[2:],
+                        (
+                            "linear-adapter",
+                            "linear-executor",
+                            "dexter-executor",
+                            "marketing-executor",
+                        ),
+                        identifiers[3:],
                         strict=True,
                     )
                 ],
@@ -273,7 +285,9 @@ class OperationTests(unittest.TestCase):
         self.assertEqual(
             [row[-1] for row in calls if row[:2] == ["docker", "unpause"]], identifiers[::-1]
         )
-        self.assertEqual(next(row[-5:] for row in calls if row[0] == "systemd-run"), identifiers)
+        self.assertEqual(
+            next(row[-len(identifiers) :] for row in calls if row[0] == "systemd-run"), identifiers
+        )
 
     def test_partial_freeze_failure_thaws_the_first_container(self):
         runtime = Runtime(self.fixture.settings())

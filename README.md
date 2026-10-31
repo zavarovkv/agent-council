@@ -9,6 +9,8 @@ The project is in early development, built around
 - Runs a personal agent with a web dashboard and Telegram messaging.
 - Delegates competitor research to a specialist profile, with the assistant
   reviewing and returning its results.
+- Supports optional [daily Telegram competitor monitoring](docs/telegram-monitor.md)
+  with reviewed Notion reports and native scheduled delivery.
 - Supports ChatGPT / Codex model login and explicit Notion / Google Drive setup.
 - Connects to Linear through its official OAuth-backed MCP integration.
 - Supports isolated Linear specialists for product research and marketing/SEO,
