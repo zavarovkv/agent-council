@@ -37,10 +37,12 @@ class Service:
         registry = self.registry()
         agent = registry.agents[slug]
         payload = verified_payload(body, signature, agent.webhook_secret, self.clock())
-        if not registry.enabled:
-            raise BlockingIOError("Linear execution is disabled.")
         event = parse_event(payload, registry, agent)
         if event is None:
+            return False
+        if not registry.enabled:
+            raise BlockingIOError("Linear execution is disabled.")
+        if event.created < registry.admission_since:
             return False
         installation = self.store.installation(slug)
         if (

@@ -127,7 +127,9 @@ sudo python3 scripts/manage.py linear-execution --disable
 ```
 
 This advances the policy revision, rejects new admission and cancels old work on
-the next worker sweep. Revoke app installations in Linear when removing access.
+the next worker sweep. Enabling starts a new admission epoch, so delayed events
+created before activation cannot start old work. Revoke app installations in
+Linear when removing access.
 Keep execution disabled while changing application identities; installed app IDs
 and grants must be deliberately reconciled before reinstallation. If maintenance
 crashes, admission stays closed until a successful guarded startup clears the

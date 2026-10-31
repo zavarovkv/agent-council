@@ -1,6 +1,7 @@
 """Explicit installation identities and fixed executor destinations; no implicit owner."""
 
 import json
+import math
 import re
 import uuid
 from dataclasses import dataclass, field
@@ -49,6 +50,7 @@ class Registry:
     teams: frozenset[str]
     origin: str
     revision: str
+    admission_since: float
     agents: dict[str, Agent] = field(repr=False)
 
     @classmethod
@@ -64,11 +66,15 @@ class Registry:
                 "teams",
                 "origin",
                 "revision",
+                "admission_since",
                 "agents",
             }
             or type(value["schema"]) is not int
             or value["schema"] != 1
             or type(value["enabled"]) is not bool
+            or type(value.get("admission_since")) not in {int, float}
+            or not math.isfinite(value["admission_since"])
+            or value["admission_since"] <= 0
         ):
             raise ValueError("Invalid Linear registry schema.")
         origin = urlsplit(value["origin"])
@@ -150,6 +156,7 @@ class Registry:
             teams,
             value["origin"].rstrip("/"),
             value["revision"],
+            value["admission_since"],
             agents,
         )
 

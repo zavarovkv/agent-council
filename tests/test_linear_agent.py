@@ -44,6 +44,7 @@ def configuration(home):
         "teams": [uid(3)],
         "origin": "https://council.example.test",
         "revision": "a" * 32,
+        "admission_since": NOW - 1,
         "agents": agents,
     }
     path = home / "agents.json"
@@ -255,6 +256,12 @@ class LinearAgentTests(unittest.TestCase):
         self.assertFalse(self.ingest(event))
         self.tick()
         self.assertEqual(len(self.hermes.requests), 1)
+
+    def test_old_delivery_cannot_start_work_after_a_new_activation_epoch(self):
+        value = {**self.config, "revision": "b" * 32, "admission_since": NOW + 1}
+        (self.home / "agents.json").write_text(json.dumps(value))
+        self.assertFalse(self.ingest(self.event()))
+        self.assertFalse(self.store.jobs())
 
     def test_created_result_and_followup_share_a_durable_task_session(self):
         self.ingest(self.event())

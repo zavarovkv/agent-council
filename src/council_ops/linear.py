@@ -199,6 +199,7 @@ def configure(runtime):
         "teams": plan["teams"],
         "origin": plan["origin"],
         "revision": secrets.token_hex(16),
+        "admission_since": time.time(),
         "agents": records,
     }
     # Validate credentials on a copied profile before changing live configuration.
@@ -265,7 +266,12 @@ def execution(runtime, *, enabled):
                 raise OperationError("Authorize each isolated executor's own model account first.")
         checkpoint = snapshot(runtime)
         smoke(runtime, checkpoint)
-    value = {**current, "enabled": enabled, "revision": secrets.token_hex(16)}
+    value = {
+        **current,
+        "enabled": enabled,
+        "revision": secrets.token_hex(16),
+        "admission_since": time.time(),
+    }
     path = directory / "agents.json"
     atomic_write(path, (json.dumps(value) + "\n").encode())
     os.chown(path, *identity(runtime.settings))
