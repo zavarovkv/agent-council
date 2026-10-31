@@ -102,6 +102,7 @@ class FakeLinear:
                             ("In Progress", "started"),
                             ("Done", "completed"),
                             ("Canceled", "canceled"),
+                            ("In Review", "started"),
                         )
                     )
                 ]
@@ -485,6 +486,45 @@ class LinearAgentTests(unittest.TestCase):
 
     def test_sub_issue_delegation_is_idempotent_and_returns_results_to_parent(self):
         self.assert_specialist_roundtrip("dexter")
+
+    def test_finished_rounds_free_capacity_and_followup_parent_needs_no_owner_mention(self):
+        self.ingest(self.event())
+        self.tick()
+        root = self.store.session("qui-gon", uid(10))
+        for i in range(4):
+            self.store.reserve_child(root, "dexter", f"round-{i}", "Review", "Check text")
+        with self.assertRaisesRegex(PermissionError, "concurrent"):
+            self.store.reserve_child(root, "dexter", "overflow", "Review", "Check text")
+        with self.store.database() as db:
+            db.execute("UPDATE delegations SET state='done'")
+        followup = copy.deepcopy(self.linear.issue_details(None, root["issue"]))
+        followup["id"] = uid(80)
+        self.linear.issue_records[uid(80)] = followup
+        self.linear.sessions[uid(10)]["issue"]["state"] = {"id": uid(203), "type": "completed"}
+        payload = {
+            "run": self.run_for(),
+            "session": root["hermes"],
+            "target": "dexter",
+            "key": "next-review",
+            "title": "Review",
+            "description": "Check revised text",
+            "parent_issue": uid(80),
+        }
+        result = self.service.delegate("qui-gon", payload)
+        self.assertEqual(result, self.service.delegate("qui-gon", payload))
+        self.assertEqual(self.linear.issue_records[result["issue_id"]]["parent"]["id"], uid(80))
+        self.ingest(self.event(slug="dexter", sid=11, actor=0), slug="dexter")
+        self.tick()
+        self.assertEqual(self.store.session("dexter", uid(11))["parent_session"], root["id"])
+        with self.assertRaises(ValueError):
+            self.service.delegate(
+                "qui-gon", {**payload, "key": "closed", "parent_issue": root["issue"]}
+            )
+        self.linear.sessions[uid(11)]["issue"]["parent"] = {"id": uid(81)}
+        with self.assertRaises(PermissionError):
+            self.service.authorize(
+                self.service.registry(), self.service.registry().agents["dexter"], uid(11)
+            )
 
     def test_marketing_sub_issue_returns_to_the_same_coordinator_session(self):
         self.config["agents"]["marketing"] = {

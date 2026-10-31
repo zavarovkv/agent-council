@@ -112,7 +112,8 @@ class Service:
                 or parent["owner"] != registry.owner
                 or parent["depth"]
                 or not origin
-                or (issue.get("parent") or {}).get("id") != parent["issue"]
+                or (issue.get("parent") or {}).get("id")
+                != (child["parent_issue"] or parent["issue"])
                 or (issue.get("delegate") or {}).get("id") != installation["app_user"]
                 or (issue.get("creator") or {}).get("id")
                 not in {origin["app_user"], registry.owner}
@@ -388,7 +389,9 @@ class Service:
         registry = self.registry()
         agent = registry.agents[slug]
         if (
-            set(payload) != {"run", "session", "target", "key", "title", "description"}
+            not {"run", "session", "target", "key", "title", "description"} <= set(payload)
+            or not set(payload)
+            <= {"run", "session", "target", "key", "title", "description", "parent_issue"}
             or payload["target"] not in agent.delegates
         ):
             raise PermissionError("Unregistered executor or tool parameters.")
@@ -404,6 +407,13 @@ class Service:
         current, remote = self.authorize(registry, agent, session["id"])
         if current["depth"]:
             raise PermissionError("Specialists cannot delegate further.")
+        parent_issue = Issues(self).checked_issue(
+            agent, registry, payload.get("parent_issue") or session["issue"]
+        )
+        if parent_issue["state"]["type"] in {"completed", "canceled", "duplicate"}:
+            raise ValueError(
+                "Use an active follow-up task as parent_issue; do not reopen accepted work."
+            )
         target = registry.agents[payload["target"]]
         installation = self.store.installation(target.slug)
         if not installation or installation["organization"] != registry.organization:
@@ -414,12 +424,13 @@ class Service:
             payload["key"],
             payload["title"].strip(),
             payload["description"].strip(),
+            parent_issue=parent_issue["id"],
         )
         issue = self.linear.ensure_child(
             agent,
             child,
-            parent_issue=session["issue"],
-            team=remote["issue"]["team"]["id"],
+            parent_issue=parent_issue["id"],
+            team=parent_issue["team"]["id"],
             delegate=installation["app_user"],
         )
         return {"issue_id": issue["id"], "url": issue["url"], "agent": target.slug}

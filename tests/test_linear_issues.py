@@ -109,7 +109,7 @@ class IssueManagementTests(unittest.TestCase):
         result = self.call(
             context, "complete", key="done", result="Delivered", verification="Checked"
         )
-        self.assertEqual(result["state"]["type"], "completed")
+        self.assertEqual(result["state"]["name"], "In Review")
         self.assertEqual(len(self.linear.comments), 1)
         self.call(context, "complete", key="done", result="Delivered", verification="Checked")
         self.assertEqual(len(self.linear.comments), 1)
@@ -134,7 +134,7 @@ class IssueManagementTests(unittest.TestCase):
         body = next(iter(self.linear.comments.values()))["body"]
         self.assertEqual(body, result + "\n\n**Проверено:** " + verification)
         self.assertLessEqual(len(body), 700)
-        self.assertEqual(self.call(context, "get")["state"]["type"], "completed")
+        self.assertEqual(self.call(context, "get")["state"]["name"], "In Review")
 
     def test_unknown_update_never_overwrites_a_later_human_edit(self):
         context = self.start()
@@ -152,6 +152,47 @@ class IssueManagementTests(unittest.TestCase):
         with self.assertRaises(RemoteError):
             self.call(context, "update", key="priority", fields={"priority": 1})
         self.assertEqual(self.linear.sessions[uid(10)]["issue"]["priority"], 3)
+
+    def test_only_owner_closes_reviewed_tasks_and_revisions_return_to_progress(self):
+        context = self.start()
+        self.call(context, "review", key="review", result="Ready", verification="Checked")
+        for action in ("create", "update"):
+            with self.subTest(action=action), self.assertRaisesRegex(ValueError, "Only the owner"):
+                self.call(
+                    context, action, key="bypass", fields={"title": "Text", "stateId": uid(203)}
+                )
+        with self.assertRaisesRegex(ValueError, "In Progress"):
+            self.call(context, "update", key="revise", fields={"description": "Revised"})
+        with self.assertRaisesRegex(ValueError, "In Progress"):
+            self.call(
+                context, "save_document", key="doc", fields={"title": "Text", "content": "Revised"}
+            )
+        self.call(context, "start", key="revision-start")
+        self.assertEqual(self.call(context, "get")["state"]["name"], "In Progress")
+        self.call(context, "update", key="revise", fields={"description": "Revised"})
+        self.call(context, "complete", key="review-again", result="Revised", verification="Checked")
+        self.assertEqual(self.call(context, "get")["state"]["name"], "In Review")
+
+    def test_review_requires_a_real_state_and_allows_children_waiting_for_owner(self):
+        context = self.start()
+        workflow = self.linear.workflow(None, uid(3))
+        self.linear.workflow = lambda *_args: workflow
+        review = workflow["states"]["nodes"].pop()
+        before = len(self.linear.issue_writes)
+        with self.assertRaisesRegex(ValueError, "In Review state"):
+            self.call(context, "review", key="ready", result="Ready", verification="Checked")
+        self.assertEqual(len(self.linear.issue_writes), before)
+        self.assertFalse(self.linear.comments)
+        workflow["states"]["nodes"].append(review)
+        self.linear.sessions[uid(10)]["issue"]["children"] = {
+            "nodes": [{"id": uid(90), "state": review}],
+            "pageInfo": {"hasNextPage": False},
+        }
+        self.call(context, "review", key="ready", result="Ready", verification="Checked")
+        self.assertEqual(self.call(context, "get")["state"]["name"], "In Review")
+        self.assertFalse(
+            any(fields.get("stateId") == uid(203) for _, fields in self.linear.issue_writes)
+        )
 
     def test_known_lost_update_and_comment_receipts_are_recovered_without_repeating(self):
         context = self.start()
@@ -250,7 +291,7 @@ class IssueManagementTests(unittest.TestCase):
             FakeLinear.issue_details(self.linear, None, uid(20))["state"]["type"], "started"
         )
 
-    def test_specialist_closes_own_real_subissue_but_cannot_create_other_work(self):
+    def test_specialist_submits_subissue_for_review_but_cannot_finish_active_parent(self):
         context = self.start()
         child = self.service.delegate(
             "qui-gon",
@@ -277,7 +318,7 @@ class IssueManagementTests(unittest.TestCase):
             },
         )
         self.assertEqual(result["id"], child["issue_id"])
-        self.assertEqual(result["state"]["type"], "completed")
+        self.assertEqual(result["state"]["name"], "In Review")
         with self.assertRaises(ValueError):
             self.call(
                 context,

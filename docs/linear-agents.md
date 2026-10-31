@@ -49,12 +49,20 @@ teams remain inaccessible. Use `project` for project resources, `document` and
 discussions. These grants do not automatically start unrelated work. No additional
 OAuth grant is needed: the existing app already has read/write scope.
 
-Delegated issues enter the team's first `started` state when execution begins;
-a comment-only mention does not move an unrelated issue. Agents own routine
-closure through `complete`, which requires a result and verification and refuses
-open child issues. Done is distinct from a completed agent session. A blocking
-decision uses resumable `clarify` with an owner mention; every unfinished action
-must identify its next step and responsible person. Failures are not completion.
+Delegated issues enter the team's active work state when execution begins;
+a comment-only mention does not move an unrelated issue. With `linear-owner-review-v1`,
+`review` submits a verified result to In Review; the legacy `complete` action is
+only a review alias. Only the human owner moves tasks to Done. Direct agent writes
+to a completed state are rejected. Before editing a reviewed text, use `start`
+to return to In Progress; submit the revised result for review again. Parent
+submission waits for active child work, but allows children awaiting owner review.
+The workflow must contain one identifiable In Review state; no fallback to Done.
+Results use at most 500 characters plus 160 for verification, with simple Markdown.
+Full text deliverables belong in formatted Notion pages with a verified link in
+Linear. This instruction does not grant Notion access: isolated Linear executors
+still need an authorized publishing capability; a temporary Linear draft is not
+a confirmed Notion delivery. A blocking decision uses resumable `clarify` with an
+owner mention; every unfinished action has a next step and responsible person.
 Writes have durable request keys. Create/comment retries reconcile stable UUIDs;
 an uncertain update is read back and never blindly overwrites a later human edit.
 Reference IDs come from the team's actual metadata, including renamed statuses.

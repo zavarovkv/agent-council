@@ -60,7 +60,7 @@ def register(ctx):
     for name, description, properties, required, path in (
         (
             "linear_issues",
-            "Manage Linear tasks: context lists team states/projects/members/labels; list searches titles; get reads an issue and comments; create makes ordinary Backlog tasks without delegating them; update changes task fields; comment posts a note; start moves to In Progress; complete marks Done only with a verified deliverable and no open children. Qui-Gon manages allowed teams; all specialists can read, create and update tasks throughout their current project or shared parent task tree. project reads project materials, document reads a linked document, save_document creates or updates one using fields.title/content (document UUID only for updates), comments pages complete comments; use cursor and offset/next_offset for long content. Mutations require a stable key, reused on retries. Never claim a completed action without its receipt.",
+            "Manage Linear tasks: context lists team states/projects/members/labels; list searches titles; get reads an issue and comments; create makes ordinary Backlog tasks without delegating them; update changes task fields; comment posts a note; start moves to In Progress; review submits a verified deliverable to In Review after child work finishes; only the human owner marks Done. Use start to return to In Progress before revisions. Legacy complete is a review alias, never Done. Qui-Gon manages allowed teams; all specialists can read, create and update tasks throughout their current project or shared parent task tree. project reads project materials, document reads a linked document, save_document creates or updates one using fields.title/content (document UUID only for updates), comments pages complete comments; use cursor and offset/next_offset for long content. Mutations require a stable key, reused on retries. Never claim a completed action without its receipt.",
             {
                 "action": {
                     "type": "string",
@@ -76,6 +76,7 @@ def register(ctx):
                         "update",
                         "comment",
                         "start",
+                        "review",
                         "complete",
                     ],
                 },
@@ -128,12 +129,16 @@ def register(ctx):
         ),
         (
             "linear_delegate",
-            "Create or retrieve one idempotent sub-issue under the current Linear task for an allowed specialist. Reuse key when retrying; the coordinator receives the result automatically.",
+            "Create or retrieve one idempotent sub-issue for an allowed specialist. Defaults to current task; parent_issue selects an active follow-up task when previous work is accepted. No new owner mention is needed. At most four specialist tasks can run concurrently; completed rounds do not consume that capacity. Reuse key when retrying; the current coordinator session receives the result automatically.",
             {
                 "target": {"type": "string", "enum": ["dexter", "marketing", "padme"]},
                 "key": {"type": "string", "maxLength": 80},
                 "title": {"type": "string", "maxLength": 200},
                 "description": {"type": "string", "maxLength": 12000},
+                "parent_issue": {
+                    "type": "string",
+                    "description": "Active issue UUID or identifier in an allowed team; defaults to current issue.",
+                },
             },
             ["target", "key", "title", "description"],
             "delegate",
