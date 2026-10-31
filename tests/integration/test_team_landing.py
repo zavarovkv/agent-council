@@ -37,7 +37,9 @@ class TeamLandingTests(unittest.TestCase):
             self.assertEqual(result.status_code, 200)
             self.assertEqual(result.headers["content-type"], "image/png")
         for path in ("auth.json", "..%2fauth.json", "padme.png", "qui-gon.env"):
-            self.assertEqual(self.client.get("/auth/login/council/avatars/" + path).status_code, 404)
+            self.assertEqual(
+                self.client.get("/auth/login/council/avatars/" + path).status_code, 404
+            )
 
     def test_public_routes_do_not_unlock_private_configuration(self):
         for headers in ({}, {"Authorization": "Bearer invalid"}):
