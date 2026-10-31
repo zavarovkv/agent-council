@@ -191,7 +191,7 @@ class GuestSDKTests(unittest.IsolatedAsyncioTestCase):
                 self.assertIn("*Логика*", content["message_text"])
                 self.assertNotIn("**Логика**", content["message_text"])
                 self.assertIn(r"2\+2\=4\.", content["message_text"])
-                self.assertIn("<tag>", content["message_text"])
+                self.assertIn(r"<tag\>", content["message_text"])
                 self.assertEqual(content["parse_mode"], "MarkdownV2")
                 self.assertTrue(content["link_preview_options"]["is_disabled"])
                 request.fail_send = True
