@@ -83,6 +83,12 @@ class FakeLinear:
         self.issues = {}
         self.uncertain_post = False
         self.uncertain_child = False
+        self.owner_url = "https://linear.app/fixture/profiles/owner"
+        self.owner_mention_calls = 0
+
+    def owner_mention(self, agent, registry):
+        self.owner_mention_calls += 1
+        return self.owner_url
 
     def session(self, agent, sid):
         return copy.deepcopy(self.sessions[sid])
@@ -297,6 +303,14 @@ class LinearAgentTests(unittest.TestCase):
         ]
         self.tick()
         self.assertIn("elicitation", [record["kind"] for record in self.linear.posts.values()])
+        question = next(
+            record for record in self.linear.posts.values() if record["kind"] == "elicitation"
+        )
+        self.assertIn(self.linear.owner_url, question["body"])
+        self.assertIn("Which competitor?", question["body"])
+        self.assertIn("Ответьте в этой ветке", question["body"])
+        self.tick(3)
+        self.assertEqual(self.linear.owner_mention_calls, 1)
         self.ingest(self.event(action="prompted", text="Competitor A", aid=31))
         self.ingest(self.event(action="prompted", text="Also include B", aid=32))
         self.tick()
@@ -307,6 +321,36 @@ class LinearAgentTests(unittest.TestCase):
         self.tick(3)
         self.assertEqual(len(self.hermes.requests), 2)
         self.assertEqual(list(self.hermes.requests.values())[-1]["text"], "Also include B")
+
+    def test_question_mention_survives_restart_lost_receipt_and_profile_rename(self):
+        self.ingest(self.event())
+        self.tick()
+        run = self.run_for()
+        self.hermes.runs[run]["pending_controls"] = [
+            {"kind": "clarify", "prompt_id": "fixture-question", "question": "Which competitor?"}
+        ]
+        self.linear.uncertain_post = True
+        self.tick()
+        self.assertEqual(self.linear.owner_mention_calls, 1)
+        self.linear.owner_url = "https://linear.app/fixture/profiles/renamed-owner"
+        self.service = Service(
+            self.home,
+            store=Store(self.home, clock=lambda: NOW),
+            linear=self.linear,
+            hermes=self.hermes,
+            clock=lambda: NOW,
+        )
+        self.tick(3)
+        questions = [
+            record for record in self.linear.posts.values() if record["kind"] == "elicitation"
+        ]
+        self.assertEqual(len(questions), 1)
+        self.assertEqual(self.linear.owner_mention_calls, 1)
+        self.assertEqual(len(self.hermes.requests), 1)
+        self.ingest(self.event(action="prompted", text="Competitor A", aid=31))
+        self.tick()
+        self.assertEqual(self.hermes.answers[0][2], "Competitor A")
+        self.assertEqual(len(self.hermes.requests), 1)
 
     def test_lost_start_and_publication_responses_do_not_repeat_model_or_activity(self):
         self.ingest(self.event())

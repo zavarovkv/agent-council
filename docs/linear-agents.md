@@ -10,8 +10,11 @@ the personal assistant's existing MCP connection.
 1. Delegate an issue to **Квай-Гон Джинн**, or mention him in an issue comment.
 2. The signed event enters a durable queue. A static status acknowledges the
    request; a resumable Hermes run handles the task.
-3. If information is missing, a native `elicitation` activity asks a question.
-   Your reply resumes that exact run. Later follow-ups use the same task session.
+3. If information is missing, a native `elicitation` activity asks a question
+   and mentions the configured owner in the comment thread. Linear creates the
+   comment and marks the session as awaiting input. Reply there to resume that
+   exact run. Repeated polling or delivery retries do not post the question twice.
+   Later follow-ups use the same task session.
 4. Qui-Gon can create up to four sub-issues and delegate them to **Dexter
    Jettster**. You can also create a sub-issue under a known Qui-Gon task and
    delegate it to Dexter yourself. The child must be created by the configured
@@ -103,6 +106,9 @@ Persistent state lives under `$HERMES_DATA_DIR/.council/linear/`:
 | `dexter/` | Specialist config, own model login, session state, workspace |
 
 Generic starting instructions are in [`instructions/linear/`](../instructions/linear/).
+Both roles use brief Linear updates: a one-sentence status, a focused question
+when blocked, and 3–5 result bullets with essential sources. Detailed answers
+are given on request.
 Preparation installs them once as each executor's `SOUL.md`; later profile edits
 are preserved. These generic profiles do not participate in private skill sync.
 All persistent Linear data enters the existing encrypted R2 backup. Snapshots

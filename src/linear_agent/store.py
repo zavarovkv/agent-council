@@ -278,6 +278,10 @@ class Store:
             row = db.execute("SELECT state FROM outbox WHERE id=?", (identity,)).fetchone()
             return row is not None and row["state"] == "sent"
 
+    def publication_exists(self, identity):
+        with self.database() as db:
+            return db.execute("SELECT 1 FROM outbox WHERE id=?", (identity,)).fetchone() is not None
+
     def context(self, agent, run, session):
         with self.database() as db:
             rows = db.execute(
