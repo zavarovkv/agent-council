@@ -58,4 +58,6 @@ class RuntimeBoundaryTests(unittest.TestCase):
             },
         )
         self.check_imports("council_team", {})
-        self.check_imports("linear_tools", {"__init__.py": {"gateway.session_context"}})
+        self.check_imports(
+            "linear_tools", {"__init__.py": {"gateway.session_context", "council_workspace.client"}}
+        )

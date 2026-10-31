@@ -194,6 +194,29 @@ It checks gateway readiness and rejection of unauthenticated dashboard API acces
 
 ## Shared file and knowledge workspaces
 
+After the owner's existing Notion and Drive connections have been verified, run
+`python3 scripts/manage.py configure-workspace` on the Docker host. It tests a
+copied profile, grants all four native profiles and four Linear executors the
+`council_workspace` tool, then verifies the private listener after cutover.
+No new OAuth consent or copied provider tokens are needed. The secretary receives
+no grant. The gateway owns the broker on port 9123 on the private Compose networks;
+the port is not published to the host and is not proxied by the public website.
+
+The tool reads and edits formatted Notion pages beneath CouncilBase and reads,
+lists, uploads and updates files in the selected Drive folder. Text delivery goes
+to Notion; Linear holds a short summary and verified link. Ordinary uploads are
+bounded to 64 KiB; downloads are paginated. Google-native files have text exports,
+not native Docs/Sheets/Slides editing through this tool. Existing native Google
+Workspace tooling remains available to the coordinator for larger processing.
+Updates require a freshly read revision, and writes use durable idempotency keys.
+An uncertain provider write must be inspected before creating a new operation.
+These revision checks reduce stale edits but are not provider-atomic transactions.
+
+Private `workspace-client.json` files contain distinct revocable internal grants;
+the main profile's `.council/workspace/access.json` controls them. Removing a client
+rejects its next request without restarting. Shared cloud content is untrusted
+task data. Provider credentials and write receipts remain in the profile backup.
+
 Workspace locations are private profile settings in
 `/opt/data/council-workspace.json`: `files` identifies the Google Drive folder;
 `knowledge_base` identifies the Notion root page. The coordinator's local

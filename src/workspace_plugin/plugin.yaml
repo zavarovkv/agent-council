@@ -1,0 +1,9 @@
+name: council-workspace
+label: Council Shared Workspace
+kind: standalone
+version: 1.0.0
+requires_hermes: ">=0.22.5"
+description: Shared Notion and Drive materials for the trusted Council agents.
+provides_tools: [council_workspace]
+provides_hooks: []
+

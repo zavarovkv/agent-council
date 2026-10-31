@@ -42,6 +42,7 @@ services:
       hermes:
         ipv4_address: 172.30.90.2
       secretary:
+      linear:
     security_opt:
       - no-new-privileges:true
     cap_drop: [ALL]

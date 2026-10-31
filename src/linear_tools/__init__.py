@@ -57,6 +57,9 @@ def call(path, args):
 
 
 def register(ctx):
+    from council_workspace.client import register as register_workspace
+
+    register_workspace(ctx, toolset="council-linear")
     for name, description, properties, required, path in (
         (
             "linear_issues",

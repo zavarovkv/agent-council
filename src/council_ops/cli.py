@@ -30,6 +30,7 @@ from .setup import configure_backups
 from .snapshots import snapshot
 from .telegram_reader import collect as collect_telegram
 from .telegram_reader import configure as configure_telegram
+from .workspace import configure as configure_workspace
 
 
 def pause_instruction_updates(runtime):
@@ -116,6 +117,9 @@ def parser():
         action="store_true",
         default=None,
         help="Use the main assistant for the pinned owner's guest calls",
+    )
+    commands.add_parser(
+        "configure-workspace", help="Share Notion and Drive tools with all trusted agents"
     )
     commands.add_parser("doctor", help="Read safe configuration, isolation and service status")
     prepare_linear = commands.add_parser(
@@ -301,6 +305,9 @@ def operate(arguments, settings):
             result = configure_route(runtime)
         elif arguments.action == "configure-monitoring":
             result = configure_monitoring(runtime)
+        elif arguments.action == "configure-workspace":
+            doctor(runtime)
+            result = configure_workspace(runtime)
         elif arguments.action == "configure-research":
             result = configure_research(runtime)
         elif arguments.action == "flush-research":

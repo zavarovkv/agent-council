@@ -27,7 +27,7 @@ LABEL org.opencontainers.image.source="https://github.com/zavarovkv/agent-counci
 LABEL org.opencontainers.image.description="Hermes integration for Agent Council"
 LABEL org.opencontainers.image.revision="${COUNCIL_REVISION}"
 LABEL org.opencontainers.image.licenses="MIT"
-LABEL io.agent-council.capabilities="private-instructions-v1,research-filing-v1,telegram-guests-v1,telegram-guest-owner-v1,telegram-guest-agent-v1,linear-project-collaboration-v1,linear-owner-review-v1,linear-agents-v1,agent-specialists-v1,linear-task-management-v1,telegram-reader-v1,agent-editor-v1"
+LABEL io.agent-council.capabilities="private-instructions-v1,research-filing-v1,telegram-guests-v1,telegram-guest-owner-v1,telegram-guest-agent-v1,linear-project-collaboration-v1,linear-owner-review-v1,workspace-access-v1,linear-agents-v1,agent-specialists-v1,linear-task-management-v1,telegram-reader-v1,agent-editor-v1"
 
 COPY assets/agents/*.png /opt/agent-council/assets/agents/
 COPY LICENSE /opt/agent-council/LICENSE
@@ -38,6 +38,7 @@ COPY --from=web-assets /vendor/advanced-delegation/ /opt/hermes/plugins/advanced
 COPY instructions/ /opt/agent-council/instructions/
 COPY scripts/provision-researcher.py scripts/provision-research-workflow.py /opt/agent-council/
 COPY scripts/configure-drive.py /opt/agent-council/configure-drive.py
+COPY scripts/provision-workspace.py /opt/agent-council/provision-workspace.py
 RUN chmod -R a+rX,go-w /opt/hermes/plugins/advanced-delegation /opt/agent-council/instructions \
     && chmod 0444 /opt/agent-council/provision-researcher.py /opt/agent-council/configure-drive.py
 
@@ -56,6 +57,9 @@ COPY src/secretary_worker/ /opt/agent-council/secretary_worker/
 COPY src/linear_agent/ /opt/agent-council/linear_agent/
 COPY src/council_team/ /opt/agent-council/council_team/
 COPY src/council_team/ /opt/hermes/council_team/
+COPY src/council_workspace/ /opt/hermes/council_workspace/
+COPY src/research_filing/ /opt/hermes/research_filing/
+COPY src/workspace_plugin/ /opt/hermes/plugins/council-workspace/
 COPY src/telegram_monitor/ /opt/agent-council/telegram_monitor/
 COPY --from=telegram-reader /opt/telegram-reader/ /opt/telegram-reader/
 COPY src/linear_tools/ /opt/hermes/plugins/council-linear/
