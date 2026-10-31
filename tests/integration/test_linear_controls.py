@@ -87,5 +87,5 @@ class NativeLinearControlTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(captured[0]["run"], "run_real")
             self.assertEqual(captured[0]["session"], "real-session")
         finally:
-            for variable, token in reversed(tokens):
-                variable.reset(token)
+            for token in reversed(tokens):
+                token.var.reset(token)

@@ -85,6 +85,19 @@ class MonitoringTests(unittest.TestCase):
         self.check()
         self.assertEqual(self.sender.call_count, 2)
 
+    def test_stopped_linear_executor_with_previous_healthy_state_is_reported(self):
+        self.report["linear"] = {
+            "configured": True,
+            "available": True,
+            "enabled": True,
+            "registered_agents": 2,
+            "installed_agents": 2,
+            "services": {"dexter-executor": {"status": "exited", "health": "healthy"}},
+        }
+        self.check()
+        self.assertEqual(self.sender.call_count, 1)
+        self.assertIn("Linear", self.sender.call_args.args[2])
+
     def test_maintenance_lock_skips_checks_without_clearing_active_incidents(self):
         self.report["health"] = "unhealthy"
         self.check()

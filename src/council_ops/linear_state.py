@@ -60,7 +60,7 @@ def maintenance(function):
 
 
 def status(settings):
-    from linear_agent.config import Registry
+    from linear_agent.config import SLUGS, Registry
 
     directory = root(settings) / "bridge"
     if not directory.exists():
@@ -86,6 +86,7 @@ def status(settings):
             "available": True,
             "enabled": registry.enabled,
             "registered_agents": len(registry.agents),
+            "required_services": ["linear-adapter", *(SLUGS[slug] for slug in registry.agents)],
             "installed_agents": installed,
             "jobs": jobs,
             "outbox": outbox,
@@ -98,7 +99,10 @@ def status(settings):
 def inspect_services(runtime):
     """Inspect only owned containers; never expose Config.Env or credentials."""
     report = status(runtime.settings)
-    report["services"] = {}
+    report["services"] = {
+        service: {"status": "missing", "health": None}
+        for service in report.get("required_services", [])
+    }
     if not root(runtime.settings).exists():
         return report
     expected_user = (

@@ -170,7 +170,8 @@ def issues(report, configuration, *, free_bytes, total_bytes):
                 or linear.get("installed_agents") != linear.get("registered_agents")
                 or not linear.get("services")
                 or any(
-                    item.get("health") != "healthy" for item in linear.get("services", {}).values()
+                    item.get("health") != "healthy" or item.get("status") != "running"
+                    for item in linear.get("services", {}).values()
                 )
             )
         )
