@@ -2,8 +2,8 @@
 # Select ChatGPT or Codex Subscription, then authorize in your own browser.
 set -euo pipefail
 case ${1:-} in
-secretary|linear-executor|dexter-executor|marketing-executor)
-  if [[ $# != 1 ]]; then printf 'Usage: setup-model.sh [secretary|linear-executor|dexter-executor|marketing-executor]\n' >&2; exit 2; fi
+secretary|linear-executor|dexter-executor|marketing-executor|padme-executor)
+  if [[ $# != 1 ]]; then printf 'Usage: setup-model.sh [secretary|linear-executor|dexter-executor|marketing-executor|padme-executor]\n' >&2; exit 2; fi
   exec ssh -t \
     -i "${COUNCIL_SSH_KEY:-$HOME/.ssh/agent_council_ed25519}" \
     -o IdentitiesOnly=yes -o ConnectTimeout=15 \
@@ -11,7 +11,7 @@ secretary|linear-executor|dexter-executor|marketing-executor)
     "exec flock -n /etc/agent-council/operations.lock bash /opt/agent-council/scripts/compose-server.sh exec $1 /opt/hermes/.venv/bin/hermes model"
 ;;
 esac
-if [[ $# != 0 ]]; then printf 'Usage: setup-model.sh [secretary|linear-executor|dexter-executor|marketing-executor]\n' >&2; exit 2; fi
+if [[ $# != 0 ]]; then printf 'Usage: setup-model.sh [secretary|linear-executor|dexter-executor|marketing-executor|padme-executor]\n' >&2; exit 2; fi
 exec ssh -t \
   -i "${COUNCIL_SSH_KEY:-$HOME/.ssh/agent_council_ed25519}" \
   -o IdentitiesOnly=yes -o ConnectTimeout=15 \

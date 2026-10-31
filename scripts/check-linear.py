@@ -26,7 +26,7 @@ def main():
             "organization": str(uuid.UUID(int=1)),
             "teams": [str(uuid.UUID(int=3))],
             "origin": "https://fixture.example.test",
-            "agents": ["qui-gon", "dexter", "marketing"],
+            "agents": ["qui-gon", "dexter", "marketing", "padme"],
         }
         prepare_files(
             data, plan, {"provider": "openai-codex", "default": "gpt-5.4"}, repository, uid, gid
@@ -34,7 +34,13 @@ def main():
         auth = root / "fixture.env"
         auth.write_text("HERMES_TELEGRAM_OWNER_USERNAME=fixture_owner\n")
         auth.chmod(0o600)
-        services = ("linear-adapter", "linear-executor", "dexter-executor", "marketing-executor")
+        services = (
+            "linear-adapter",
+            "linear-executor",
+            "dexter-executor",
+            "marketing-executor",
+            "padme-executor",
+        )
         override = root / "offline.yaml"
         override.write_text(
             "services:\n"

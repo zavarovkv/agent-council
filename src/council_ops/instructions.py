@@ -8,6 +8,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path, PurePosixPath
 
+from linear_agent.config import SLUGS
 from secretary_worker.instructions import load_instructions
 
 from .config import OperationError, atomic_write, contained, read_settings
@@ -62,7 +63,7 @@ def valid_destination(name):
             ),
         }
     if parts[:2] == (".council", "linear"):
-        if len(parts) < 4 or parts[2] not in {"qui-gon", "dexter", "marketing"}:
+        if len(parts) < 4 or parts[2] not in SLUGS:
             return False
         parts = parts[3:]
     elif parts[0] == "profiles":
@@ -98,11 +99,7 @@ def collect(source, home):
             if "agent-specialists-v1" not in source_requirements(source):
                 raise OperationError("Linear instruction bundles require agent-specialists-v1.")
             for agent in role.iterdir():
-                if (
-                    agent.name not in {"qui-gon", "dexter", "marketing"}
-                    or agent.is_symlink()
-                    or not agent.is_dir()
-                ):
+                if agent.name not in SLUGS or agent.is_symlink() or not agent.is_dir():
                     raise OperationError("Invalid isolated Linear instruction role.")
                 profile = home / ".council/linear" / agent.name
                 if not (profile / "config.yaml").is_file():

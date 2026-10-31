@@ -43,6 +43,8 @@ class SpecialistTests(unittest.TestCase):
             self.assertTrue(by_slug["dexter"]["delegation_allowed"])
             self.assertFalse(by_slug["marketing"]["registered"])
             self.assertFalse(by_slug["marketing"]["delegation_allowed"])
+            self.assertFalse(by_slug["padme"]["registered"])
+            self.assertFalse(by_slug["padme"]["delegation_allowed"])
             with store.database() as db:
                 db.execute("DELETE FROM installations WHERE agent=?", ("dexter",))
             by_slug = {
@@ -86,6 +88,17 @@ class SpecialistTests(unittest.TestCase):
         with self.assertRaises(OperationError):
             prepare_files(home, plan, *args)
         self.assertEqual(json.loads((base / "bridge/plan.json").read_text()), expanded)
+        with_editor = {**expanded, "agents": [*expanded["agents"], "padme"]}
+        prepare_files(home, with_editor, *args)
+        self.assertEqual(grant.read_text(), "own credential fixture")
+        self.assertEqual(soul.read_text(), "Reviewed private coordinator")
+        self.assertEqual((base / "bridge/qui-gon.env").read_bytes(), key)
+        self.assertFalse((base / "padme/auth.json").exists())
+        editor = json.loads((base / "padme/config.yaml").read_text())
+        self.assertEqual(editor["mcp_servers"], {})
+        self.assertEqual(
+            editor["platform_toolsets"]["api_server"], ["web", "clarify", "council-linear"]
+        )
 
     def test_additive_credentials_preserve_old_policy_epoch_and_grants(self):
         home = self.home / "runtime"

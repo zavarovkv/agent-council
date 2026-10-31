@@ -3,8 +3,8 @@
 set -euo pipefail
 case ${1:-} in
   "") if [[ $# != 0 ]]; then exit 2; fi; arguments="" ;;
-  dexter|marketing) if [[ $# != 1 ]]; then exit 2; fi; arguments=" --agent $1" ;;
-  *) printf 'Usage: setup-linear.sh [dexter|marketing]\n' >&2; exit 2 ;;
+  dexter|marketing|padme) if [[ $# != 1 ]]; then exit 2; fi; arguments=" --agent $1" ;;
+  *) printf 'Usage: setup-linear.sh [dexter|marketing|padme]\n' >&2; exit 2 ;;
 esac
 exec ssh -t \
   -i "${COUNCIL_SSH_KEY:-$HOME/.ssh/agent_council_ed25519}" \

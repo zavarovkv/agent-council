@@ -33,6 +33,17 @@ ROLES = {
             "experiment plans",
         ],
     },
+    "padme": {
+        "name": "Падме Амидала",
+        "service": "padme-executor",
+        "specialty": "Редактор русскоязычных текстов: вычитка, естественный язык, сохранение авторского голоса и подготовка материалов для сайта, публикаций и топ-менеджеров.",
+        "deliverables": [
+            "edited Russian copy with meaning and facts preserved",
+            "publication-ready website text",
+            "executive briefs and presentation narratives",
+            "editorial review tied to the actual artifact version",
+        ],
+    },
 }
 
 LIMITATIONS = [

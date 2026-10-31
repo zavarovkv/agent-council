@@ -103,16 +103,28 @@ def prepare_files(home, plan, model, repository, uid, gid):
             os.chown(target, uid, gid, follow_symlinks=False)
 
 
-def prepare(runtime, *, owner, organization, teams, with_dexter=False, with_marketing=False):
+def prepare(
+    runtime,
+    *,
+    owner,
+    organization,
+    teams,
+    with_dexter=False,
+    with_marketing=False,
+    with_padme=False,
+):
     verify_capabilities(runtime, ["linear-agents-v1"])
     if with_marketing:
         verify_capabilities(runtime, ["agent-specialists-v1"])
+    if with_padme:
+        verify_capabilities(runtime, ["agent-editor-v1"])
     previous_flags = {
         name: runtime.settings.values.get(name, "false")
         for name in (
             "COUNCIL_LINEAR_ENABLED",
             "COUNCIL_LINEAR_DEXTER_ENABLED",
             "COUNCIL_LINEAR_MARKETING_ENABLED",
+            "COUNCIL_LINEAR_PADME_ENABLED",
         )
     }
     plan = {
@@ -125,6 +137,7 @@ def prepare(runtime, *, owner, organization, teams, with_dexter=False, with_mark
             "qui-gon",
             *(["dexter"] if with_dexter else []),
             *(["marketing"] if with_marketing else []),
+            *(["padme"] if with_padme else []),
         ],
     }
     if not plan["teams"]:
@@ -150,6 +163,7 @@ def prepare(runtime, *, owner, organization, teams, with_dexter=False, with_mark
             "COUNCIL_LINEAR_ENABLED": "true",
             "COUNCIL_LINEAR_DEXTER_ENABLED": "true" if with_dexter else "false",
             "COUNCIL_LINEAR_MARKETING_ENABLED": "true" if with_marketing else "false",
+            "COUNCIL_LINEAR_PADME_ENABLED": "true" if with_padme else "false",
         }
     )
     try:
@@ -160,7 +174,7 @@ def prepare(runtime, *, owner, organization, teams, with_dexter=False, with_mark
         newly_started = []
         if previous_flags["COUNCIL_LINEAR_ENABLED"] != "true":
             newly_started.extend(["linear-adapter", "linear-executor"])
-        for slug in ("dexter", "marketing"):
+        for slug in ("dexter", "marketing", "padme"):
             if (
                 slug in plan["agents"]
                 and previous_flags["COUNCIL_LINEAR_" + slug.upper() + "_ENABLED"] != "true"
