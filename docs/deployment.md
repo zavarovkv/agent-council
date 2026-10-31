@@ -497,3 +497,18 @@ virtual host remains unchanged.
 - [Telegram Login](https://core.telegram.org/bots/telegram-login)
 - [Hermes model setup](https://hermes-agent.nousresearch.com/docs/getting-started/quickstart)
 - [Sign in with ChatGPT](https://learn.chatgpt.com/docs/sign-in-with-chatgpt)
+
+## Public landing and indexing
+
+The hostname-specific Council route serves the existing public roster/login view
+at `/` with HTTP 200; signing in continues to `/profiles`. Private dashboard and
+API routes retain the upstream session gate. Apply the versioned Nginx template
+with `python3 scripts/manage.py configure-route`; it validates syntax, retains
+rollback and gracefully reloads only the shared proxy configuration.
+
+The rendered HTML contains a canonical URL, description, Open Graph/Twitter card,
+WebSite JSON-LD and static portrait/contact links. `/robots.txt` advertises a
+one-page sitemap. `X-Robots-Tag` excludes private interfaces from indexing; it is
+not an authorization mechanism. The RU/EN switch is a reading preference on one
+URL, so no invented language URLs or hreflang alternates are published. Indexing
+and search appearance remain decisions of the search engines.

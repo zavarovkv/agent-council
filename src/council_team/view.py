@@ -158,12 +158,19 @@ def snapshot(home, read_config, *, now=None):
 def markup():
     cards = []
     for slug, role in ROLES.items():
+        telegram = (
+            '<p><a href="https://t.me/Qui_Gon_Jinn_ai" rel="noopener" '
+            'data-en="Message on Telegram">Написать в Telegram</a></p>'
+            if slug == "qui-gon"
+            else ""
+        )
         cards.append(
             f'<article data-agent="{PUBLIC_SLUGS[slug]}">'
-            f'<img data-avatar="{PUBLIC_SLUGS[slug]}" width="96" height="96" alt="{html.escape(role["name"])}" loading="lazy">'
+            f'<img src="auth/login/council/avatars/{PUBLIC_SLUGS[slug]}" data-avatar="{PUBLIC_SLUGS[slug]}" width="96" height="96" alt="{html.escape(role["name"])}" loading="lazy">'
             f"<h2>{html.escape(role['name'])}</h2><p>"
             f'<strong data-en="{html.escape(ENGLISH[slug][0])}">{TITLES[slug]}</strong></p>'
             f'<p data-en="{html.escape(ENGLISH[slug][1])}">{html.escape(role["specialty"])}</p>'
+            f"{telegram}"
             '<p><span data-en="Model:">Модель:</span> <strong data-field="model">—</strong></p>'
             '<p><span data-en="Completed tasks:">Завершено задач:</span> <strong data-field="closed_tasks">—</strong> · '
             '<span data-en="Tokens:">Токены:</span> <strong data-field="tokens">—</strong></p>'

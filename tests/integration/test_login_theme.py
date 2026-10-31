@@ -1,5 +1,7 @@
 """The themed renderer must preserve upstream auth links and escaping."""
 
+import json
+import re
 import unittest
 from html.parser import HTMLParser
 from types import SimpleNamespace
@@ -60,3 +62,17 @@ class LoginThemeTests(unittest.TestCase):
         self.assertIn("Вход пока недоступен", document)
         self.assertEqual(Links(document).links, [])
         self.assertNotIn("form", Links(document).tags)
+
+    def test_public_metadata_and_contact_link_exist_before_javascript(self):
+        document = self.render([SimpleNamespace(name="telegram-owner", display_name="Telegram")])
+        self.assertEqual(document.count('rel="canonical"'), 1)
+        self.assertIn('href="https://council.zavarov.com/"', document)
+        self.assertIn('property="og:url" content="https://council.zavarov.com/"', document)
+        structured = re.search(
+            r'<script type="application/ld\+json">(.*?)</script>', document, re.S
+        )
+        value = json.loads(structured[1])
+        self.assertEqual(value["@type"], "WebSite")
+        self.assertEqual(value["publisher"]["url"], "https://zavarov.com/")
+        self.assertIn('href="https://t.me/Qui_Gon_Jinn_ai"', document)
+        self.assertEqual(document.count('<img src="auth/login/council/avatars/'), 4)
