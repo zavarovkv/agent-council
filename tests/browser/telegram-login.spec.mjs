@@ -23,6 +23,18 @@ async function mount(page, { deny = false, sdkUnavailable = false } = {}) {
       submissions.push(request.postDataJSON());
       return route.fulfill({ status: deny ? 403 : 200, json: deny ? { detail: "Доступ не разрешен." } : { next: "/sessions" } });
     }
+    if (url.pathname === "/auth/council/team") {
+      const roles = [["qui-gon", "GPT-6.1 Sol"], ["dexter", "GPT-6 Astra"], ["lando", "GPT-6.1 Sol"], ["padme", "GPT-6 Astra"]];
+      return route.fulfill({ json: { schema: 1, agents: roles.map(([slug, name]) => ({
+        slug, model: { name, effort: "high" }, closed_tasks: slug === "padme" ? null : 3,
+        tokens: 123456, linear_connected: slug !== "padme",
+      })) } });
+    }
+    if (url.pathname.startsWith("/auth/council/avatars/")) {
+      const slug = url.pathname.split("/").pop();
+      const filename = { "qui-gon": "qui-gon.jpg", dexter: "dexter.jpg", lando: "lando.jpg", padme: "padme.png" }[slug];
+      return route.fulfill({ contentType: slug === "padme" ? "image/png" : "image/jpeg", body: await readFile(`assets/agents/${filename}`) });
+    }
     return route.fulfill({ contentType: "text/html", body: url.pathname === "/sessions" ? "<h1>Authorized test fixture</h1>" : html });
   });
   // The real SDK runs, but the provider popup is a fixture: no real account or bot is contacted.
@@ -44,6 +56,11 @@ for (const colorScheme of ["light", "dark"]) {
     await expect(button).toBeEnabled();
     await expect(page.locator("header nav button.tg-auth-button")).toHaveCount(1);
     await expect(page.locator("footer")).toHaveCount(0);
+    await expect(page.locator("[data-agent]")).toHaveCount(4);
+    await expect(page.locator('[data-agent="dexter"] [data-field="model"]')).toHaveText("GPT-6 Astra · high");
+    await expect(page.locator('[data-agent="padme"] [data-field="closed_tasks"]')).toHaveText("—");
+    await expect(page.locator('[data-agent="padme"] [data-field="connection"]')).toHaveText("Подключение к Linear не завершено");
+    expect(await page.locator("[data-avatar]").evaluateAll(images => images.every(image => image.complete && image.naturalWidth > 0))).toBeTruthy();
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBeTruthy();
     if (process.env.COUNCIL_SCREENSHOTS) await page.screenshot({ path: `${process.env.COUNCIL_SCREENSHOTS}/${colorScheme}.png`, fullPage: true });
     await page.keyboard.press("Tab");
@@ -82,7 +99,7 @@ test("denied account stays on the landing and can retry", async ({ page }) => {
   const popup = await popupPromise;
   await popup.waitForLoadState();
   await popup.evaluate(({ token, origin }) => opener.postMessage({ event: "auth_result", result: token }, origin), { token, origin });
-  await expect(page.getByRole("status")).toHaveText("Доступ не разрешен.");
+  await expect(page.locator(".login-status")).toHaveText("Доступ не разрешен.");
   await expect(button).toBeEnabled();
   expect(page.url()).toBe(origin + "/login");
   expect(submissions).toHaveLength(1);
@@ -92,5 +109,5 @@ test("unavailable SDK keeps a functional server-side login link", async ({ page 
   await mount(page, { sdkUnavailable: true });
   await expect(page.getByRole("link", { name: "Войти через Telegram" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Войти через Telegram" })).toBeHidden();
-  await expect(page.getByRole("status")).toContainText("Не удалось загрузить кнопку Telegram");
+  await expect(page.locator(".login-status")).toContainText("Не удалось загрузить кнопку Telegram");
 });

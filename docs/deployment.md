@@ -323,7 +323,21 @@ routing. Do not expand the execution allowlist to all contacts as a workaround.
 A secretary needs separate conversation state and restricted execution, plus
 explicit rules for drafts versus automatic replies before activation.
 
-## Login appearance
+## Public team page and login
+
+The landing includes the canonical team, image-owned portraits and selected models.
+The Linear adapter refreshes a private aggregate file every five minutes using its
+existing app grant; counts include archived completed issues in configured teams.
+A delegated issue is credited once to its delegate, otherwise to its assignee.
+No issue titles, comments, user IDs or credentials enter the public response.
+
+`/auth/council/team` serves a five-minute snapshot assembled from these counts and
+read-only profile configuration/session databases. Tokens are saved-session input
+plus output, with session-ID deduplication and attribution by recorded profile.
+Cached/reasoning subsets are not added twice. Pruned history and tool-free secretary
+replies are outside this metric; it is not provider billing. Missing, malformed or
+stale sources produce an unknown value, never a synthetic zero. The page shows no
+dates. Other dashboard APIs retain their existing authorization gate.
 
 The landing page uses [Beauty.css](https://github.com/zavarovkv/beauty-css) as an
 exact npm dependency, currently **0.4.0**. `package-lock.json` records registry

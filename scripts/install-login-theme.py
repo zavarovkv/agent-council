@@ -6,6 +6,8 @@ import hashlib
 import sys
 from pathlib import Path
 
+from council_team.view import markup
+
 UPSTREAM_SHA256 = "bdd4cadc0b4725b7f133fe4a897e0b6a6c5620f4349614f2c9505e32d07a738d"
 UPSTREAM_ROUTES_SHA256 = "b88945b2586de1288875ba1da6d8923d07bf34c1c97b16861e42e7d9633fdd08"
 UPSTREAM_STATUS_SHA256 = "91d723e7db56ae3c22c4b98eb964e01ea9e2d11d6e209f612d891a951068449b"
@@ -57,6 +59,10 @@ def install(renderer: Path, assets: Path) -> None:
         "<script>\n" + (assets / "telegram-widget.js").read_text(encoding="utf-8") + "\n</script>"
     )
     login = login.replace("$WIDGET_SCRIPT", widget_script)
+    login = login.replace("$TEAM_MEMBERS", markup()).replace(
+        "$TEAM_SCRIPT",
+        "<script>\n" + (assets / "team.js").read_text(encoding="utf-8") + "\n</script>",
+    )
     login = login.replace("{", "{{").replace("}", "}}")
     login = login.replace("$PROVIDER_BUTTONS", "{provider_buttons}").replace(
         "$PASSWORD_SCRIPT", "{password_script}"
@@ -98,6 +104,8 @@ def install(renderer: Path, assets: Path) -> None:
         "\n\nfrom plugins.dashboard_auth.telegram_owner.widget import router as _council_widget_router\n"
         "from plugins.dashboard_auth.telegram_owner.widget import revoke_access_cookie as _council_revoke_access_cookie\n"
         "router.include_router(_council_widget_router)\n"
+        "from plugins.dashboard_auth.telegram_owner.team import router as _council_team_router\n"
+        "router.include_router(_council_team_router)\n"
     )
     compile(updated_routes, str(routes), "exec")
     routes.write_text(updated_routes, encoding="utf-8")
