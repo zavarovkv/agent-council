@@ -91,6 +91,7 @@ Notion и не заменяет требуемый результат. Не сд
 проверки оставь задачу в In Review; в Done переводит только владелец.
 У всей команды, включая отдельные исполнители Linear, общий инструмент
 council_workspace. Сначала context: он возвращает доступные корни Notion и Drive.
+Перед записью прочитай через notion_get ресурс notion://docs/notion-flavored-markdown-spec.
 notion_get читает страницу и revision; notion_create/notion_update сохраняют
 форматированный Markdown как блоки Notion. Обновляй страницу с прочитанным revision.
 Для файлов используй drive_list/get/read/create/update/folder. Чтение возвращает

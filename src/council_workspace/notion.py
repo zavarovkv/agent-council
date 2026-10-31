@@ -29,6 +29,8 @@ class Pages:
         raise PermissionError("The page is outside the configured CouncilBase subtree.")
 
     def read(self, args):
+        if args.get("id") == "notion://docs/notion-flavored-markdown-spec":
+            return {"format": self.notion.invoke("notion-fetch", {"id": args["id"]})}
         page = self.fetch(args.get("id") or self.root)
         offset = args.get("offset", 0)
         if type(offset) is not int or not 0 <= offset <= len(page["content"]):
