@@ -246,6 +246,17 @@ class LandingInstallTests(unittest.TestCase):
             self.invoke(path, "0" * 64)
         self.assertFalse(installer.LINK.exists())
 
+    def test_busy_operation_lock_is_retryable_without_switching(self):
+        with (
+            patch.object(sys, "argv", ["installer", "unused", "--sha256", "a" * 64]),
+            patch.object(installer, "read_artifact", return_value={}),
+            installer.operation_lock(),
+            self.assertRaises(SystemExit) as error,
+        ):
+            installer.main()
+        self.assertEqual(error.exception.code, 75)
+        self.assertFalse(installer.LINK.exists())
+
     def test_rejects_traversal_and_absolute_paths(self):
         for name in ("../escape", "/tmp/escape"):
             with self.subTest(name=name):

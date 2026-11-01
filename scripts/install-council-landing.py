@@ -197,6 +197,9 @@ def main():
         files = read_artifact(args.archive, args.sha256)
         with operation_lock():
             install(files, args.sha256, args.verify_url)
+    except BlockingIOError:
+        print("Council operation active; retry static deployment shortly", file=sys.stderr)
+        raise SystemExit(75) from None
     except (OSError, ValueError, tarfile.TarError) as error:
         raise SystemExit(str(error)) from None
     print(f"Installed static Council landing {args.sha256}")

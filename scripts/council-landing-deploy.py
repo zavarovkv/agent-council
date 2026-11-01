@@ -11,10 +11,31 @@ import re
 import subprocess
 import sys
 import tempfile
+import time
 from pathlib import Path
 
 MAX_ARCHIVE = 8 * 1024 * 1024
 INSTALLER = "/usr/local/libexec/council/install-council-landing.py"
+
+
+def install_archive(archive, expected):
+    command = [
+        "sudo",
+        "-n",
+        INSTALLER,
+        str(archive),
+        "--sha256",
+        expected,
+        "--verify-url",
+        "https://council.zavarov.com",
+    ]
+    for delay in (5, 10, 20, 30, None):
+        result = subprocess.run(command, check=False, timeout=90)
+        if result.returncode == 0:
+            return
+        if result.returncode != 75 or delay is None:
+            raise subprocess.CalledProcessError(result.returncode, command)
+        time.sleep(delay)
 
 
 def main():
@@ -41,20 +62,7 @@ def main():
             raise SystemExit("Archive checksum mismatch")
         # Privileged installer is a fixed reviewed file. No user-controlled
         # shell, path or environment interpolation.
-        subprocess.run(
-            [
-                "sudo",
-                "-n",
-                INSTALLER,
-                str(archive),
-                "--sha256",
-                expected,
-                "--verify-url",
-                "https://council.zavarov.com",
-            ],
-            check=True,
-            timeout=90,
-        )
+        install_archive(archive, expected)
     print("Council landing installed and origin verified")
 
 

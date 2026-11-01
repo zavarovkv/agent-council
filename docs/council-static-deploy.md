@@ -45,14 +45,16 @@ application state. If the initial routing cutover fails, restore the saved Counc
 Nginx configuration through the guarded operator procedure, validate and reload.
 Retain prior releases until validation and rollback checks have passed.
 
-## Optional restricted receiver
+## Automatic publication and restricted receiver
 
 `scripts/council-landing-deploy.py` accepts only the forced command
 `council-landing-deploy <64 lowercase hex SHA-256>`. It reads at most 8 MiB from stdin
 and invokes the fixed privileged installer with origin verification. The installer,
 verifier and receiver must be root-owned files outside the deploy user's writable
 paths, installed together under `/usr/local/libexec/council/`. The installer uses
-`/etc/agent-council/operations.lock`; it fails if another owned operation is active.
+`/etc/agent-council/operations.lock`; it returns temporary failure code 75 if another owned operation is active. The
+receiver retries only that condition, for up to 65 seconds; validation failures
+are not retried.
 
 If separately authorized, use a dedicated unprivileged SSH account, a verified key
 with `command="/usr/local/libexec/council/council-landing-deploy.py",restrict`, and a
@@ -60,6 +62,25 @@ narrow sudoers rule for only the installer path, validated by `visudo -c`. Keep 
 SSH host-key verification. No shared `/tmp` lock, root password, forwarding or arbitrary
 remote shell is needed.
 
-This PR does not install the receiver, create a deploy identity or configure GitHub
-credentials. Enabling the manual deployment workflow requires separate authorization
-for those credentials and a tested initial routing cutover and rollback.
+The owner-authorized blog pipeline deploys after its successful main-branch build
+and publication. PRs cannot deploy. Bootstrap or rotate the dedicated public key
+from a reviewed checkout as root:
+
+```bash
+bash scripts/setup-council-static-deploy.sh /secure/path/council-deploy.pub
+```
+
+The script validates the public key, existing account and ownership, serializes
+with Council operations, installs the three root-owned programs and validates its
+single-installer sudoers rule. The account has a locked password, no extra groups,
+and root-owned SSH configuration. No service restart or Nginx change is needed.
+Private keys stay outside this repository. Verify arbitrary SSH commands fail,
+then configure the blog's `council-production` environment secrets/variables as
+described in its `docs/council-deploy-automation.md`. Restrict that environment to
+`main`; automatic publication uses no reviewer gate. A new key replaces the old
+public key. To revoke deployment, remove this account's authorized key and the
+GitHub environment private-key secret; existing static content remains served.
+
+Use the blog's manual deployment workflow with a previous successful build for
+rollback, or revert the source on main and rebuild. Agents and the authenticated
+application have their own deployment lifecycle.
