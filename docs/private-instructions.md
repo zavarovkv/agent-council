@@ -21,7 +21,7 @@ private-skills/
     └── skills/{spouse,contacts,new-users}/SKILL.md
 ```
 
-Isolated Linear roles use `linear/{qui-gon,dexter,marketing}/SOUL.md` and
+Isolated Linear roles use `linear/{qui-gon,dexter,marketing,padme}/SOUL.md` and
 `linear/<slug>/skills/<name>/SKILL.md`. Prepare each executor first and declare
 `agent-specialists-v1` in `requires.json`. These files map only into that
 executor's own profile; they grant no credentials or additional tools.
@@ -36,7 +36,13 @@ until reconciled.
 
 Skill folders can contain nested categories, scripts and reference files.
 Artifacts must be regular UTF-8 files, with no symlinks or hidden resources,
-at most 1 MiB per file and 8 MiB/1,024 files per bundle. Common credential
+at most 1 MiB per resource and 8 MiB/1,024 files per bundle. Managed `SKILL.md`
+files and references exposed by the isolated reader are limited to 64 KiB.
+Native skills require safe YAML metadata: a 1–64 character lowercase slug matching
+the directory, a non-empty description up to 1024 characters and a Markdown body.
+The three secretary route folders retain their existing `secretary-` name prefix.
+Copied-profile verification and isolated catalog discovery use the same parser;
+quoted, folded and literal YAML descriptions retain their actual meaning. Common credential
 patterns are rejected as a guardrail, not a complete secret-detection guarantee.
 Keep credentials, configuration, databases, conversations and memory outside Git.
 

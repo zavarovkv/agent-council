@@ -1,253 +1,171 @@
-# Architecture review — 2026-10-30
+# Architecture review – 2026-11-01
 
-Scope: first-party code, runtime boundaries, Telegram authorization and delivery,
-Docker, host operations, instruction releases, backups, CI and the integration
-contracts of pinned Hermes v0.22.5. This is a design/code/operations review, not
-a complete audit of upstream dependencies or the host OS. Capacity has not been
-established by a sustained load test. Deployment evidence belongs in PR #22.
+Scope: first-party runtime, skills and release tooling; Telegram, Linear, Notion,
+Drive, public landing, Docker, backups and live operational state. This is not a
+pentest of upstream Hermes, the whole host or cloud providers. No production
+messages, model requests or document edits were needed for the review.
 
-A live non-load sample used about 515 MiB of the main runtime's 2 GiB limit and
-119 MiB of the worker's 512 MiB limit, with about 38 GiB free on the host. This
-sample supports monitoring and load testing as the next capacity step.
+## Decision
 
-## Assessment
+Keep Hermes, Linear and single-host Docker Compose. Their responsibilities are
+appropriate for four agents and the measured load. Consolidate contracts and
+remove conflicting policy copies before adding more infrastructure. The main
+architectural risks are ambiguous writes, gaps between instructions and enforced
+permissions, and missing behavioral/capacity evidence.
 
-The current structure fits a personal, trusted deployment: one supervised Hermes
-runtime, a separate tool-free correspondence worker and host-only maintenance.
-The main improvements now are operational visibility, fair resource allocation,
-reliable task/result workflows and a clear capability model before expanding
-access. Multi-host orchestration becomes useful after those boundaries and
-measured capacity requirements exist.
+[Current component and trust diagram](architecture.md) is the operating model.
+The blog owns public landing source and automatic static deployment. Linear is
+the only task tracker. Notion owns formatted text deliverables; Drive owns shared
+files. Personal runtime memory stays local; the Drive memory-sync proposal
+(PR #59) remains closed and deferred.
 
-Keep the four data lifecycles explicit:
+## Evidence and corrections
 
-| Layer | Source of truth | Release/recovery |
+| Priority | Finding | Change and evidence |
 | --- | --- | --- |
-| Application and infrastructure | Public Git, pinned dependencies/images | Tested immutable code release |
-| Personal instructions and custom skill source | Private Git; trusted `main` update channel | Reviewed SHA, offline copy validation, checkpoint, guarded activation |
-| Conversations, memory, runs and artifacts | Persistent Hermes profiles/workspace | Consistent data backup and tested recovery |
-| Credentials and recovery password | Root-only host files; independent recovery copy | Explicit provisioning/rotation, outside agent Git access |
+| P1 | Notion ancestry parsing searched page content as well as metadata; a parent-like tag in prose could cross the configured subtree boundary | Only the envelope before content establishes ancestry; regression tests reject forged read/create scope |
+| P1 | A preflight validation error was recorded as an attempted cloud mutation, permanently blocking the same request key | Read-only preparation precedes atomic reservation; tests cover corrected retry, offline confirmed replay, competing callers and uncertain mutation refusal |
+| P1 | Notion readback removed punctuation, so changed signs, decimals and URL paths could be reported as verified | Content comparison retains punctuation and targets while allowing known Notion escaping; negative regression cases added |
+| P1 | Drive upload verification compared name and size only | Verify the provider's content checksum too; missing or different checksum cannot produce `verified: true` |
+| P2 | Workspace context still said only the owner can close tasks, contradicting the coordinator's scoped acceptance tool | Storage context delegates task transitions to the Linear workflow; storage no longer defines acceptance policy |
+| P2 | Isolated skill discovery used regex while Hermes parsed YAML; folded descriptions became a literal `>` or `|` | One runtime metadata contract serves discovery and pre-activation verification; actual pinned-image tests cover quoted, folded, literal and unsafe YAML |
+| P2 | Private CI accepted malformed metadata and did not enforce runtime name/size limits | Safe YAML decoding, directory/name/type/size checks and real-parser tests; the secretary's three historical route aliases remain explicit |
+| P2 | Architecture/README described two services, native Kanban as the next tracker, stateless-only guest calls and no static deploy identity | Replaced with current services, source-of-truth and trust boundaries; public example instructions are distinguished from installed private policy |
 
-The secretary receives its own instructions and provider grant. Its conversation
-styles do not grant private tools or family identity. Invited dashboard operators
-share the owner's execution environment; profiles and board filters are logical
-organization inside that trusted environment.
+The skills change is to validation and documentation. Agent roles, model choices,
+private instruction wording and permissions are preserved. Existing durable-write
+receipts keep their schema and meaning; old uncertain mutations are not reclassified
+as safe to replay.
 
-## Improvements implemented in this pass
+## Live state sampled before changes
 
-- Personal instructions can be installed from a protected private checkout. Only
-  the host receives a read-only GitHub key; image builds and public CI remain
-  independent of private source and credentials.
-- Explicit SHA installation and five-minute `main` synchronization share the
-  maintenance lock, drift checks, consistent checkpoint and copied-profile test.
-  Conflicting runtime edits remain intact. Documentation-only revisions update
-  release metadata without restarting services.
-- Failed candidate validation/cutover quarantines that revision. Manual restore
-  disables the update timer, preserving the restored release until an operator
-  chooses to resume updates.
-- Copied profiles validate managed skill metadata with Hermes' actual safe YAML
-  loader. This avoids assuming an additional YAML package exists in the image.
-- `doctor` reports private instruction revision/drift, automation state and the
-  last verified cloud backup. It exposes no prompt text, identities or keys.
-- Cloudflare R2 was initialized with bucket-scoped access. An encrypted upload,
-  download and offline recovery check succeeded before daily scheduling was
-  enabled. Source images/software/caches remain outside cloud data copies.
-- CI tests PRs and main, cancels superseded runs and avoids duplicate branch-push
-  and PR builds. Python 3.11/3.14, real pinned-image integration, browser contracts
-  and backup recovery remain required checks.
+- Seven running services: main Hermes, secretary, Linear adapter, four executors.
+  Doctor reported healthy containers, loopback-only published ports, verified
+  mounts and a non-root gateway.
+- Four Linear applications installed; execution enabled; 37 completed bridge jobs,
+  one cancelled job and no pending outbox activity in that sample.
+- Private instruction revision `7a01a67ed2cdb3219024ac4c50ec1625bb854e99`:
+  122 managed artifacts, no local drift, active synchronization timer.
+- Backup timer active; its last recorded verified recovery was about 2.5 hours old.
+  This is existing recovery evidence, not a new replacement-server exercise.
+- About 40 GiB free on the 75 GiB disk. Main Hermes used about 655 MiB of 2 GiB;
+  executors about 264–269 MiB of 768 MiB each; secretary 119 MiB of 512 MiB;
+  bridge 18 MiB of 256 MiB. These are idle/light-load samples, not load-test limits.
+- Docker reported 5.1 GB of image storage and 5.1 GB of build cache. Shared layers
+  mean these totals must not be naively added. No disk cleanup was necessary.
 
-These build on existing immutable owner pinning, verified Telegram JWT/nonces,
-revocable persistent sessions, durable reply queues, resource limits, loopback
-exposure and image/data rollback. See [technical review](technical-review.md).
+## Remaining engineering work, in order
 
-## Prioritized follow-up work
+### 1. Global task admission and proactive coordination
 
-### P1 — Shorten and explain maintenance windows
+Each isolated executor currently defaults to one concurrent native run. The
+bridge also caps each parent at four unfinished specialist delegations. Neither
+is a global five-task limit across Telegram, dashboard, cron and Linear. An
+instruction saying “at most five” does not supply a scheduler.
 
-A user-facing 502 was observed during this maintenance. Deployment, private
-instruction activation and consistent snapshots currently stop owned services;
-profile copying, verification and gateway startup make repeated operations
-noticeable in the web UI. This is an observed usability/availability issue.
+Implement a small admission module in the existing platform, with durable leases,
+per-executor and total budgets, idempotent acquisition, heartbeat/expiry and a
+queue. Every execution entry point must participate before the limit is described
+as global. Reserve coordinator capacity to avoid a parent waiting on children
+while occupying the last slot. Define whether awaiting-input runs consume a
+slot; test restart recovery and starvation. Do not add a second backlog.
 
-Implemented: routine snapshots freeze/resume the existing processes instead of
-restarting gateways. A bounded copy and independent host thaw timer protect
-against an interrupted CLI. Council's Nginx route maps origin connection failures
-to a non-cached 503 with `Retry-After`, preserving application auth/error responses.
-The real template is tested against a loopback-only fixture upstream.
+Only then enable a bounded periodic coordinator sweep of Linear: prioritize,
+identify blocked work, continue ready tasks, request a missing decision once, and
+report exceptions. A skill file does not install this schedule. Keep planned
+Гален/K-2SO roles unavailable until their executors, grants, tools and evaluation
+are provisioned. Existing AGE-27 tracks this work; do not duplicate it.
 
-Coalesce maintenance steps, validate staged instruction bundles before downtime
-and separate style/skill activation from code-image deployment. Use atomic bundle
-selection and a tested reader reload where native contracts permit it. Investigate
-coordinated online SQLite/file backups before eliminating the brief freeze;
-consistency must remain explicit. Add a maintenance response with Retry-After on
-the Council route and measure an availability budget. Preserve the single Telegram
-poller and image/data rollback when designing any overlapping cutover.
+Acceptance evidence: simultaneous admission from every supported entry point
+never exceeds the configured budget; retries/restarts do not duplicate a run;
+waiting parents cannot starve their children; revoked work stops before effects.
 
-### P1 — Protect business replies from public traffic
+### 2. Skill behavior and concise reporting
 
-Implemented: both the gateway and worker reserve one generation slot per route;
-hourly budgets are 60 business and 40 public replies. The gateway selects a fixed
-route from verified transport metadata. Persisted reservations keep the route
-and reject identity reuse across routes. Tests hold a slow public call, verify
-business progress and check budget isolation across a worker restart.
+The private repository already has role sources, generated adapters, shared
+procedures and an evaluation-case catalog. Static CI checks do not execute those
+cases. Build a disposable evaluation runner pinned to runtime, model and skill
+SHAs, with fake tools/data, fixed budget and independently reviewed traces.
+Compare baseline/candidate: role selection, required editorial handoff, questions,
+status transitions, actual evidence, denied actions, tokens and elapsed time.
 
-Previously both transports shared two slots and a global hourly budget, creating
-an availability risk inferred from
-[`plugin.py`](../src/telegram_secretary/plugin.py),
-[`delivery.py`](../src/telegram_secretary/delivery.py) and
-[`history.py`](../src/secretary_worker/history.py); no production attack is asserted.
+The Linear tool limits ordinary comments to 700 characters and review result/check
+fields to 500/160. The bridge's final AgentActivity response can still contain up
+to 16,000 characters. This is a separate path and explains why a short-comment
+skill alone cannot guarantee concise updates. Add an explicit deliverable/summary
+contract before enforcing a final-response limit: preserve the full artifact in
+Notion and publish a short summary plus verified link. Do not silently truncate
+research and claim the artifact was saved.
 
-Per-chat ordering, deduplication, cancellation and uncertain-send handling remain
-unchanged. Further work: record provider usage when supplied and expose route
-budgets to the owner. Provider-account quotas are still shared upstream.
+Acceptance evidence: a long-output fixture is preserved as an artifact, the
+published update stays within the agreed limit, retries do not duplicate either,
+and missing artifact access produces a clear actionable failure.
 
-### P1 — Deliver failure and stale-backup alerts
+### 3. Concurrent editing and uncertain-write reconciliation
 
-Implemented: a host monitor sends incident/recovery notifications only to the
-root-pinned owner's numeric Telegram ID, using the bot's existing private token.
-It deduplicates persistent incidents, skips active maintenance and checks services,
-queues, safe provider outcomes, backup age/units, instruction drift/rejection and
-disk space. Failed notification delivery retains the episode for retry.
+Current Notion and Drive revision checks prevent knowingly replacing an already
+stale version, but do not make the provider mutation atomic. Notion full-content
+replacement can race another editor. Use versioned deliverables and explicitly
+promote the accepted version; investigate provider-supported conditional updates
+before promising compare-and-swap guarantees. The workspace lock only serializes
+this service, not human or external API edits.
 
-A separate scheduled GitHub workflow checks public HTTPS and auth boundaries
-without any deployment secrets. It reports through GitHub's notification system;
-owner account notification preferences remain a required setup step. It cannot
-send through an unreachable host's Telegram credential. See
-[monitoring](monitoring.md) for setup, limits and verification.
+Unknown writes currently fail closed. Add an operator reconciliation command
+which inspects candidate objects/receipts and records a confirmed outcome, with
+an audit record. It must not clear pending rows or issue a new create blindly.
+Consider finer resource locks only after measuring the current serialized service;
+keep credential refresh and same-document writes serialized.
 
-### P1 — Rehearse recovery on a replacement host
+### 4. Operational visibility and recovery objectives
 
-A disposable Linux CI host now rehearses a real source deployment, stopped
-portable checkpoint, removal of source containers/data and recovery into new
-paths under a different system UID. Both recovered services start without agent
-egress; HTTPS with a verified fixture CA proves the anonymous gate and a retained
-owner session. Managed private instructions and workspace artifacts survive.
-The rehearsal refuses a host containing an existing Council deployment.
+Extend existing `doctor`/monitoring with safe error categories, queue age, run
+correlation and latency, not transcripts or raw provider exceptions. Distinguish
+healthy process, ready provider grant and successful task. Expose instruction
+revision and available capabilities in the trusted operator view.
 
-Actual R2 download and offline database checks are valuable evidence. A prepared
-replacement-host exercise must also prove account/UID setup, pinned image rebuild,
-Nginx/TLS provisioning, dashboard access and provider reauthorization when needed.
-Measure recovery time and define the tolerated data-loss window with the owner.
+Agree on recovery point/time objectives and rehearse a replacement host including
+DNS/TLS and provider reauthorization. CI fixture recovery and an R2 restore check
+are useful but do not prove those external steps. Retain data-only backups and
+root-only recovery keys. Add dependency/SBOM review to the existing pinned update
+process before considering a signed release registry.
 
-The CI rehearsal uses fixture data and a fixture TLS proxy. Production DNS, public
-certificate issuance and real provider reauthorization still require a planned
-replacement-server exercise; it is not evidence of those external procedures.
+### 5. Scale when measurements require it
 
-Use [`recover`](../src/council_ops/install.py) and the recorded revision. Confirm
-the restored private rules start without GitHub availability, recreate host-only
-read access separately and resume timers deliberately. Never rehearse by swapping
-the live data volume. See [backup recovery](backups.md).
+Seven containers and the observed headroom do not justify Kubernetes, a message
+broker or splitting every Python module into a network service. First measure
+concurrent task throughput, provider rate limits and recovery behavior. SQLite
+and local locks are appropriate to the current single-host design; multi-host
+workers would need shared lease/queue storage and a separate execution trust
+boundary. Full untrusted agents require stronger per-tenant isolation first.
 
-### P1 before expanding privileges — Enforce a capability model
+## Verification
 
-The spouse username selector is a style preference. The owner and invited web
-operators share a runtime. Additional family/guest tool access requires immutable
-actor IDs, explicit capabilities, scoped credentials and execution/storage
-boundaries. These checks belong in the server/tool layer, independently of
-editable skills.
+Baseline: 309 unit tests, seven opt-in live tests skipped. Candidate: 317 unit
+tests, the same seven skips; Ruff and shell/workflow checks run separately.
+Private baseline: 67 named skill instances plus policy/generated-file checks and
+eight trace-validator tests. The candidate adds two real-YAML tests. Real skill
+behavior has not been evaluated and is not reported as passing.
 
-Define a small matrix first: actor, agent, operation, resource scope, approval
-requirement. Test denied tool calls and cross-profile data access. Untrusted full
-agents require separate runtimes and grants. Preserve the existing tool-free
-correspondence path while this work is designed. See [security](../SECURITY.md).
+Pinned-image integration and deployment receipts must be checked on the reviewed
+commit before cutover. Live verification must retain TLS hostname validation,
+check the origin authorization gate, inspect all four executor catalogs and
+confirm TravelLine process/configuration checksums. Cloudflare 403 alone is not
+a successful application-auth test.
 
-### P2 — Build research workflow around native Kanban
+## Primary references
 
-Pinned Hermes already supplies SQLite-backed boards, Task/Run/Event/Attachment
-models, claims, review transitions and dashboard APIs. Use an adapter to those
-contracts for task ownership, execution and review. A duplicate Council task
-database would create two competing status sources.
+- [Hermes profiles](https://hermes-agent.nousresearch.com/docs/user-guide/profiles):
+  separate profile state and configuration; this is not container isolation.
+- [Hermes skills](https://hermes-agent.nousresearch.com/docs/user-guide/features/skills)
+  and [Agent Skills format](https://agentskills.io/specification): on-demand
+  procedures with structured metadata; use actual safe YAML semantics.
+- [Linear agent interaction](https://linear.app/developers/agent-interaction) and
+  [webhooks](https://linear.app/developers/webhooks): session lifecycle, signed
+  event delivery and separate issue workflow.
+- [Drive file resource](https://developers.google.com/workspace/drive/api/reference/rest/v3/files):
+  file version and binary-content checksum are different properties.
+- [Docker Compose production](https://docs.docker.com/compose/how-tos/production/):
+  production configuration and service-level deployment on a single host.
 
-The useful addition is a reliable filing workflow: stable task/run IDs on local
-reports, a reviewed artifact record and an idempotent Notion/Drive outbox. Prompt
-instructions about retries and parent-page indexing should be backed by code
-where writes must survive lost responses and restarts. A filing retry must reuse
-the same report and update one index row. Link saved artifacts from the native
-task board and verify destinations through the configured cloud integration.
-
-Implemented: coordinator-only `research_archive` validates a completed native
-Dexter task and closed run, attaches an immutable Markdown artifact and persists
-filing steps. It uses the native MCP client/grant, verifies report/index readback,
-reuses page identity across revisions and protects human edits. A host timer
-retries missing steps without model calls. Unknown creates pause for reconciliation
-instead of blindly publishing a duplicate. See [research workflow](research.md).
-
-### P2 — Make operator state visible in one place
-
-Expose a trusted operator view for each agent: profile, model/provider readiness,
-installed instruction SHA, pending update/conflict, current task/run, last result
-and backup age. Build on `doctor` and native Kanban APIs. Keep root maintenance
-behind a narrow host operations boundary; a dashboard must not receive Docker
-socket access or Git/R2 keys to implement these controls.
-
-For portability, resolve deployment account, paths, container/service names and
-origin from validated configuration. Several setup commands and unit templates
-still document this specific Ubuntu host. Add a fixture installation with
-non-default names/paths before calling the installer generic.
-
-### P2 — Minimize anonymous status responses
-
-An unauthenticated request through the public Cloudflare hostname returned HTTP
-200 from `/api/status` with `profiles`, `memory`, `disk`, `install_id` and
-`gateway_platforms` fields. Private configuration/session APIs still reject
-anonymous requests; this finding concerns unnecessary operational metadata,
-rather than demonstrated credential or conversation disclosure.
-
-Implemented: only `auth_required`, `auth_providers` and `auth_flows` are public.
-A verified, currently authorized Telegram session is required before detailed
-status/profile lookup. Both response shapes use `no-store` and vary on Cookie
-and Authorization. Native safe-mode/health checks retain the bootstrap fields.
-Tests cover signed login, invalid and expired sessions, early profile lookup
-rejection and the exact anonymous schema. Live checks enforce that schema.
-
-### P2 — Add structured diagnostics and release discipline
-
-Keep generic public errors, and record internal failure categories, run/request
-correlation IDs, route, latency, queue age and retry/delivery outcome. Persist
-enough to distinguish provider authentication, quota, Telegram permission and
-ambiguous network delivery failures without storing raw exception bodies.
-
-Publish versioned releases with a compatibility table for Hermes, Python, model
-adapters and data schemas. Add SBOM/vulnerability review and a tested dependency
-update cadence. Image signing/registry publication need an explicit release
-policy. Keep public workflows free of deployment secrets.
-
-Extend the compatibility suite to app downgrades containing private instruction
-state, and to the actual Telegram adapter's menu-startup contract. The current
-menu integration depends on pinned native startup attributes; a fixture adapter
-alone cannot establish that an upstream update preserved those attributes.
-
-## Scaling sequence
-
-1. Finish operator visibility, alerts, route fairness and the research filing
-   contract on the current host. Preserve native Hermes task/run semantics.
-2. Introduce a small declarative agent catalog for model, profile, instruction
-   release and allowed capabilities. Validate it and reconcile it through the
-   existing host operations layer.
-3. Separate the control API from execution before supporting untrusted agents
-   or mutually untrusted operators. Assign per-agent volumes, provider grants,
-   resource budgets and network policies.
-4. Add additional worker hosts when measured concurrency/availability needs
-   require them. Choose shared task/lease storage and a scheduler at that point;
-   SQLite-backed local state and host-local locks currently assume one machine.
-
-Keep runtime/provider upgrades separate from instruction releases. Use synthetic
-conversation fixtures and opt-in model evaluations for changes in assistant
-behavior, with an explicit evaluation budget and no real private chats in CI.
-
-## Verification basis
-
-Unit tests cover auth rejection/revocation, concurrent pinning/reservations,
-delivery cancellation/ambiguity, private-file boundaries, actual offline Git
-updates, no-op releases, drift preservation and rollback/update quarantine.
-Integration tests exercise the pinned Hermes adapter, skill parser and isolated
-service. Live checks verify origin auth independently of Cloudflare, provider
-readiness without sending Telegram messages and the existing service guard.
-
-This establishes tested contracts for the current deployment; multi-host load,
-disaster recovery on a replacement host and future capability policies require
-their own acceptance tests.
-
-References: [Docker Compose production](https://docs.docker.com/compose/how-tos/production/),
-[GitHub workflow concurrency](https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/control-workflow-concurrency),
-[restic repository operations](https://restic.readthedocs.io/en/stable/045_working_with_repos.html).
+Latest online documentation is guidance, not proof of a pinned runtime contract;
+the offline image integration suite checks the version actually deployed.
