@@ -55,9 +55,41 @@ Repositories containing CI, compilers or planned agents use an explicit `bundle.
 Declare every root directory exactly once and require `instruction-bundles-v2`.
 Only `roles` are installed. `drafts` do not create profiles, and tooling/shared
 source directories are never copied into a runtime. A skill alias must reference
-an active role; it cannot expose drafts or tooling. Generate shared role outputs
-before release and verify the compiler's `--check` result. Repositories without
+an active role; it cannot expose drafts or tooling. Repositories without
 a manifest retain the original role-only layout.
+
+### Canonical shared sources
+
+To avoid checked-in generated copies, declare `composition.json` and require
+`instruction-composition-v1`:
+
+```json
+{
+  "schema": 1,
+  "shared": {
+    "roles": ["assistant", "dexter", "lando", "padme"],
+    "skills": ["council-workspace", "handoff-contract", "linear-workflow"]
+  },
+  "linear": {"qui-gon": "qui-gon", "dexter": "dexter", "marketing": "lando", "padme": "padme"}
+}
+```
+
+The host installs `shared/skills/<name>/` into each declared role and its Linear
+aliases. Linear SOUL is composed from the aliased role's `SOUL.md`,
+`shared/linear-contract.md`, then `adapters/linear/<adapter>.md`. Keep only aliases
+in `linear/<slug>/`; checked-in SOUL copies and colliding role skills are rejected.
+Source paths are bounded and validated; no private compiler is executed. Secrets,
+memory, grants and scripts outside the selected skills never enter the output.
+Draft roles cannot be composition recipients. Remove retired canonical skills
+and references; installation prunes their previously managed files and empty
+folders, preserving unrelated local resources.
+
+On a changed profile, installation also invalidates Hermes' derived skill index
+and persisted system-prompt pointers while services are stopped. Hermes otherwise
+reuses old rules across restarts. Session IDs, transcripts, model settings, tool
+grants and memory are retained; the next turn rebuilds instructions from disk.
+An unsupported database schema aborts the install and triggers rollback. An
+unchanged profile or documentation-only update retains its cache.
 
 When a skill needs a newly released application capability, add an optional
 root `requires.json`, for example:
@@ -168,6 +200,9 @@ to `/opt/data/skills/`. Export stages changes only in the private working copy;
 it neither stops the service nor commits/pushes. Review the diff and resources,
 then commit using an authorized writer account. The host deploy key cannot push.
 Apply that reviewed commit to reconcile the runtime and recorded checksums.
+Composed Linear SOUL files are not exported as source. If one was edited locally,
+export stops so the edit can be reconciled into the canonical role or adapter.
+Shared skills export into `shared/skills/`; conflicting runtime copies stop export.
 
 Applied artifacts and their marker are included in profile backups. Recovery
 does not need GitHub access to start those saved instructions. The private source
