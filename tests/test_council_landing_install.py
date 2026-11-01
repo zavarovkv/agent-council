@@ -61,6 +61,70 @@ class LandingInstallTests(unittest.TestCase):
         self.assertTrue((installer.LINK.resolve().stat().st_mode & 0o111) != 0)
         self.invoke(path, digest)  # idempotent install
 
+    def test_bad_candidate_keeps_previous_release(self):
+        first = self.root / "first.tar.gz"
+        digest = archive(
+            first,
+            {
+                "index.html": b"<html>https://council.zavarov.com/</html>",
+                "en/index.html": b"<html>https://council.zavarov.com/en/</html>",
+                "council/avatars/qui-gon.png": b"png fixture",
+            },
+        )
+        self.invoke(first, digest)
+        previous = installer.LINK.resolve()
+        second = self.root / "bad.tar.gz"
+        digest = archive(
+            second,
+            {
+                "index.html": b"invalid page",
+                "en/index.html": b"<html>https://council.zavarov.com/en/</html>",
+                "council/avatars/qui-gon.png": b"png fixture",
+            },
+        )
+        with self.assertRaises(SystemExit):
+            self.invoke(second, digest)
+        self.assertEqual(installer.LINK.resolve(), previous)
+
+    def test_post_switch_failure_restores_previous_pointer(self):
+        first = self.root / "first.tar.gz"
+        digest = archive(
+            first,
+            {
+                "index.html": b"<html>https://council.zavarov.com/</html>",
+                "en/index.html": b"<html>https://council.zavarov.com/en/</html>",
+                "council/avatars/qui-gon.png": b"png fixture",
+            },
+        )
+        self.invoke(first, digest)
+        previous = installer.LINK.resolve()
+        second = self.root / "second.tar.gz"
+        digest = archive(
+            second,
+            {
+                "index.html": b"<html>https://council.zavarov.com/changed</html>",
+                "en/index.html": b"<html>https://council.zavarov.com/en/</html>",
+                "council/avatars/qui-gon.png": b"png fixture",
+            },
+        )
+        original_replace = installer.os.replace
+        calls = 0
+
+        def fail_verification_once(source, destination):
+            nonlocal calls
+            calls += 1
+            result = original_replace(source, destination)
+            if calls == 1:
+                # Simulate a broken new target immediately after activation.
+                (installer.LINK / "en/index.html").unlink()
+            return result
+
+        with patch.object(installer.os, "replace", side_effect=fail_verification_once):
+            with self.assertRaises(RuntimeError):
+                self.invoke(second, digest)
+        self.assertEqual(installer.LINK.resolve(), previous)
+        self.assertTrue((installer.LINK / "en/index.html").is_file())
+
     def test_rejects_bad_checksum_without_switching(self):
         path = self.root / "valid.tar.gz"
         archive(path, {"index.html": b"content"})
