@@ -94,15 +94,15 @@ def main():
             assert response[1]["X-Robots-Tag"] == "noindex, nofollow"
             landing = request("/")
             assert landing[0] == 302 and landing[1]["Location"] == "https://zavarov.com/council/"
-            assert landing[1]["X-Robots-Tag"] == "noindex, nofollow"\n            assert request("/login?next=%2Fprofiles")[0] == 200
+            assert landing[1]["X-Robots-Tag"] == "noindex, nofollow"
+            assert request("/login?next=%2Fprofiles")[0] == 200
             robots = request("/robots.txt")
             assert (
                 robots[0] == 200
                 and b"Sitemap: https://zavarov.com/sitemap.xml" in robots[2]
             )
             sitemap = request("/sitemap.xml")
-            assert sitemap[0] == 200 and b"<loc>https://council.zavarov.com/</loc>" in sitemap[2]
-            assert b"<lastmod>" not in sitemap[2]
+            assert sitemap[0] == 301 and sitemap[1]["Location"] == "https://zavarov.com/sitemap.xml"
             assert request("/provider-failure")[0:3:2] == (503, b"application response")
             assert request("/__hermes_setup_pending")[0] == 404
             upstream.shutdown()
