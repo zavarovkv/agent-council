@@ -53,10 +53,12 @@ def document(value):
     if content is None:
         raise FilingError("unsupported_notion_document")
     # Page prose (including code examples) is untrusted content, not ancestry.
-    # Only the MCP envelope preceding <content> can establish the scope.
-    envelope = value[: content.start()]
+    # Only the MCP ancestry envelope can establish scope. Properties, like the
+    # body, can contain human-authored strings that resemble structural tags.
+    envelope = re.split(r"<properties\b", value[: content.start()], maxsplit=1)[0]
     root = re.search(r'<page\b[^>]*\burl="([^"]+)"', envelope)
-    parent = re.search(r'<parent-page\b[^>]*\burl="([^"]+)"', envelope)
+    ancestry = re.search(r"<ancestor-path>(.*?)</ancestor-path>", envelope, re.S)
+    parent = re.search(r'<parent-page\b[^>]*\burl="([^"]+)"', ancestry[1] if ancestry else "")
     if root is None:
         raise FilingError("unsupported_notion_document")
     identifier = page_id(root[1])
