@@ -4,6 +4,7 @@
 Run only through a dedicated unprivileged SSH account with a narrowly scoped
 sudoers rule for the trusted installer; no arbitrary remote command execution.
 """
+
 import fcntl
 import hashlib
 import os
