@@ -33,7 +33,12 @@ def main():
                     raise SystemExit("Artifact too large")
                 for member in members:
                     parts = Path(member.name).parts
-                    if not member.isfile() or not parts or any(p in ("..", ".") for p in parts):
+                    if (
+                        not member.isfile()
+                        or Path(member.name).is_absolute()
+                        or not parts
+                        or any(p in ("..", ".") for p in parts)
+                    ):
                         raise SystemExit("Unsafe archive entry")
                     out = stage.joinpath(*parts)
                     out.parent.mkdir(mode=0o755, parents=True, exist_ok=True)
