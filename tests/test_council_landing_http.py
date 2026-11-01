@@ -24,6 +24,8 @@ class Fixture(BaseHTTPRequestHandler):
             body = b"Agent Council static landing"
         elif self.path == "/login?next=%2Fprofiles":
             status, body = 200, b"Login"
+        elif self.path == "/api/config":
+            status, body = (200 if self.broken else 401), b"API"
         else:
             status, body = 404, b"not found"
         self.send_response(status)
