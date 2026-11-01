@@ -35,11 +35,11 @@ def load_state(home):
             or set(value)
             != (
                 {"schema", "enabled", "revision", "owner_agent"}
-                if value.get("schema") == 3
+                if value.get("schema") in {3, 4}
                 else {"schema", "enabled", "revision"}
             )
             or type(value["schema"]) is not int
-            or value["schema"] not in {1, 2, 3}
+            or value["schema"] not in {1, 2, 3, 4}
             or type(value.get("owner_agent", False)) is not bool
             or type(value["enabled"]) is not bool
             or not isinstance(value["revision"], str)

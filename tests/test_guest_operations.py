@@ -106,3 +106,14 @@ class GuestOperationsTests(unittest.TestCase):
             with self.assertRaises(OperationError):
                 deploy(self.runtime)
         self.runtime.stop.assert_not_called()
+
+    def test_v4_context_cannot_roll_back_to_cli_image_even_when_disabled(self):
+        path = self.home / RELATIVE_POLICY
+        path.parent.mkdir(parents=True)
+        path.write_text(
+            json.dumps(dict(schema=4, enabled=False, owner_agent=True, revision="b" * 32))
+        )
+        path.chmod(0o600)
+        with patch("council_ops.guests.verify_capabilities") as verify:
+            require_compatible(self.runtime, self.home, image="old")
+            self.assertIn("telegram-guest-context-v1", verify.call_args.args[1])

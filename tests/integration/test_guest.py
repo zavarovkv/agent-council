@@ -220,7 +220,7 @@ class GuestSDKTests(unittest.IsolatedAsyncioTestCase):
             policy.parent.mkdir(parents=True)
             policy.write_text(
                 json.dumps(
-                    {"schema": 3, "enabled": True, "revision": "b" * 32, "owner_agent": True}
+                    {"schema": 4, "enabled": True, "revision": "b" * 32, "owner_agent": True}
                 )
             )
             policy.chmod(0o600)

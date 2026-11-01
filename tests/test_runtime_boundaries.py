@@ -44,7 +44,7 @@ class RuntimeBoundaryTests(unittest.TestCase):
                 "public.py": {"telegram"},
                 "guest.py": {"telegram"},
                 "owner_guest.py": {"telegram"},
-                "owner_agent.py": {"hermes_cli.gateway_client"},
+                "owner_agent.py": {"hermes_cli.gateway_client", "council_owner.context"},
                 "menus.py": {"telegram", "hermes_cli.commands_platforms"},
             },
         )

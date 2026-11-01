@@ -27,7 +27,7 @@ LABEL org.opencontainers.image.source="https://github.com/zavarovkv/agent-counci
 LABEL org.opencontainers.image.description="Hermes integration for Agent Council"
 LABEL org.opencontainers.image.revision="${COUNCIL_REVISION}"
 LABEL org.opencontainers.image.licenses="MIT"
-LABEL io.agent-council.capabilities="private-instructions-v1,instruction-bundles-v2,instruction-composition-v1,research-filing-v1,telegram-guests-v1,telegram-guest-owner-v1,telegram-guest-agent-v1,linear-project-collaboration-v1,linear-owner-review-v1,linear-coordinator-acceptance-v1,workspace-access-v1,linear-agents-v1,agent-specialists-v1,linear-task-management-v1,telegram-reader-v1,agent-editor-v1"
+LABEL io.agent-council.capabilities="private-instructions-v1,instruction-bundles-v2,instruction-composition-v1,research-filing-v1,telegram-guests-v1,telegram-guest-owner-v1,telegram-guest-agent-v1,telegram-guest-context-v1,linear-project-collaboration-v1,linear-owner-review-v1,linear-coordinator-acceptance-v1,workspace-access-v1,linear-agents-v1,agent-specialists-v1,linear-task-management-v1,telegram-reader-v1,agent-editor-v1"
 
 COPY assets/agents/*.png /opt/agent-council/assets/agents/
 COPY LICENSE /opt/agent-council/LICENSE
@@ -51,7 +51,8 @@ RUN chmod 0555 /etc/cont-init.d/03-council-session-store \
 COPY src/telegram_auth/ /opt/hermes/plugins/dashboard_auth/telegram_owner/
 RUN chmod -R a+rX,go-w /opt/hermes/plugins/dashboard_auth/telegram_owner
 
-# Native SDK hook, plus a separate tool-free HTTP worker. No upstream source patches.
+# Native Telegram SDK hook and a separate tool-free HTTP worker.
+# Owner session-surface compatibility is installed explicitly below.
 COPY src/telegram_secretary/ /opt/hermes/plugins/council-secretary/
 COPY src/secretary_worker/ /opt/agent-council/secretary_worker/
 COPY src/linear_agent/ /opt/agent-council/linear_agent/
@@ -59,6 +60,9 @@ COPY src/council_team/ /opt/agent-council/council_team/
 COPY src/council_team/ /opt/hermes/council_team/
 COPY src/council_workspace/ /opt/hermes/council_workspace/
 COPY src/council_skills/ /opt/hermes/council_skills/
+COPY src/council_owner/ /opt/hermes/council_owner/
+COPY scripts/install-owner-context.py /opt/agent-council/install-owner-context.py
+RUN python3 /opt/agent-council/install-owner-context.py /opt/hermes
 COPY src/research_filing/ /opt/hermes/research_filing/
 COPY src/workspace_plugin/ /opt/hermes/plugins/council-workspace/
 COPY src/telegram_monitor/ /opt/agent-council/telegram_monitor/
