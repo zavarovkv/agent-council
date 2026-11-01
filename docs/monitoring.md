@@ -39,6 +39,18 @@ Instruction/research timers also defer a busy lock or active conversation to
 their next tick without recording a failed unit. Invalid/stale state, rejected
 releases and other errors still fail; daily backup failures are never suppressed.
 
+Owner messages use short Russian sentences without diagnostic headers. Instruction
+alerts distinguish unavailable files, local edits, rejected revisions, stopped
+schedules and failed updates. Recovery confirms that the checks pass again; it
+does not claim a new instruction version was installed. Keep the operations lock
+held across any planned timer pause and its restoration to avoid a false alarm.
+
+Hermes shutdown/restart notices are registered through the native plugin locale
+API in `src/telegram_secretary/__init__.py`. Only these two message keys are
+overridden, in Russian for both the default English UI and Russian UI. Other
+translations and upstream shutdown delivery are unchanged. The notice asks the
+owner to write after reconnection; it does not promise an automatic task resume.
+
 Inspect locally:
 
 ```bash

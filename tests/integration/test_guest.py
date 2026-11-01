@@ -9,7 +9,7 @@ import tempfile
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, Mock, patch
 
 from telegram import Bot, Update
 from telegram.ext import Application, TypeHandler
@@ -98,7 +98,9 @@ class GuestSDKTests(unittest.IsolatedAsyncioTestCase):
     ):
         module = plugin("council_guest_dispatch_fixture")
         factories = []
-        module.register(SimpleNamespace(register_telegram_handler=factories.append))
+        module.register(
+            SimpleNamespace(register_telegram_handler=factories.append, register_locale=Mock())
+        )
         with tempfile.TemporaryDirectory() as temporary:
             home = Path(temporary)
             (home / "telegram-owner.json").write_text('{"telegram_id":12345}')
