@@ -34,6 +34,11 @@ def view(args):
             for folder in sorted(root.iterdir()) if root.exists() else []:
                 if not NAME.fullmatch(folder.name):
                     continue
+                # Hermes also seeds categorized upstream skills at startup. Their
+                # category directories (and old empty directories) are not skills.
+                metadata = folder / "SKILL.md"
+                if not metadata.exists() and not metadata.is_symlink():
+                    continue
                 content = regular_text(root, folder.name + "/SKILL.md")
                 header = content.split("---", 2)
                 if len(header) != 3 or header[0].strip():

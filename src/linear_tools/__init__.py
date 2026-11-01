@@ -63,7 +63,7 @@ def register(ctx):
     for name, description, properties, required, path in (
         (
             "linear_issues",
-            "Manage Linear tasks: context lists team states/projects/members/labels; list searches titles; get reads an issue and comments; create makes ordinary Backlog tasks without delegating them; update changes task fields; comment posts a note; start moves to In Progress; review submits a verified deliverable to In Review after child work finishes; only the human owner marks Done. Use start to return to In Progress before revisions. Legacy complete is a review alias, never Done. Qui-Gon manages allowed teams; all specialists can read, create and update tasks throughout their current project or shared parent task tree. project reads project materials, document reads a linked document, save_document creates or updates one using fields.title/content (document UUID only for updates), comments pages complete comments; use cursor and offset/next_offset for long content. Mutations require a stable key, reused on retries. Never claim a completed action without its receipt.",
+            "Manage Linear tasks: context lists team states/projects/members/labels; list searches titles; get reads an issue and comments; create makes ordinary Backlog tasks without delegating them; update changes task fields; comment posts a note; start moves to In Progress; review submits a verified deliverable to In Review after child work finishes; accept lets only root Qui-Gon close verified low-risk internal tasks using get.acceptance.revision, category, result, verification, evidence HTTPS URL and artifact_version. Important/high-priority, owner-reserved, public, strategic, financial, production and security work remains for owner acceptance. Read artifacts before accepting; specialists cannot self-accept. Use start to return to In Progress before revisions. Legacy complete is a review alias, never Done. Qui-Gon manages allowed teams; all specialists can read, create and update tasks throughout their current project or shared parent task tree. project reads project materials, document reads a linked document, save_document creates or updates one using fields.title/content (document UUID only for updates), comments pages complete comments; use cursor and offset/next_offset for long content. Mutations require a stable key, reused on retries. Never claim a completed action without its receipt.",
             {
                 "action": {
                     "type": "string",
@@ -80,6 +80,7 @@ def register(ctx):
                         "comment",
                         "start",
                         "review",
+                        "accept",
                         "complete",
                     ],
                 },
@@ -91,6 +92,22 @@ def register(ctx):
                     "type": "string",
                     "description": "Allowed team UUID; defaults to current task's team.",
                 },
+                "revision": {
+                    "type": "string",
+                    "description": "Exact acceptance.revision from get.",
+                },
+                "category": {
+                    "type": "string",
+                    "enum": [
+                        "internal-research",
+                        "internal-draft",
+                        "documentation",
+                        "sandbox-validation",
+                        "internal-planning",
+                    ],
+                },
+                "evidence": {"type": "string", "maxLength": 2048},
+                "artifact_version": {"type": "string", "maxLength": 160},
                 "document": {
                     "type": "string",
                     "description": "Linked document UUID for document action.",

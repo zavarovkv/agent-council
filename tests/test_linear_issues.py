@@ -153,11 +153,11 @@ class IssueManagementTests(unittest.TestCase):
             self.call(context, "update", key="priority", fields={"priority": 1})
         self.assertEqual(self.linear.sessions[uid(10)]["issue"]["priority"], 3)
 
-    def test_only_owner_closes_reviewed_tasks_and_revisions_return_to_progress(self):
+    def test_direct_done_is_blocked_and_revisions_return_to_progress(self):
         context = self.start()
         self.call(context, "review", key="review", result="Ready", verification="Checked")
         for action in ("create", "update"):
-            with self.subTest(action=action), self.assertRaisesRegex(ValueError, "Only the owner"):
+            with self.subTest(action=action), self.assertRaisesRegex(ValueError, "Direct Done"):
                 self.call(
                     context, action, key="bypass", fields={"title": "Text", "stateId": uid(203)}
                 )

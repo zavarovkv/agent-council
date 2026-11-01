@@ -265,7 +265,7 @@ class Linear:
     def issue_details(self, agent, issue):
         return self.query(
             agent,
-            "query CouncilIssueDetails($id:String!){issue(id:$id){documents(first:50){nodes{id title url} pageInfo{hasNextPage endCursor}} attachments(first:50){nodes{id title url} pageInfo{hasNextPage endCursor}} id identifier title description url archivedAt priority dueDate team{id} creator{id} delegate{id} assignee{id} project{id} parent{id} state{id name type} labels{nodes{id name}} children(first:100){nodes{id identifier state{id type}} pageInfo{hasNextPage}} comments(last:10){nodes{id body user{id name}}}}}",
+            "query CouncilIssueDetails($id:String!){issue(id:$id){documents(first:50){nodes{id title url} pageInfo{hasNextPage endCursor}} attachments(first:50){nodes{id title url} pageInfo{hasNextPage endCursor}} id identifier title description url archivedAt priority dueDate team{id} creator{id} delegate{id} assignee{id} project{id} parent{id} state{id name type} labels{nodes{id name}} children(first:100){nodes{id identifier state{id type}} pageInfo{hasNextPage}} comments(last:51){nodes{id body user{id name}} pageInfo{hasPreviousPage}}}}",
             {"id": issue},
         )["issue"]
 
