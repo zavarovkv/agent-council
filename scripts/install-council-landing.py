@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Operator-only install of a reviewed Hugo artifact, no network or credentials."""
+
 import argparse
 import hashlib
 import os
@@ -10,6 +11,7 @@ from pathlib import Path
 DEST = Path("/var/www")
 LINK = DEST / "agent-council-landing"
 RELEASES = DEST / "agent-council-landing-releases"
+
 
 def main():
     parser = argparse.ArgumentParser()
@@ -46,6 +48,7 @@ def main():
     temp_link.symlink_to(target)
     os.replace(temp_link, LINK)
     print(f"Installed static Council landing {actual}; verify Nginx separately")
+
 
 if __name__ == "__main__":
     main()
