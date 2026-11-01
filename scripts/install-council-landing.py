@@ -50,6 +50,18 @@ def main():
                 if not (stage / required).is_file():
                     raise SystemExit(f"Missing {required}")
             os.rename(stage, target)
+    # Validate the candidate before changing the live pointer. A broken
+    # archive must never replace a working landing.
+    for name in ("index.html", "en/index.html"):
+        page = (target / name).read_text(encoding="utf-8")
+        if "council.zavarov.com" not in page or "<html" not in page:
+            raise SystemExit(f"Invalid Council page: {name}")
+    if LINK.is_symlink():
+        current = LINK.resolve(strict=True)
+        if not current.is_relative_to(RELEASES.resolve(strict=True)):
+            raise SystemExit("Live landing points outside managed releases")
+    elif LINK.exists():
+        raise SystemExit("Refusing to replace non-symlink live landing")
     temp_link = DEST / f".agent-council-landing-{os.getpid()}"
     temp_link.symlink_to(target)
     os.replace(temp_link, LINK)
