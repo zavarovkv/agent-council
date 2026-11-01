@@ -1,0 +1,13 @@
+[Unit]
+Description=Save Telegram early-access requests to the Agent Council Notion register
+After=docker.service network-online.target
+Requires=docker.service
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/agent-council
+ExecStart=/bin/bash /opt/agent-council/scripts/sync-waitlist.sh
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+TimeoutStartSec=5min

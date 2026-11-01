@@ -85,6 +85,9 @@ independent HTTPS checks.
 [Research workflow](docs/research.md) connects native task/run tracking to reviewed
 Notion reports and their parent-page index.
 
+[Early-access request capture](docs/waitlist.md) saves explicit Telegram waitlist
+requests to a dedicated Notion register, with durable capture and duplicate protection.
+
 [Linear setup](docs/linear.md) connects the personal assistant to issues and projects.
 The optional [Linear agents](docs/linear-agents.md) receive delegated issues,
 ask for clarification and route sub-issues to isolated executors.
