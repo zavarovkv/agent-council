@@ -40,6 +40,19 @@ at most 1 MiB per file and 8 MiB/1,024 files per bundle. Common credential
 patterns are rejected as a guardrail, not a complete secret-detection guarantee.
 Keep credentials, configuration, databases, conversations and memory outside Git.
 
+Repositories containing CI, compilers or planned agents use an explicit `bundle.json`:
+
+```json
+{"schema":1,"roles":["assistant","dexter","lando","padme","linear","secretary"],"drafts":["galen","k2so"],"resources":[".github","adapters","quality","shared"]}
+```
+
+Declare every root directory exactly once and require `instruction-bundles-v2`.
+Only `roles` are installed. `drafts` do not create profiles, and tooling/shared
+source directories are never copied into a runtime. A skill alias must reference
+an active role; it cannot expose drafts or tooling. Generate shared role outputs
+before release and verify the compiler's `--check` result. Repositories without
+a manifest retain the original role-only layout.
+
 When a skill needs a newly released application capability, add an optional
 root `requires.json`, for example:
 

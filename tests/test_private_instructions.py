@@ -63,6 +63,37 @@ class PrivateInstructionTests(unittest.TestCase):
         install_files(self.home, files, REVISION, self.uid, self.gid)
         return files
 
+    def test_manifest_keeps_tooling_and_unprovisioned_drafts_out_of_runtime(self):
+        for name in (".github", "quality", "adapters", "galen"):
+            (self.source / name).mkdir()
+            (self.source / name / "SOUL.md").write_text("Do not install this draft or tooling")
+        manifest = {
+            "schema": 1,
+            "roles": ["assistant"],
+            "drafts": ["galen"],
+            "resources": [".github", "quality", "adapters"],
+        }
+        path = self.source / "bundle.json"
+        path.write_text(json.dumps(manifest))
+        with self.assertRaisesRegex(OperationError, "instruction-bundles-v2"):
+            collect(self.source, self.home)
+        (self.source / "requires.json").write_text(
+            '{"schema":1,"capabilities":["instruction-bundles-v2"]}'
+        )
+        files = self.install()
+        self.assertEqual(len(files), 3)
+        self.assertEqual((self.home / "SOUL.md").read_text(), "Private assistant identity")
+        self.assertFalse((self.home / "profiles/galen").exists())
+        self.assertFalse((self.home / "quality").exists())
+        (self.source / "unexpected").mkdir()
+        with self.assertRaisesRegex(OperationError, "exactly once"):
+            collect(self.source, self.home)
+        (self.source / "unexpected").rmdir()
+        manifest["drafts"].append("assistant")
+        path.write_text(json.dumps(manifest))
+        with self.assertRaisesRegex(OperationError, "exactly once"):
+            collect(self.source, self.home)
+
     def test_isolated_roles_reuse_reviewed_skill_source_without_other_profile_data(self):
         researcher = self.home / "profiles/dexter"
         researcher.mkdir(parents=True)
