@@ -62,10 +62,28 @@ def main():
             raise SystemExit("Live landing points outside managed releases")
     elif LINK.exists():
         raise SystemExit("Refusing to replace non-symlink live landing")
+    previous = LINK.resolve(strict=True) if LINK.is_symlink() else None
     temp_link = DEST / f".agent-council-landing-{os.getpid()}"
-    temp_link.symlink_to(target)
-    os.replace(temp_link, LINK)
-    print(f"Installed static Council landing {actual}; verify Nginx separately")
+    try:
+        temp_link.symlink_to(target)
+        os.replace(temp_link, LINK)
+        # Verify the switched pointer, not just the candidate on disk.
+        if LINK.resolve(strict=True) != target.resolve(strict=True):
+            raise RuntimeError("Static landing pointer verification failed")
+        for name in ("index.html", "en/index.html"):
+            if not (LINK / name).is_file():
+                raise RuntimeError(f"Missing live page: {name}")
+    except Exception:
+        if previous is not None:
+            rollback_link = DEST / f".agent-council-rollback-{os.getpid()}"
+            rollback_link.symlink_to(previous)
+            os.replace(rollback_link, LINK)
+        elif LINK.is_symlink():
+            LINK.unlink()
+        raise
+    finally:
+        temp_link.unlink(missing_ok=True)
+    print(f"Installed static Council landing {actual}; HTTP checks still required")
 
 
 if __name__ == "__main__":
