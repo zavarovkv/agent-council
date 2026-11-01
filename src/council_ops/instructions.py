@@ -12,6 +12,8 @@ from linear_agent.config import SLUGS
 from secretary_worker.instructions import load_instructions
 
 from .config import OperationError, atomic_write, contained, read_settings
+from .instruction_cache import refresh_profiles
+from .instruction_composition import load as load_composition
 from .lifecycle import identity, restore, smoke
 from .snapshots import snapshot
 
@@ -137,6 +139,7 @@ def collect(source, home):
     files = {}
     bundles = []
     roles = source_roles(source)
+    composition = load_composition(source, roles, source_requirements(source))
     for role in roles:
         if role.is_symlink() or not ROLE.fullmatch(role.name):
             raise OperationError("Invalid instruction role directory.")
@@ -173,6 +176,7 @@ def collect(source, home):
                     if shared.resolve() != shared or not (shared / "skills").is_dir():
                         raise OperationError("Missing shared skill source.")
                     bundles.append((shared / "skills", prefix + "/skills", False))
+                    bundles.extend(composition.shared_bundles(source, value["role"], prefix))
             continue
         if role.name == "secretary":
             load_instructions(role)
@@ -186,6 +190,7 @@ def collect(source, home):
                 raise OperationError("Provision each named agent profile before its instructions.")
             prefix = "profiles/" + role.name
         bundles.append((role, prefix, True))
+        bundles.extend(composition.shared_bundles(source, role.name, prefix))
     for role, prefix, full_role in bundles:
         for path in role.rglob("*"):
             if path.is_symlink():
@@ -216,6 +221,12 @@ def collect(source, home):
             if CREDENTIAL.search(data.decode("utf-8")):
                 raise OperationError("Credential-like content found; keep credentials outside Git.")
             files[name] = Artifact(data, bool(path.stat().st_mode & 0o111))
+    for name, data in composition.souls(source).items():
+        if name in files or not valid_destination(name) or len(data) > 1048576:
+            raise OperationError("Duplicate, invalid or oversized composed instruction.")
+        if CREDENTIAL.search(data.decode("utf-8")):
+            raise OperationError("Credential-like content found; keep credentials outside Git.")
+        files[name] = Artifact(data)
     if not files or len(files) > 1024 or sum(len(f.data) for f in files.values()) > 8 * 1048576:
         raise OperationError("An instruction bundle must contain bounded role artifacts.")
     return files
@@ -336,7 +347,21 @@ def install_files(home, files, revision, uid, gid, *, capabilities=(), adoptions
         atomic_write(path, artifact.data, mode=0o700 if artifact.executable else 0o600)
         os.chown(path, uid, gid)
     for name in previous.keys() - files.keys():
-        destination(home, name).unlink()
+        path = destination(home, name)
+        path.unlink()
+        if "skills" in PurePosixPath(name).parts:
+            parent = path.parent
+            while parent != home and parent.name != "skills" and not any(parent.iterdir()):
+                parent.rmdir()
+                parent = parent.parent
+    changed = {
+        name
+        for name in previous.keys() | files.keys()
+        if previous.get(name) != (digest(files[name].data) if name in files else None)
+    }
+    # Callers hold the maintenance lock and stop writers (or install into a copy).
+    # Session transcripts survive; only derived prompt/index caches are invalidated.
+    refresh_profiles(home, changed, uid, gid)
     marker = home / MARKER
     marker.parent.mkdir(mode=0o700, exist_ok=True)
     os.chown(marker.parent, uid, gid)
@@ -601,7 +626,9 @@ def export(runtime, source, revision, *, include_skills=()):
     if not previous or json.loads((home / MARKER).read_text()).get("revision") != revision:
         raise OperationError("Export into the clean checkout of the currently installed revision.")
     runtime.require_idle()
-    collect(source, home)  # Validate role aliases before resolving export destinations.
+    expected = collect(source, home)  # Validate aliases before resolving export destinations.
+    composition = load_composition(source, source_roles(source), source_requirements(source))
+    composed = composition.souls(source)
     names = set(previous)
     for skill in include_skills:
         directory = home / "skills" / skill
@@ -624,7 +651,13 @@ def export(runtime, source, revision, *, include_skills=()):
         data = path.read_bytes()
         if CREDENTIAL.search(data.decode("utf-8")):
             raise OperationError("Credential-like content found; export refused.")
-        target = source / source_name(name, source)
+        if name in composed:
+            if data != expected[name].data:
+                raise OperationError(
+                    "Composed SOUL changed locally; preserve it and reconcile the canonical role or adapter."
+                )
+            continue
+        target = source / composition.canonical(source_name(name, source))
         if target.resolve() != target:
             raise OperationError("Refusing a symlinked export destination.")
         artifact = Artifact(data, bool(path.stat().st_mode & 0o111))

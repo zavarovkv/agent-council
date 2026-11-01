@@ -85,15 +85,17 @@ checks do not make the audience private.
 ## Instruction lifecycle
 
 Private `shared/` holds common procedures; role folders hold specialization;
-`adapters/` adds channel behavior. Generated Linear SOUL files and common-skill
-copies are checked against their sources. `skills-source.json` aliases share
+`adapters/` adds channel behavior. The trusted installer reads `composition.json`
+to assemble Linear SOUL files and distribute common skills directly from canonical
+sources, without checked-in generated copies. `skills-source.json` aliases share
 reviewed instruction text, never another profile's credentials or conversations.
 The secretary has a separate tool-free policy and three fixed style routes.
 
 The host checks private `main` periodically, selects an exact revision, checks
 capabilities and file drift, drains work, verifies a copied profile, and installs
 with rollback. It refuses to overwrite unreviewed runtime edits. Export generated
-skills for review before committing them. Docker upgrades preserve private rules.
+skills for review before committing them. Instruction updates invalidate derived
+prompt/index caches without removing session history. Docker upgrades preserve private rules.
 Static checks prove format and synchronization, not agent reasoning quality; see
 [the review](architecture-review.md) for the missing behavioral evaluation layer.
 
