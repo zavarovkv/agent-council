@@ -1,5 +1,8 @@
 # Technical review — 2026-10-30
 
+Historical review of the initial deployment. Current component boundaries,
+verification and priorities are in the [2026-11-01 architecture review](architecture-review.md).
+
 Scope: repository architecture, Docker isolation, deployment scripts, Telegram
 authorization, state persistence, recovery and open-source maintenance. This is
 not a complete audit of upstream Hermes, all dependencies or the host OS.

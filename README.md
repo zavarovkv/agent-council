@@ -7,18 +7,19 @@ The project is in early development, built around
 ## What it does
 
 - Runs a personal agent with a web dashboard and Telegram messaging.
-- Delegates competitor research to a specialist profile, with the assistant
-  reviewing and returning its results.
+- Coordinates Квай-Гон, Декстер, Лэндо and Падме through Linear tasks, specialist
+  sub-issues, clarification and reviewed deliverables.
 - Supports optional [Telegram source collection](docs/telegram-monitor.md)
   for native agent research workflows.
 - Supports ChatGPT / Codex model login and explicit Notion / Google Drive setup.
 - Connects to Linear through its official OAuth-backed MCP integration.
-- Supports isolated Linear specialists for product research and marketing/SEO,
+- Supports isolated Linear specialists for product research, marketing/SEO and editing,
   with a live agent catalog, delegated sub-issues and reviewed local skills.
 - Provides an optional Telegram secretary for selected account chats and public
   bot conversations, with separate reply styles for spouse, contacts and new users.
 - Supports opt-in, owner-only [Telegram guest calls](docs/telegram-guests.md) in other chats,
-  with stateless public answers and no private tools or history.
+  with the owner's private agent and tools when explicitly enabled; the answer
+  remains visible to the conversation's participants.
 - Includes Docker deployment, persistent storage, verified rollback and encrypted
   Cloudflare R2 backup tooling.
 
@@ -26,7 +27,10 @@ The project is in early development, built around
 
 Docker Compose runs the private Hermes runtime behind HTTPS and Telegram sign-in.
 The owner and explicitly invited dashboard operators share its tools, credentials
-and history. Specialist profiles use that same trusted runtime.
+and history. Native specialist profiles share this trusted runtime; the four
+Linear executors have separate containers, state and task-scoped tools. A shared
+workspace service gives trusted agents access to the selected Notion subtree and
+Drive folder without copying cloud credentials to every executor.
 
 External correspondence goes through a separate **tool-free secretary** with its
 own model session and history. It cannot access the personal agent's files,
@@ -50,17 +54,18 @@ state before switching releases. Off-server backups require separate
 
 ## Instructions and skills
 
-Start with the [instruction index](instructions/README.md). Shared instructions
-are grouped by role: `assistant/`, `dexter/`, `secretary/` and `guest/`. The secretary's
-common policy and three reply scenarios are editable Markdown files.
+Start with the [instruction index](instructions/README.md). The public repository
+contains setup examples; the private instruction repository owns installed role
+rules, shared procedures and generated Linear adapters. The secretary has its
+own policy and three conversation styles.
 
 Personal rules can live in a [private instruction repository](docs/private-instructions.md),
 installed by reviewed commit without including private Git access in Docker or CI.
 
-Commit and deploy secretary changes to apply them. Researcher instructions use
-an explicit profile installer that preserves manual edits. Private/generated
-Hermes skills remain in persistent storage. [AGENTS.md](AGENTS.md) contains the
-repository's development rules.
+The private-repository timer applies a verified revision when work is idle,
+checks a copied profile and preserves local drift. Private/generated Hermes skills
+remain in persistent storage; export and review runtime edits before committing.
+[AGENTS.md](AGENTS.md) contains the repository's development rules.
 
 ## Develop
 
@@ -82,8 +87,12 @@ See the [architecture review and priorities](docs/architecture-review.md) for
 operational follow-up, and [monitoring](docs/monitoring.md) for owner alerts and
 independent HTTPS checks.
 
-[Research workflow](docs/research.md) connects native task/run tracking to reviewed
-Notion reports and their parent-page index.
+[Research workflow](docs/research.md) documents the legacy native filing path.
+New work is tracked in Linear; formatted texts belong in Notion and files in Drive.
+
+The public landing is edited and built with the blog; its
+[restricted automatic deployment](docs/council-static-deploy.md) is independent
+of agent runtime releases.
 
 [Early-access request capture](docs/waitlist.md) saves explicit Telegram waitlist
 requests to a dedicated Notion register, with durable capture and duplicate protection.

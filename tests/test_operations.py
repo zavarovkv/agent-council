@@ -387,6 +387,12 @@ class OperationTests(unittest.TestCase):
         self.assertIn("none", command)
         self.assertIn("--read-only", command)
         self.assertIn("ALL", command)
+        # The current verifier must work against the previous image too, which
+        # may predate its shared parser module. Ship both as read-only inputs.
+        self.assertIn(
+            f"type=bind,source={self.fixture.repository / 'src/council_skills'},target=/tmp/council_skills,readonly",
+            command,
+        )
         self.assertNotIn("fake-secret-not-for-arguments", " ".join(command))
         self.assertNotIn("fake-private-bot-token", " ".join(command))
 

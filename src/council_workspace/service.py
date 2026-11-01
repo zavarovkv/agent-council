@@ -68,17 +68,18 @@ class Workspace:
                     "drive_root": policy["drive_root"],
                     "notion": "formatted pages",
                     "drive": "read, list, upload and edit files in the shared folder",
-                    "text_delivery": "Save formatted text in Notion; put its verified link in Linear. Submit In Review; only the owner marks Done.",
+                    "text_delivery": "Save formatted text in Notion; put its verified link in Linear. Task transitions and acceptance are governed by the Linear workflow and task tools.",
                 }
 
-            def perform():
-                provider = (
+            def provider():
+                return (
                     Pages(self.notion_call, policy["notion_root"])
                     if action.startswith("notion_")
                     else Files(self.drive_factory(self.home), policy["drive_root"])
                 )
-                return provider.prepare_write(args)() if action in WRITES else provider.read(args)
 
-            return self.store.write(client, args, perform) if action in WRITES else perform()
+            if action in WRITES:
+                return self.store.write(client, args, lambda: provider().prepare_write(args))
+            return provider().read(args)
         finally:
             self.lock.release()

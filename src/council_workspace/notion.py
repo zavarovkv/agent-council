@@ -1,10 +1,11 @@
 """Formatted Notion pages scoped to the selected CouncilBase subtree."""
 
 import hashlib
+import html
 import json
 import re
 
-from research_filing.notion import Notion, canonical, page_id
+from research_filing.notion import Notion, page_id
 
 
 def revision(content):
@@ -21,7 +22,9 @@ def content_signature(content):
         r"\1",
         content,
     )
-    return canonical(content)
+    # Preserve punctuation: -1 and 1, 1.5 and 1,5, or /a-b and /a/b are not
+    # equivalent evidence. Ignore only whitespace and known Notion escaping.
+    return re.findall(r"\w+|[^\w\s]", html.unescape(content))
 
 
 class Pages:

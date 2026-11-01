@@ -101,6 +101,8 @@ def smoke(runtime, backup, *, image=None, prepare_copy=None, instruction_mode=No
                 f"type=bind,source={roots['workspace']},target=/workspace",
                 "--mount",
                 f"type=bind,source={settings.repository / 'scripts/verify-profile.py'},target=/tmp/verify-profile.py,readonly",
+                "--mount",
+                f"type=bind,source={settings.repository / 'src/council_skills'},target=/tmp/council_skills,readonly",
                 "--entrypoint",
                 "/opt/hermes/.venv/bin/python",
                 image,

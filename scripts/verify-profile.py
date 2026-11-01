@@ -14,7 +14,7 @@ def verify_managed_skills(home):
     marker = home / ".council/instructions.json"
     if not marker.exists():
         return
-    from utils import fast_safe_load
+    from council_skills import MAX_BYTES, metadata
 
     if marker.is_symlink():
         raise ValueError("Refusing a symlinked instruction marker.")
@@ -28,20 +28,13 @@ def verify_managed_skills(home):
         if relative.name != "SKILL.md":
             continue
         path = home / relative
-        if path.resolve() != path or not path.is_file() or path.stat().st_size > 1048576:
+        if path.resolve() != path or not path.is_file() or path.stat().st_size > MAX_BYTES:
             raise ValueError("Invalid managed skill file.")
-        parts = path.read_text().split("---\n", 2)
-        if len(parts) != 3 or parts[0] or not parts[2].strip():
-            raise ValueError("Managed skills need YAML front matter and a Markdown body.")
-        try:
-            metadata = fast_safe_load(parts[1])
-        except Exception:
-            raise ValueError("Invalid managed skill YAML metadata.") from None
-        if not isinstance(metadata, dict) or not all(
-            isinstance(metadata.get(field), str) and metadata[field].strip()
-            for field in ("name", "description")
-        ):
-            raise ValueError("Managed skills need a name and description.")
+        expected = path.parent.name
+        # The secretary uses fixed route folders, not the native skill catalog.
+        if relative.parts[:4] == (".council", "secretary", "instructions", "skills"):
+            expected = "secretary-" + expected
+        metadata(path.read_text(encoding="utf-8"), expected)
 
 
 def main():

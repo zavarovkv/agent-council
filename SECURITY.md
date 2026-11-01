@@ -48,12 +48,19 @@ See [secretary setup and delivery limits](docs/secretary.md).
 Optional [guest invocations](docs/telegram-guests.md) are limited to the pinned
 numeric owner ID even in a shared conversation. Admission and delivery both
 check that identity; usernames and quoted instructions grant no access. The
-answer is visible to participants, so guest inference receives only a generic
-public policy, invocation and one bounded quote, with no private instructions,
-history or tools. Completed guest text is scrubbed from the queue and no guest
-question/answer text is stored by the worker. Model wording can still be wrong
-or fabricated; isolation prevents access to private data, not every possible
-inappropriate statement. Do not put private facts in shared secretary instructions.
+answer is visible to participants. The restricted route uses a generic public
+policy without private history or tools; its completed text is scrubbed from the
+queue. The separately enabled extended owner route uses a native private-agent
+session with normal tools and persistent history. That route is not a tool-free
+privacy boundary: the owner must account for the conversation's audience. Quoted
+third-party text never grants authority. Do not put private facts in shared
+secretary instructions.
+
+Linear specialists execute in separate profiles and containers. Task tools check
+the installation, actor, session and project; shared cloud tools check a fixed
+Notion subtree and Drive folder. Native owner profiles remain trusted and more
+privileged. Skill wording cannot replace these runtime checks or constrain a
+malicious process already inside the trusted main runtime.
 
 ## Deployment controls
 
@@ -91,7 +98,8 @@ reuse Hermes' hardened helpers. The ordinary OIDC/PKCE flow is the SDK-failure f
 Sessions, memories, skills and model OAuth credentials persist in the private
 data volume. Include them in a consistent backup, preferably encrypted off-server,
 and test recovery. A container restart test is not disaster-recovery validation.
-Stop Hermes while copying SQLite files. Back up state before an image/schema
+Use the operator's drain and consistent snapshot protocol when copying SQLite files;
+do not copy databases independently while agents are writing. Back up state before an image/schema
 upgrade; an older image may not understand a newer schema.
 
 Use the versioned operator commands in [deployment](docs/deployment.md) and

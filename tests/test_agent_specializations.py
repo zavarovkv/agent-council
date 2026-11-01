@@ -24,6 +24,18 @@ class SpecialistTests(unittest.TestCase):
         self.addCleanup(temporary.cleanup)
         self.home = Path(temporary.name).resolve()
         self.value = configuration(self.home)
+        # These tests cover filesystem boundaries with simple scalar fixtures.
+        # Real YAML semantics are covered by the pinned-image integration suite.
+        loader = patch(
+            "council_skills.load_yaml",
+            side_effect=lambda text: dict(
+                (key, value.strip())
+                for key, _, value in (line.partition(":") for line in text.splitlines())
+                if key
+            ),
+        )
+        loader.start()
+        self.addCleanup(loader.stop)
 
     def test_catalog_uses_real_registration_grants_and_authorized_task_context(self):
         store = Store(self.home, clock=lambda: NOW)

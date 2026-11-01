@@ -1,124 +1,144 @@
-# Architecture and scope
+# Architecture and boundaries
 
-Agent Council currently manages a single trusted Hermes runtime and an optional,
-isolated secretary. Docker Compose is the single-host process supervisor; the
-root-owned operator CLI handles release and recovery operations. This is a
-modular application with explicit execution boundaries, not a multi-tenant agent
-platform. A separate scheduler or control plane is not implemented.
+Agent Council is a single-host, trusted personal deployment. Linear owns task
+status; Hermes executes work. Docker Compose supervises seven persistent services.
+The public landing is built in the blog repository and released independently.
+This is not a multi-tenant execution platform.
 
 ```mermaid
-flowchart LR
+flowchart TD
+    Blog[Blog Git + GitHub Actions] -->|restricted static deployment| Landing[Static landing]
     Browser --> Cloudflare --> Nginx
-    Nginx -->|loopback 9119 + owner/invitation auth| Hermes[Private Hermes runtime]
-    Owner[Owner bot DM] --> Hermes
-    External[Public bot DMs / verified business chats] --> Admission[Native Telegram admission]
-    Admission --> Policy[Read-only owner and conversation policy]
-    Policy --> Queue[Separate durable queues]
-    Queue -->|fixed authenticated RPC| Worker[Isolated tool-free worker]
-    Worker --> History[Own model grant and delivered-only history]
-    Hermes --> State[Private agent state and workspace]
-    Operator[Root-only operator CLI] --> Release[Git revision + pinned image]
-    Release --> Hermes
-    Release --> Worker
-    Operator --> Checkpoint[Consistent local restore point]
-    State --> Checkpoint
-    History --> Checkpoint
-    Checkpoint --> Restic[Optional maintenance-only restic]
-    Restic --> R2[Private encrypted R2 repository]
+    Nginx --> Landing
+    Nginx -->|owner / invited operator auth| Main[Hermes private runtime]
+    Telegram --> Admission[Immutable owner and audience checks]
+    Admission -->|owner DM / enabled guest call| Main
+    Admission -->|external correspondence| Secretary[Tool-free secretary]
+    Linear -->|signed webhook| Bridge[Linear adapter + durable SQLite]
+    Nginx -->|webhook and short OAuth setup window| Bridge
+    Bridge -->|native Runs API| Executors[4 isolated Hermes executors]
+    Executors -->|task-scoped tools| Bridge
+    Executors -->|per-client grant| Workspace[Shared workspace service in main runtime]
+    Main --> Workspace
+    Workspace --> Notion[Shared CouncilBase subtree]
+    Workspace --> Drive[Shared Drive folder]
+    Source[Optional Telegram account reader] -->|bounded collected data| Main
+    PrivateGit[Private instructions Git] -->|host-only reviewed SHA installer| Main
+    PrivateGit -->|same role source, separate state| Executors
+    Ops[Root operator CLI] -->|lock, drain, verify copy, cutover| Main
+    Ops --> Executors
+    Ops --> Bridge
+    Ops --> Secretary
+    Ops --> Checkpoint[Consistent persistent-state snapshot]
+    Checkpoint -->|encrypted restic backup| R2
 ```
 
-## Code boundaries
+## Sources of truth
 
-| Component | Responsibility | Dependencies and limits |
+| Information | Authoritative source | What it does not own |
 | --- | --- | --- |
-| `src/telegram_auth/` | Verified Telegram login, owner enrollment, invitations, revocable dashboard sessions | Pinned Hermes OIDC/JWT/cookie primitives; never trust browser-decoded claims |
-| `telegram_secretary/plugin.py` | Native SDK admission and component wiring | Owns handler order and startup tasks; foreign updates stop before private handlers |
-| `telegram_secretary/policy.py` | Read the owner pin and literal deployment settings once | Standard library only; usernames select style, never privileges |
-| `telegram_secretary/bridge.py`, `public.py` | Business and public bot transports | Independent transports share delivery; a public send cannot become a business send |
-| `telegram_secretary/delivery.py`, `store.py` | Per-chat serialization, cancellation, delivery ambiguity and queue state | Recheck work before model spend and before sending; no private agent executor |
-| `telegram_secretary/rpc.py` | Fixed worker endpoint and authenticated JSON exchange | No caller-selected URL, redirects or inherited proxies |
-| `secretary_worker/protocol.py` | Strict input schema and conversation namespace | Opaque identifiers, bounded text, fixed audience enumeration |
-| `secretary_worker/service.py` | Compose history, skill instructions and model generation | No Telegram credential, private tools, agent executor or caller prompts |
-| `secretary_worker/history.py` | Transactional reservations, quotas, delivered context and retention | Existing SQLite schema; committed request identity prevents repeated generation |
-| `secretary_worker/http.py` | Bounded private HTTP transport | Machine key, finite sockets/threads, bounded request body and generic errors |
-| `secretary_worker/model.py` | Pinned Hermes auxiliary model adapter | Separate provider grant, `tools=None`, final text only; reject tool calls/reasoning-only results |
-| `src/council_ops/` | Host install, build, backup, restore and inspection | Not copied into the runtime image; root-only settings and serialized maintenance |
-| `assets/login/`, `instructions/` | Versioned login assets and role instructions | Immutable image artifacts; exact unchanged Beauty.css dependency |
+| Task, priority, assignee, review status | Linear | Agent memory or full publication text |
+| Formatted deliverable and editorial version | Notion | Task execution scheduling |
+| Shared files | Selected Google Drive folder | Personal memory synchronization; that proposal is deferred |
+| Role, procedures, channel instructions | Private instruction repository | Credentials or enforcement of privileges |
+| Installed instructions | Manifest with SHA and file hashes | Automatic permission to overwrite local drift |
+| Runs, conversation state, memories | Separate Hermes profile data | Linear's issue status |
+| Replay receipts and delivery queues | Component SQLite stores | A second product backlog |
+| Runtime controls and public role metadata | Public repository + private host configuration | Private instruction contents |
+| Public landing | Blog source and its build artifact | Runtime release or private dashboard authorization |
 
-Static import checks enforce the worker's narrow upstream adapter dependency and
-prevent the gateway from importing the worker or host operations. These checks
-are maintenance guardrails; container isolation and application authorization are
-the actual execution boundaries. Runtime tests exercise the real pinned SDK
-rather than treating import checks as a security proof.
+A finished Hermes run or a completed Linear agent session is not a completed
+issue. Specialists submit to review. The coordinator's bounded acceptance tool
+can close eligible internal work; important, public, production, security and
+owner-reserved work needs owner acceptance. The native owner runtime is more
+privileged than isolated task executors. Prompt rules alone cannot constrain all
+of its direct integrations.
 
-## Identity and conversation routing
+## Components and trust
 
-Telegram verifies the OIDC token before owner enrollment. A verified owner login
-pins its numeric ID whether setup used an explicit ID or username bootstrap.
-Existing pins must agree with explicit configuration. Invited accounts are
-independent numeric grants and cannot create or replace the owner pin.
-Dashboard sessions store only token hashes and verified identity metadata;
-revocation, expiry and invitation checks remain effective after a restart.
+| Component | Responsibility and boundary |
+| --- | --- |
+| `telegram_auth` | Verified Telegram OIDC, immutable owner pin, explicit invitations, revocable sessions; anonymous status is deliberately minimal |
+| `telegram_secretary` | Distinct owner, business, public and guest admission; rechecks identity and delivery state; usernames select style only |
+| `secretary_worker` | Separate profile, model grant and delivered-only history; tools disabled, no private Notion/Drive or host mounts; route-specific quotas and durable reservations |
+| `linear_agent` | OAuth installation, signed event admission, owner/project checks, durable jobs/outbox, sub-issue routing, clarification and acceptance |
+| `linear_tools` | Session identity from native execution context; fixed internal endpoint; reviewed local skill reader; no shell or arbitrary integration endpoint |
+| `council_skills` | Common safe YAML metadata and size/name contract for profile verification and isolated skill discovery |
+| `council_workspace` | Main runtime owns cloud credentials; eight explicit native/Linear client grants share one Notion subtree and Drive folder; external correspondence has no grant |
+| `council_team` | Public role metadata; live `linear_agents` adds actual installation, readiness and task-specific routing permission |
+| `research_filing` | Compatibility path for existing native research artifacts and filing receipts; not the canonical tracker for new work |
+| `telegram_monitor` | Optional isolated account-based source collector; collected messages are source data, never instructions |
+| `council_ops` | Host-only deployment, inspection, backups and recovery; never imported into agent execution |
 
-The owner bot DM uses the private agent. Other bot DMs use the optional public
-transport. Business messages additionally require a fresh, enabled connection
-owned by the pinned account with reply permission. Each route has its own queue
-and conversation namespace. Public and business routes share two generation
-slots, while the worker separately enforces capacity and hourly quotas.
+Native profiles `default`, `dexter`, `lando`, `padme` have separate role state but
+share the trusted main runtime. Linear executors have separate containers,
+profiles, grants and narrow tools. Their stable identities are `qui-gon`, `dexter`,
+`marketing`, `padme`: `marketing` is the existing OAuth identity of Лэндо, not a
+second agent. Гален and K-2SO instruction drafts do not create live executors.
 
-`spouse`, `contacts` and `new-users` are conversation styles with the same
-restricted capabilities. The spouse username preference is not proof of family
-identity or an access grant. The bot API does not supply the owner's address-book
-membership; contacts use an explicit private ID list. Rules and their editing
-workflow are documented in [secretary.md](secretary.md).
+Profile separation is useful for context, but is not an OS security boundary.
+The owner and invited dashboard operators share a trusted runtime. Supporting
+untrusted full agents requires additional credential, process, storage and network
+boundaries. Even an owner-authorized group reply is visible to that group; identity
+checks do not make the audience private.
 
-Cancelled, edited, expired or human-paused work is checked again after waiting
-for capacity. Local start/help messages do not call the model or acknowledge
-nonexistent model history. Only a confirmed generated reply is acknowledged as
-delivered. Ambiguous Telegram sends never replay automatically. Cancellation
-cleans up the in-memory task and pending claim. This is not exactly-once delivery:
-an interrupted or failed generation can require a new incoming message.
+## Instruction lifecycle
 
-## Deployment and persistent state
+Private `shared/` holds common procedures; role folders hold specialization;
+`adapters/` adds channel behavior. Generated Linear SOUL files and common-skill
+copies are checked against their sources. `skills-source.json` aliases share
+reviewed instruction text, never another profile's credentials or conversations.
+The secretary has a separate tool-free policy and three fixed style routes.
 
-The existing TravelLine process, environment and virtual host are separate and
-never mounted into a Council container. Nginx routes only the new virtual host to
-loopback. Certificate maintenance uses separate directories. The image's s6
-bootstrap needs limited root capabilities and a writable root; actual agent
-processes run under the dedicated non-root UID/GID. The worker has a read-only
-root, no capabilities, no published ports and only its own profile mounted.
-Neither service receives a Docker socket or operator/R2 credentials.
+The host checks private `main` periodically, selects an exact revision, checks
+capabilities and file drift, drains work, verifies a copied profile, and installs
+with rollback. It refuses to overwrite unreviewed runtime edits. Export generated
+skills for review before committing them. Docker upgrades preserve private rules.
+Static checks prove format and synchronization, not agent reasoning quality; see
+[the review](architecture-review.md) for the missing behavioral evaluation layer.
 
-Images pin upstream digests and dependency integrity; releases use Git revision
-labels/tags. The same pinned Hermes base preserves its runtime tools and provider
-adapter compatibility. Node is a build stage, with only dependency artifacts
-copied into the final image. Runtime data and generated skills remain outside Git.
+## Reliability and data access
 
-The operator CLI serializes account setup and maintenance, builds before downtime,
-checks idle work, stops the two owned services consistently, and tests both old
-and candidate images against copied state without network access. Failed cutover
-restores image, data, auth, machine key and active Compose source together. The
-active Compose source lives outside the checkout, so updating Git does not change
-the previous release's rollback configuration. Legacy migration commands require
-an explicit opt-in and are not an update workflow.
+Incoming events have durable identities. A lost native-run response is retried
+with the same idempotency key. Linear activities use an outbox and readback.
+Pending clarification resumes the same native run with its prompt identity and
+execution generation. Uncertain non-idempotent writes are not blindly replayed.
 
-`doctor` reports actual container controls, the loaded secretary policy and both
-queues' availability/counts, without identities, transcripts or keys. Optional
-route faults remain visible without preventing repair/restore. Health and queue
-inspection do not prove that an external model grant remains valid.
+Workspace writes first validate input, current revision and resource scope without
+creating a mutation receipt. An atomic reservation then admits one mutation.
+Confirmed replay returns its stored receipt without contacting the cloud; an
+uncertain mutation requires reconciliation. No database transaction spans cloud
+I/O. A local workspace lock serializes writes and reads; callers receive busy
+responses rather than accumulating unbounded work.
 
-## Recovery and scope limits
+Notion ancestry is read from the response envelope, never from page prose.
+Readback preserves meaningful punctuation and link destinations. Drive uploads
+check name, size and content checksum. Current revision checks are read-before-write
+checks, not provider-enforced atomic compare-and-swap: another editor can still
+race an update. Use versioned deliverables for concurrent editorial work.
 
-Local upgrade restore points retain complete state. Optional R2/restic backups
-contain encrypted persistent data and exclude regenerable software, caches,
-logs and images. Recovery downloads and offline database checks precede retention.
-Installing tooling does not activate cloud backups: credentials, initialization,
-a verified recovery and explicit scheduling are required. See [backups.md](backups.md).
+## Deployment and recovery
 
-The owner and invited dashboard operators share a trusted runtime, credentials
-and tools. They are not separate tenants. The tool-free secretary is the only
-supported path for untrusted correspondence; it cannot read private Notion/Drive
-data or run internal research agents. General guest agents require a separate
-control plane and execution/storage/credential isolation. Groups, proactive
-messaging, personal-account clients and phone escalation are not enabled by this
-architecture. See [SECURITY.md](../SECURITY.md) for the supported threat model.
+Public Nginx routes use loopback ports; internal tool listeners are unpublished.
+The existing TravelLine process and virtual host stay outside Council mounts and
+maintenance. No service has the Docker socket or host Git/R2 credentials. Isolated
+workers use a non-root UID, read-only roots, bounded resources and dropped
+capabilities. Main Hermes retains the limited root bootstrap required by its
+pinned image; actual agent processes are non-root.
+
+Hermes, image digests, actions and dependency integrity are pinned. The Node build
+stage contributes only assets. Root maintenance serializes operations, preserves
+the active Compose source, drains owned services and tests candidate images on a
+copy. Rollback restores the matching image, configuration and data. R2 contains
+encrypted persistent data, not images, dependencies or caches. Restore tests and
+retention are described in [backups](backups.md).
+
+The blog deploy identity can invoke only the forced static installer. It cannot
+restart agents, read their data or obtain root shell access. Runtime and instruction
+releases remain separate. See [landing deployment](council-static-deploy.md).
+
+`doctor` reports configuration, actual containers, safe queue aggregates,
+instruction revision/drift and verified backup age. It does not prove model answer
+quality, sustained capacity or external provider availability. Four Linear
+executors each default to one concurrent run; the documented five-task policy is
+not yet a global admission controller covering every native entry point.
