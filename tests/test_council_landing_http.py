@@ -1,5 +1,6 @@
 """Exercise the Council HTTP smoke gate with a loopback-only fixture."""
 
+import hashlib
 import importlib.util
 import threading
 import unittest
@@ -29,6 +30,8 @@ class Fixture(BaseHTTPRequestHandler):
         else:
             status, body = 404, b"not found"
         self.send_response(status)
+        self.send_header("X-Content-Type-Options", "nosniff")
+        self.send_header("Referrer-Policy", "same-origin")
         self.end_headers()
         self.wfile.write(body)
 
@@ -50,6 +53,17 @@ class SmokeTests(unittest.TestCase):
         Fixture.broken = True
         with self.assertRaises(RuntimeError):
             checker.check(self.base)
+
+    def test_rejects_old_cached_page_even_with_valid_marker(self):
+        hashes = {"/": "0" * 64, "/en/": "1" * 64}
+        with self.assertRaisesRegex(RuntimeError, "candidate artifact"):
+            checker.check(self.base, expected_pages=hashes)
+        actual = hashlib.sha256(b"Agent Council static landing").hexdigest()
+        checker.check(self.base, expected_pages={"/": actual, "/en/": actual})
+
+    def test_rejects_unverified_direct_origin(self):
+        with self.assertRaises(ValueError):
+            checker.check(self.base, origin_address="127.0.0.1")
 
     def test_rejects_invalid_url(self):
         with self.assertRaises(ValueError):

@@ -100,6 +100,11 @@ def main():
             assert response[1]["X-Robots-Tag"] == "noindex, nofollow"
             landing = request("/")
             assert landing[0] == 200 and landing[2] == b"council static landing"
+            for path in ("/", "/en/", "/council/site.css"):
+                headers = request(path)[1]
+                assert headers["X-Content-Type-Options"] == "nosniff"
+                assert headers["Referrer-Policy"] == "same-origin"
+                assert headers["X-Robots-Tag"].startswith("index, follow")
             assert request("/en/")[0:3:2] == (200, b"council english landing")
             assert request("/council/site.css")[0:3:2] == (200, b"council stylesheet")
             assert request("/login?next=%2Fprofiles")[0] == 200
@@ -111,6 +116,7 @@ def main():
             )
             sitemap = request("/sitemap.xml")
             assert sitemap[0] == 200 and b"<loc>https://council.zavarov.com/</loc>" in sitemap[2]
+            assert b"<loc>https://council.zavarov.com/en/</loc>" in sitemap[2]
             assert b"<lastmod>" not in sitemap[2]
             assert request("/provider-failure")[0:3:2] == (503, b"application response")
             assert request("/__hermes_setup_pending")[0] == 404

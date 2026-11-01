@@ -1,40 +1,65 @@
-# Deploy Council static landing from blog build
+# Deploy the blog-built Council landing
 
-Source of truth: zavarovkv/zavarov.com. Public URL: https://council.zavarov.com/. Auth and application routes remain on this origin.
+The public source is `zavarovkv/zavarov.com`. The reviewed Hugo artifact serves
+`https://council.zavarov.com/` and `/en/` without redirecting to the blog.
+`/login`, `/auth/*`, `/api/*` and Linear integrations keep their existing routes.
+Team statistics still use the public, aggregate-only `/auth/login/council/team` endpoint.
 
-## Reviewed artifact
+## Artifact and initial deployment
 
-Successful blog main workflow run 41303875094 produced:
-- Artifact: council-landing-05d96217a68bad200afa3402a921c2f66b35c57f-deploy
-- GitHub artifact ID: 13082825703
+1. Select an exact successful **main push** run of the blog's GitHub Pages workflow.
+   Download its `council-landing-<commit-sha>-deploy` artifact with authenticated GitHub
+   tooling. Record the source commit and run; do not reuse a historical example run.
+2. Extract `council-landing.tar.gz` from the ZIP and compute the inner archive's SHA-256.
+   Inspect both pages, all four avatars and their CSS, JS, fonts and image references.
+   All static assets must live below `/council/`; root `/css/` or `/fonts/` paths would
+   reach the application instead. Check localized canonical URLs, the existing login
+   URL, theme/language controls, Telegram link and live team statistics.
+3. Transfer the archive to a restricted temporary path. Run the reviewed installer
+   as an operator: `python3 scripts/install-council-landing.py ARCHIVE --sha256 DIGEST`.
+   On the first installation, omit `--verify-url` until Nginx has been switched.
+4. Apply the Council route through the guarded route-management procedure. It must
+   retain the previous Council configuration, validate with `nginx -t`, reload
+   gracefully and verify that TravelLine's process and configuration are unchanged.
+5. Run the installer again with the same archive/hash and
+   `--verify-url https://council.zavarov.com`. It verifies the exact RU/EN page bytes
+   through **127.0.0.1 over HTTPS**, preserving the real hostname for Host, TLS SNI
+   and certificate validation. Cloudflare's cached page cannot satisfy this check.
+   Login must return 200; an unauthenticated protected API request must return 401.
+6. Check all static resources, team metrics and both themes at desktop/mobile sizes.
+   Check the existing authenticated routes separately; a public smoke test does not
+   prove that a real Telegram OAuth exchange succeeds.
 
-Artifact is a ZIP containing council-landing.tar.gz. Download using authorized GitHub tooling. Verify the ZIP and tar contents locally before transfer. The installer requires the exact SHA-256 of the inner tar.gz, not the ZIP. Do not trust a checksum copied from an unverified source.
-
-## Operator deployment (after PR checks and review)
-
-1. Retrieve the reviewed artifact and extract council-landing.tar.gz to a temporary local directory.
-2. Compute `sha256sum council-landing.tar.gz`; inspect tar entries for `index.html`, `en/index.html`, `council/avatars/*.png` and fingerprinted CSS. Confirm canonical URLs point to council.zavarov.com and sign-in to /login.
-3. Copy the archive to a restricted temporary path on the server, then use the reviewed `scripts/install-council-landing.py <archive> --sha256 <digest>` as an authorized operator. The installer validates entries and atomically points /var/www/agent-council-landing to a versioned release.
-4. Verify the static files exist and Nginx can read them. Review and apply the route through the existing guarded Council route management workflow, run `nginx -t` and reload gracefully.
-5. Smoke test /, /en/, /council/avatars/qui-gon.png, /login, /profiles, /auth/*, /api/*, /integrations/linear/*, including an unauthorized request to protected API.
-6. Verify Telegram OAuth callbacks remain on the same origin. Monitor HTTP errors and login failures.
+The installer reads and hashes one bounded archive snapshot before extraction;
+replacing the sender's file cannot change the checked bytes. Compressed and expanded
+sizes, entry count, paths and duplicate names are bounded. Links are rejected.
+Releases use the full SHA-256, and cached releases must exactly match the archive.
+Only the public symlink changes. The same Council operations lock excludes concurrent
+application/routing maintenance. Credentials and application data are not modified.
 
 ## Rollback
 
-Restore the prior Nginx route via the existing guarded route management rollback. Restore the previous static release symlink only if needed. Do not remove or reset authentication data. Never change DNS or OAuth credentials for this migration.
+For later deployments, a failed origin smoke check restores the previous static
+symlink automatically. This does **not** roll back Nginx configuration or authenticated
+application state. If the initial routing cutover fails, restore the saved Council
+Nginx configuration through the guarded operator procedure, validate and reload.
+Retain prior releases until validation and rollback checks have passed.
 
-No automatic production deployment is wired in this PR. The host installer requires an authorized operator and an explicit reviewed artifact.
+## Optional restricted receiver
 
-## Restricted SSH receiver (not installed by this PR)
+`scripts/council-landing-deploy.py` accepts only the forced command
+`council-landing-deploy <64 lowercase hex SHA-256>`. It reads at most 8 MiB from stdin
+and invokes the fixed privileged installer with origin verification. The installer,
+verifier and receiver must be root-owned files outside the deploy user's writable
+paths, installed together under `/usr/local/libexec/council/`. The installer uses
+`/etc/agent-council/operations.lock`; it fails if another owned operation is active.
 
-The reviewed `scripts/council-landing-deploy.py` reads the forced-command's `SSH_ORIGINAL_COMMAND`, accepts only `council-landing-deploy <64 lowercase hex SHA-256>`, bounds the incoming archive to 8 MiB and invokes the fixed installer with `sudo -n`. It must be installed as an immutable root-owned file outside the deploy user's writable directories. The authorized_keys entry should use `command="/usr/local/libexec/council/council-landing-deploy.py",restrict` and a separately verified Ed25519 public key. Set a dedicated `sudoers` rule for only the fixed installer path, review it with `visudo -c`, and deny all other privileged operations. Do not use the root password.
+If separately authorized, use a dedicated unprivileged SSH account, a verified key
+with `command="/usr/local/libexec/council/council-landing-deploy.py",restrict`, and a
+narrow sudoers rule for only the installer path, validated by `visudo -c`. Keep strict
+SSH host-key verification. No shared `/tmp` lock, root password, forwarding or arbitrary
+remote shell is needed.
 
-**Release limitation:** this receiver installs the artifact but does not itself reload Nginx or perform an HTTP smoke test/rollback. Do not activate the GitHub workflow for production until a separately reviewed server-side verification/rollback step exists and is tested. The current pipeline is a preparation, not a production-ready one-click deployment.
-
-## HTTP smoke gate
-
-After Nginx serves the candidate, run `python3 scripts/verify-council-landing.py --base-url https://council.zavarov.com`. It requires HTTP 200 for the RU and EN landing and the existing `/login?next=%2Fprofiles` route, and checks a recognizable public marker. This is read-only and does not assert that authenticated sessions or Telegram OAuth actually succeed. A failed smoke test must block release completion and trigger an operator-controlled rollback to the previous Nginx config/static release. The current restricted SSH receiver does not invoke this check or perform that rollback automatically; do not claim full automated recovery.
-
-## Automatic HTTP rollback (candidate implementation)
-
-The restricted SSH receiver now invokes the installer with a fixed `--verify-url https://council.zavarov.com`. After atomically switching the static symlink, the installer executes the read-only HTTP smoke checker and restores the previous symlink if that checker fails. This checks public RU/EN and login HTTP responses, not authenticated Telegram login, OAuth callbacks, API authorization, or Nginx configuration rollback. The new workflow must not be enabled until the verifier and installer are installed together as root-owned immutable scripts, Nginx serves the static release, and the live login route's expected status is confirmed. Test rollback in staging and keep the previous Nginx configuration available. A failed first deployment has no prior static symlink to restore; restore the old Nginx route through the guarded operator procedure.
+This PR does not install the receiver, create a deploy identity or configure GitHub
+credentials. Enabling the manual deployment workflow requires separate authorization
+for those credentials and a tested initial routing cutover and rollback.
