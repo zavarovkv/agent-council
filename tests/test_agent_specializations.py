@@ -169,3 +169,29 @@ class SpecialistTests(unittest.TestCase):
             )
             (folder / "SKILL.md").write_text("x" * 65537)
             self.assertIn("error", json.loads(view({"name": "research"})))
+
+    def test_skill_catalog_survives_upstream_categories_and_empty_directories(self):
+        root = self.home / "skills"
+        reviewed = root / "task-management"
+        reviewed.mkdir(parents=True)
+        metadata = "---\nname: task-management\ndescription: Manage tasks.\n---\nReviewed.\n"
+        (reviewed / "SKILL.md").write_text(metadata)
+        nested = root / "research/upstream-example"
+        nested.mkdir(parents=True)
+        (nested / "SKILL.md").write_text("Upstream text, not part of the reviewed catalog.")
+        (root / "obsolete-skill").mkdir()
+        with patch.dict(os.environ, {"HERMES_HOME": str(self.home)}):
+            self.assertEqual(
+                json.loads(view({})),
+                {"skills": [{"name": "task-management", "description": "Manage tasks."}]},
+            )
+            self.assertEqual(json.loads(view({"name": "task-management"}))["content"], metadata)
+            for name in ("research", "research/upstream-example", "obsolete-skill"):
+                self.assertIn("error", json.loads(view({"name": name})))
+            # Missing category metadata is ignored; invalid or linked skill
+            # metadata still fails closed instead of silently hiding a skill.
+            (root / "obsolete-skill/SKILL.md").write_text("Invalid metadata")
+            self.assertIn("error", json.loads(view({})))
+            (root / "obsolete-skill/SKILL.md").unlink()
+            (root / "obsolete-skill/SKILL.md").symlink_to(self.home / "missing.md")
+            self.assertIn("error", json.loads(view({})))
