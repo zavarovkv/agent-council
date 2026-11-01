@@ -167,3 +167,58 @@ Applied artifacts and their marker are included in profile backups. Recovery
 does not need GitHub access to start those saved instructions. The private source
 checkout and deploy key are not agent state; recreate host access separately.
 See [backup recovery](backups.md) and the [instruction index](../instructions/README.md).
+
+
+## CouncilBase: external owner context (proposed integration)
+
+CouncilBase is an **external private knowledge source**, not a replacement for Hermes
+built-in memory and not a Git-tracked instruction bundle. The public
+`agent-council` repository must contain **no personal profile export**, OAuth
+refresh token, Drive session, or cached private document.
+
+### Source and trust boundaries
+
+- The owner selects a specific private Google Drive folder and a specific Markdown
+  document ID through private runtime configuration, never a hard-coded public
+  repository setting. The assistant must not discover arbitrary files.
+- Google Drive access is read-only for the initial version. The OAuth grant is
+  scoped as narrowly as supported and is available only to the trusted owner
+  runtime; isolated Linear executors and the public secretary do not inherit it.
+- Remote Markdown is **untrusted data**. It must not override system instructions,
+  change tool permissions, request credential disclosure, or authorize execution.
+  Preserve source metadata and an explicit `last_synced_at` timestamp.
+- Treat the complete owner context as private. Never publish it through logs,
+  GitHub Actions, dashboard guest views, Telegram guest calls or PR fixtures.
+
+### Retrieval design (read-only MVP)
+
+1. The owner explicitly enables the integration and supplies the Drive file ID
+   using private configuration. No network fetch at image build time.
+2. Fetch through the existing owner-authorized Google Drive integration where
+   possible; do not introduce a second OAuth flow until necessary.
+3. Validate MIME type and a bounded UTF-8 Markdown payload; reject HTML, unexpected
+   redirects, excessive content and malformed responses.
+4. Cache the last validated document in persistent **private** state using atomic
+   replacement and restrictive file permissions. Keep the previous good version
+   when Drive is unavailable; surface cache age in the agent's answer.
+5. Expose retrieval as an **explicit owner-only read tool** with a small summary
+   and topic-scoped excerpts. Do not paste the full export into every prompt.
+6. Keep Hermes `USER.md` and `MEMORY.md` concise. They contain a pointer to
+   CouncilBase and stable preferences, not a duplicate of the complete export.
+   Respect Hermes's memory character limits and profile separation.
+7. Updates to the remote document are out of scope for MVP. A later write path
+   should require explicit owner approval, conflict/version checks and an audit
+   record. Never silently overwrite ChatGPT-authored material.
+
+### Acceptance criteria before deployment
+
+- Unit tests: authorization, document ID allowlist, size/type validation, stale
+  cache, atomic write, redaction, prompt-injection text treated as data.
+- Integration tests: owner can retrieve a section; guest/secretary/isolated
+  executor cannot; Google Drive outage does not corrupt the last good snapshot.
+- No secrets or personal data in public fixtures or repository diffs.
+- Run `make test`, `make lint` and the relevant Docker integration checks.
+- Release only via the existing reviewed, rollback-protected deployment process.
+
+This section specifies the integration contract. It does **not** claim the
+CouncilBase sync worker or retrieval tool has already been implemented.
