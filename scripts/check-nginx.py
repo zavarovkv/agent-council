@@ -104,7 +104,7 @@ def main():
                 headers = request(path)[1]
                 assert headers["X-Content-Type-Options"] == "nosniff"
                 assert headers["Referrer-Policy"] == "same-origin"
-                assert headers["X-Robots-Tag"].startswith("index, follow")
+                assert headers["X-Robots-Tag"].startswith("index, follow"), (path, headers)
             assert request("/en/")[0:3:2] == (200, b"council english landing")
             assert request("/council/site.css")[0:3:2] == (200, b"council stylesheet")
             assert request("/login?next=%2Fprofiles")[0] == 200
