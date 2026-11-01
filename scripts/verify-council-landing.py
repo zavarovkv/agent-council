@@ -9,6 +9,7 @@ ROUTES = {
     "/": (200, b"Agent Council"),
     "/en/": (200, b"Agent Council"),
     "/login?next=%2Fprofiles": (200, None),
+    "/api/config": (401, None),
 }
 
 
