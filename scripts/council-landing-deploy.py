@@ -46,7 +46,10 @@ def main():
             # Privileged installer is a fixed reviewed file. No user-controlled
             # shell, path or environment interpolation.
             subprocess.run(
-                ["sudo", "-n", INSTALLER, str(archive), "--sha256", expected],
+                [
+                    "sudo", "-n", INSTALLER, str(archive), "--sha256", expected,
+                    "--verify-url", "https://council.zavarov.com",
+                ],
                 check=True,
                 timeout=90,
             )
