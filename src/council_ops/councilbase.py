@@ -86,3 +86,60 @@ def read_snapshot(directory: Path, document_id: str):
         raise ContextValidationError("Cache checksum mismatch")
     validate_document(document_id, content, "text/markdown")
     return data
+
+
+def sections(markdown: str):
+    """Parse top-level Markdown sections without executing embedded content."""
+    chunks = []
+    heading = "Overview"
+    lines = []
+    for line in markdown.splitlines():
+        if line.startswith("# "):
+            if lines:
+                chunks.append((heading, "\n".join(lines).strip()))
+            heading = line[2:].strip() or "Untitled"
+            lines = []
+        elif line.startswith("## "):
+            if lines:
+                chunks.append((heading, "\n".join(lines).strip()))
+            heading = line[3:].strip() or "Untitled"
+            lines = []
+        else:
+            lines.append(line)
+    if lines:
+        chunks.append((heading, "\n".join(lines).strip()))
+    return [(title, body) for title, body in chunks if body]
+
+
+def retrieve_topic(snapshot: dict, query: str, *, max_chars: int = 4000, limit: int = 3):
+    """Return bounded topic excerpts with source metadata; no instructions are executed."""
+    if not isinstance(query, str) or not query.strip() or len(query) > 200:
+        raise ContextValidationError("Topic query must be 1 to 200 characters")
+    if not isinstance(max_chars, int) or not 200 <= max_chars <= 12000:
+        raise ContextValidationError("Invalid excerpt limit")
+    if not isinstance(limit, int) or not 1 <= limit <= 10:
+        raise ContextValidationError("Invalid section count")
+    terms = set(re.findall(r"[\w-]{3,}", query.casefold()))
+    ranked = []
+    for index, (title, body) in enumerate(sections(snapshot["text"])):
+        title_tokens = set(re.findall(r"[\w-]{3,}", title.casefold()))
+        body_tokens = set(re.findall(r"[\w-]{3,}", body.casefold()))
+        score = 3 * len(terms & title_tokens) + len(terms & body_tokens)
+        if score:
+            ranked.append((-score, index, title, body))
+    ranked.sort()
+    remaining = max_chars
+    excerpts = []
+    for _, _, title, body in ranked[:limit]:
+        text = body[:remaining]
+        if not text:
+            break
+        excerpts.append({"heading": title, "text": text, "truncated": len(body) > len(text)})
+        remaining -= len(text)
+    return {
+        "document_id": snapshot["document_id"],
+        "synced_at": snapshot["synced_at"],
+        "sha256": snapshot["sha256"],
+        "excerpts": excerpts,
+        "source_is_untrusted": True,
+    }
