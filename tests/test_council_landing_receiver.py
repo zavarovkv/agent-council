@@ -18,7 +18,12 @@ spec.loader.exec_module(receiver)
 
 class ReceiverTests(unittest.TestCase):
     def test_rejects_any_other_command_before_reading_input(self):
-        for command in (\n            "",\n            "ls",\n            "council-landing-deploy bad",\n            "council-landing-deploy " + "f" * 64 + ";id",\n        ):
+        for command in (
+            "",
+            "ls",
+            "council-landing-deploy bad",
+            "council-landing-deploy " + "f" * 64 + ";id",
+        ):
             with self.subTest(command=command):
                 with patch.dict(os.environ, {"SSH_ORIGINAL_COMMAND": command}):
                     with self.assertRaises(SystemExit):
@@ -29,7 +34,9 @@ class ReceiverTests(unittest.TestCase):
             payload = b"example artifact"
             with (
                 patch.object(receiver, "LOCK", str(Path(tmp) / "lock")),
-                patch.dict(\n                    os.environ, {"SSH_ORIGINAL_COMMAND": "council-landing-deploy " + "0" * 64}\n                ),
+                patch.dict(
+                    os.environ, {"SSH_ORIGINAL_COMMAND": "council-landing-deploy " + "0" * 64}
+                ),
                 patch.object(sys, "stdin", io.TextIOWrapper(io.BytesIO(payload))),
                 patch.object(receiver.subprocess, "run") as run,
             ):
@@ -39,7 +46,13 @@ class ReceiverTests(unittest.TestCase):
             with (
                 patch.object(receiver, "LOCK", str(Path(tmp) / "lock")),
                 patch.object(receiver, "MAX_ARCHIVE", 2),
-                patch.dict(\n                    os.environ,\n                    {\n                        "SSH_ORIGINAL_COMMAND": "council-landing-deploy "\n                        + hashlib.sha256(payload).hexdigest()\n                    },\n                ),
+                patch.dict(
+                    os.environ,
+                    {
+                        "SSH_ORIGINAL_COMMAND": "council-landing-deploy "
+                        + hashlib.sha256(payload).hexdigest()
+                    },
+                ),
                 patch.object(sys, "stdin", io.TextIOWrapper(io.BytesIO(payload))),
                 patch.object(receiver.subprocess, "run") as run,
             ):
