@@ -4,6 +4,8 @@
 import argparse
 import hashlib
 import os
+import subprocess
+import sys
 import tarfile
 import tempfile
 from pathlib import Path
@@ -17,6 +19,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("archive", type=Path)
     parser.add_argument("--sha256", required=True)
+    parser.add_argument("--verify-url")
     args = parser.parse_args()
     archive = args.archive.resolve(strict=True)
     actual = hashlib.sha256(archive.read_bytes()).hexdigest()
@@ -73,6 +76,15 @@ def main():
         for name in ("index.html", "en/index.html"):
             if not (LINK / name).is_file():
                 raise RuntimeError(f"Missing live page: {name}")
+        if args.verify_url:
+            if args.verify_url != "https://council.zavarov.com":
+                raise ValueError("Unapproved smoke-check origin")
+            subprocess.run(
+                [sys.executable, str(Path(__file__).with_name("verify-council-landing.py")),
+                 "--base-url", args.verify_url],
+                check=True,
+                timeout=30,
+            )
     except Exception:
         if previous is not None:
             rollback_link = DEST / f".agent-council-rollback-{os.getpid()}"
