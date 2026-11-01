@@ -93,12 +93,12 @@ def main():
             assert response[0] == 401 and response[2] == b"application response"
             assert response[1]["X-Robots-Tag"] == "noindex, nofollow"
             landing = request("/")
-            assert landing[0] == 200 and landing[2] == b"public landing"
-            assert landing[1]["X-Robots-Tag"].startswith("index, follow")
+            assert landing[0] == 302 and landing[1]["Location"] == "https://zavarov.com/council/"
+            assert landing[1]["X-Robots-Tag"] == "noindex, nofollow"\n            assert request("/login?next=%2Fprofiles")[0] == 200
             robots = request("/robots.txt")
             assert (
                 robots[0] == 200
-                and b"Sitemap: https://council.zavarov.com/sitemap.xml" in robots[2]
+                and b"Sitemap: https://zavarov.com/sitemap.xml" in robots[2]
             )
             sitemap = request("/sitemap.xml")
             assert sitemap[0] == 200 and b"<loc>https://council.zavarov.com/</loc>" in sitemap[2]
