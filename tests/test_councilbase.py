@@ -8,6 +8,7 @@ from council_ops.councilbase import (
     read_snapshot,
     validate_document,
     write_snapshot,
+    retrieve_topic,
 )
 
 DOCUMENT = "1unboDfPqJ0U86nyaj9tuNM_CwSK17CKF"
@@ -58,6 +59,27 @@ class CouncilBaseSnapshotTests(unittest.TestCase):
         os.chmod(path, 0o600)
         with self.assertRaises(ContextValidationError):
             read_snapshot(self.directory, DOCUMENT)
+
+    def test_topic_retrieval_is_bounded_and_source_labeled(self):
+        write_snapshot(
+            self.directory,
+            DOCUMENT,
+            "# Profile\\nName\\n## Hermes\\nHermes has a private agent.\\n"
+            "## Finance\\nBank records must stay private.".encode(),
+            "text/markdown",
+        )
+        snapshot = read_snapshot(self.directory, DOCUMENT)
+        result = retrieve_topic(snapshot, "Hermes", max_chars=200)
+        self.assertTrue(result["source_is_untrusted"])
+        self.assertEqual(result["excerpts"][0]["heading"], "Hermes")
+        self.assertEqual(result["document_id"], DOCUMENT)
+        self.assertLessEqual(sum(len(x["text"]) for x in result["excerpts"]), 200)
+
+    def test_retrieval_rejects_unbounded_query(self):
+        snapshot = {"text": "# Context\\nData", "document_id": DOCUMENT,
+                    "synced_at": "now", "sha256": "abc"}
+        with self.assertRaises(ContextValidationError):
+            retrieve_topic(snapshot, "x" * 201)
 
     def test_rejects_symlink_target(self):
         outside = self.directory / "outside"
