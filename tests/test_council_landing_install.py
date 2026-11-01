@@ -125,6 +125,46 @@ class LandingInstallTests(unittest.TestCase):
         self.assertEqual(installer.LINK.resolve(), previous)
         self.assertTrue((installer.LINK / "en/index.html").is_file())
 
+    def test_failed_http_smoke_restores_previous_release(self):
+        first = self.root / "first.tar.gz"
+        digest = archive(
+            first,
+            {
+                "index.html": b"<html>https://council.zavarov.com/</html>",
+                "en/index.html": b"<html>https://council.zavarov.com/en/</html>",
+                "council/avatars/qui-gon.png": b"png fixture",
+            },
+        )
+        self.invoke(first, digest)
+        previous = installer.LINK.resolve()
+        second = self.root / "second.tar.gz"
+        digest = archive(
+            second,
+            {
+                "index.html": b"<html>https://council.zavarov.com/new</html>",
+                "en/index.html": b"<html>https://council.zavarov.com/en/</html>",
+                "council/avatars/qui-gon.png": b"png fixture",
+            },
+        )
+        with (
+            patch.object(
+                sys,
+                "argv",
+                [
+                    "installer", str(second), "--sha256", digest,
+                    "--verify-url", "https://council.zavarov.com",
+                ],
+            ),
+            patch.object(
+                installer.subprocess,
+                "run",
+                side_effect=installer.subprocess.CalledProcessError(1, "smoke"),
+            ),
+        ):
+            with self.assertRaises(installer.subprocess.CalledProcessError):
+                installer.main()
+        self.assertEqual(installer.LINK.resolve(), previous)
+
     def test_rejects_bad_checksum_without_switching(self):
         path = self.root / "valid.tar.gz"
         archive(path, {"index.html": b"content"})
