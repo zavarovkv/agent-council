@@ -10,7 +10,6 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-
 SCRIPT = Path(__file__).resolve().parents[1] / "scripts/install-council-landing.py"
 spec = importlib.util.spec_from_file_location("council_landing_installer", SCRIPT)
 installer = importlib.util.module_from_spec(spec)
