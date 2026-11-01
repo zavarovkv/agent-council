@@ -53,13 +53,13 @@ class OwnerGuestTests(unittest.IsolatedAsyncioTestCase):
             await self.bridge.handle(event)
         self.assertEqual(self.execute.await_count, 2)
         self.assertEqual(self.bot.answer_guest_query.await_count, 2)
-        self.assertEqual(self.bot.edit_message_text.await_count, 2)
+        self.bot.edit_message_text.assert_not_called()
         self.assertEqual(self.requests, [])
         self.bot.send_message.assert_not_called()
         self.assertEqual(self.owner_store.interrupted(), [])
 
     async def test_revocation_during_execution_blocks_private_result(self):
-        async def run(job, authorized, progress, remember):
+        async def run(job, authorized, remember):
             (self.home / "telegram-owner.json").write_text('{"telegram_id":54321}')
             self.assertFalse(await authorized())
             return "PRIVATE_RESULT"
@@ -68,15 +68,68 @@ class OwnerGuestTests(unittest.IsolatedAsyncioTestCase):
         await self.bridge.handle(update(actor=12345))
         await self.settle()
         self.bot.edit_message_text.assert_not_called()
+        self.bot.answer_guest_query.assert_not_called()
 
-    async def test_ambiguous_ack_never_starts_agent_or_retries(self):
+    async def test_pending_execution_is_silent_then_delivers_the_result_once(self):
+        started, finish = asyncio.Event(), asyncio.Event()
+
+        async def run(job, authorized, remember):
+            remember("native-fixture")
+            started.set()
+            await finish.wait()
+            return "Готовый ответ"
+
+        self.enable(run)
+        event = update(actor=12345)
+        await self.bridge.handle(event)
+        await asyncio.wait_for(started.wait(), 1)
+        self.bot.answer_guest_query.assert_not_called()
+        self.bot.edit_message_text.assert_not_called()
+        await self.bridge.handle(event)
+        finish.set()
+        await self.settle()
+        self.bot.answer_guest_query.assert_awaited_once()
+        result = self.bot.answer_guest_query.call_args.kwargs["result"]
+        self.assertEqual(result.input_message_content.args[0], "Готовый ответ")
+        self.bot.edit_message_text.assert_not_called()
+
+    async def test_execution_error_sends_one_meaningful_notice_without_replay(self):
+        self.enable(AsyncMock(side_effect=RuntimeError("Private provider diagnostics")))
+        event = update(actor=12345)
+        await self.bridge.handle(event)
+        await self.settle()
+        await self.bridge.handle(event)
+        self.execute.assert_awaited_once()
+        self.bot.answer_guest_query.assert_awaited_once()
+        result = self.bot.answer_guest_query.call_args.kwargs["result"]
+        self.assertIn("Проверьте сессию Council", result.input_message_content.args[0])
+        self.assertNotIn("Private provider", result.input_message_content.args[0])
+
+    async def test_recovery_without_receipt_cancels_run_without_sending_or_replaying(self):
+        self.enable()
+        job = incoming(update(actor=12345), self.now[0])
+        self.assertTrue(self.owner_store.admit(job, "b" * 32))
+        self.owner_store.update(job["id"], status="running", session_id="native-fixture")
+        bridge = OwnerGuestBridge(self.bridge, self.owner_store, execute=self.execute)
+        with patch(
+            "telegram_secretary.owner_guest.owner_agent.cancel_session", new_callable=AsyncMock
+        ) as cancel:
+            await bridge.recover()
+        cancel.assert_awaited_once_with("native-fixture")
+        self.execute.assert_not_called()
+        self.bot.answer_guest_query.assert_not_called()
+        self.bot.edit_message_text.assert_not_called()
+        self.assertFalse(self.owner_store.admit(job, "b" * 32))
+
+    async def test_ambiguous_final_delivery_never_reexecutes_or_retries(self):
         self.enable()
         self.bot.answer_guest_query.side_effect = TimeoutError()
         await self.bridge.handle(update(actor=12345))
         await self.settle()
         await self.bridge.handle(update(actor=12345))
-        self.execute.assert_not_called()
+        self.execute.assert_awaited_once()
         self.assertEqual(self.bot.answer_guest_query.await_count, 1)
+        self.bot.edit_message_text.assert_not_called()
 
     async def test_revoked_epoch_and_crash_do_not_replay_started_work(self):
         self.enable()
@@ -163,9 +216,7 @@ class NativeGatewayTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_native_submission_retains_policy_no_unattended_bypass(self):
         remember = []
-        result = await execute(
-            self.job, self.authorized, AsyncMock(), remember.append, connect=self.connect
-        )
+        result = await execute(self.job, self.authorized, remember.append, connect=self.connect)
         self.assertEqual(result, "Native reply")
         self.assertEqual(remember, ["native-session"])
         params = next(params for method, params in self.calls if method == "prompt.submit")
@@ -185,7 +236,6 @@ class NativeGatewayTests(unittest.IsolatedAsyncioTestCase):
             await execute(
                 self.job,
                 self.authorized,
-                AsyncMock(),
                 lambda sid: None,
                 connect=self.connect,
                 pause=pause,
@@ -198,17 +248,13 @@ class NativeGatewayTests(unittest.IsolatedAsyncioTestCase):
             pending=[{"admission_id": "admission", "status": "started"}],
             prompts=[{"kind": "clarify", "prompt_id": "question", "execution_generation": 7}],
         )
-        await execute(
-            self.job, self.authorized, AsyncMock(), lambda sid: None, connect=self.connect
-        )
+        await execute(self.job, self.authorized, lambda sid: None, connect=self.connect)
         self.assertNotIn("prompt.submit", [method for method, _ in self.calls])
         self.assertIn("clarify.respond", [method for method, _ in self.calls])
 
     async def test_approval_is_never_accepted_from_guest_text(self):
         self.snap["prompts"] = [{"kind": "approval"}]
-        result = await execute(
-            self.job, self.authorized, AsyncMock(), lambda sid: None, connect=self.connect
-        )
+        result = await execute(self.job, self.authorized, lambda sid: None, connect=self.connect)
         self.assertIn("подтверждение", result)
         self.assertFalse(
             any(method in {"prompt.submit", "approval.respond"} for method, _ in self.calls)
