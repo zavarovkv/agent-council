@@ -3,7 +3,6 @@
 
 import argparse
 import http.client
-import ssl
 from urllib.parse import urlsplit
 
 ROUTES = {
