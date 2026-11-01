@@ -10,6 +10,7 @@ import tempfile
 import unittest
 from contextlib import closing
 from pathlib import Path
+from unittest.mock import patch
 
 from hermes_cli.web_server_sessions import _open_session_db_at_path
 
@@ -48,6 +49,44 @@ class ProfileBootstrapTests(unittest.TestCase):
                     module.verify_managed_skills(home)
             skill.write_text("---\nname: example\ndescription: Fixture skill\n---\nValid body")
             module.verify_managed_skills(home)
+
+    def test_isolated_catalog_and_installer_share_real_yaml_semantics(self):
+        spec = importlib.util.spec_from_file_location(
+            "council_skills_fixture", "/opt/hermes/plugins/council-linear/skills.py"
+        )
+        reader = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(reader)
+        from council_skills import metadata
+
+        with tempfile.TemporaryDirectory() as temporary:
+            home = Path(temporary)
+            skill = home / "skills/example/SKILL.md"
+            skill.parent.mkdir(parents=True)
+            cases = (
+                ('description: "Check: the source."', "Check: the source."),
+                ("description: >\n  Check source\n  evidence.", "Check source evidence."),
+                ("description: |\n  Check source\n  evidence.", "Check source\nevidence."),
+            )
+            with patch.dict(os.environ, {"HERMES_HOME": str(home)}):
+                for header, expected in cases:
+                    text = f'---\nname: "example"\n{header}\n---\nBody'
+                    skill.write_text(text)
+                    self.assertEqual(metadata(text, "example")["description"], expected)
+                    self.assertEqual(
+                        json.loads(reader.view({})),
+                        {"skills": [{"name": "example", "description": expected}]},
+                    )
+                for header in (
+                    "description: true",
+                    "description: [one, two]",
+                    "description: !!python/object/apply:os.system ['false']",
+                ):
+                    text = f"---\nname: example\n{header}\n---\nBody"
+                    skill.write_text(text)
+                    with self.assertRaises(ValueError):
+                        metadata(text, "example")
+                    self.assertIn("error", json.loads(reader.view({})))
+                    self.assertIn("error", json.loads(reader.view({"name": "example"})))
 
     def test_initialization_is_private_browsable_and_preserves_existing_data(self):
         with tempfile.TemporaryDirectory() as temporary:

@@ -2,10 +2,9 @@
 
 import json
 import os
-import re
 from pathlib import Path, PurePosixPath
 
-NAME = re.compile(r"[a-z0-9]+(?:-[a-z0-9]+)*\Z")
+from council_skills import MAX_BYTES, NAME, metadata
 
 
 def regular_text(root, relative):
@@ -14,7 +13,7 @@ def regular_text(root, relative):
         root.resolve() != root
         or path.resolve() != path
         or not path.is_file()
-        or path.stat().st_size > 65536
+        or path.stat().st_size > MAX_BYTES
     ):
         raise ValueError("Expected bounded regular skill text.")
     return path.read_text(encoding="utf-8")
@@ -36,17 +35,13 @@ def view(args):
                     continue
                 # Hermes also seeds categorized upstream skills at startup. Their
                 # category directories (and old empty directories) are not skills.
-                metadata = folder / "SKILL.md"
-                if not metadata.exists() and not metadata.is_symlink():
+                skill_file = folder / "SKILL.md"
+                if not skill_file.exists() and not skill_file.is_symlink():
                     continue
                 content = regular_text(root, folder.name + "/SKILL.md")
-                header = content.split("---", 2)
-                if len(header) != 3 or header[0].strip():
-                    raise ValueError("Skill metadata missing.")
-                description = re.search(r"^description: (.+)$", header[1], re.MULTILINE)
-                if not description or len(entries) >= 128:
+                if len(entries) >= 128:
                     raise ValueError("Invalid skill catalog.")
-                entries.append({"name": folder.name, "description": description[1][:1024]})
+                entries.append(metadata(content, folder.name))
             return json.dumps({"skills": entries}, ensure_ascii=False)
         if not isinstance(name, str) or not NAME.fullmatch(name):
             raise ValueError("Invalid skill name.")
@@ -62,7 +57,7 @@ def view(args):
             or Path(relative).suffix != ".md"
         ):
             raise ValueError("Only skill instructions and Markdown references are readable.")
-        regular_text(root, name + "/SKILL.md")
+        metadata(regular_text(root, name + "/SKILL.md"), name)
         return json.dumps(
             {"name": name, "path": relative, "content": regular_text(root, name + "/" + relative)},
             ensure_ascii=False,

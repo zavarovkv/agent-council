@@ -58,6 +58,7 @@ COPY src/linear_agent/ /opt/agent-council/linear_agent/
 COPY src/council_team/ /opt/agent-council/council_team/
 COPY src/council_team/ /opt/hermes/council_team/
 COPY src/council_workspace/ /opt/hermes/council_workspace/
+COPY src/council_skills/ /opt/hermes/council_skills/
 COPY src/research_filing/ /opt/hermes/research_filing/
 COPY src/workspace_plugin/ /opt/hermes/plugins/council-workspace/
 COPY src/telegram_monitor/ /opt/agent-council/telegram_monitor/

@@ -49,10 +49,15 @@ def document(value):
             raise FilingError("unsupported_notion_document")
         declared_id = page_id(wrapped.get("url"))
         value = wrapped["text"]
-    root = re.search(r'<page\b[^>]*\burl="([^"]+)"', value)
-    parent = re.search(r'<parent-page\b[^>]*\burl="([^"]+)"', value)
     content = re.search(r"<content>\s?(.*?)\s?</content>", value, re.S)
-    if root is None or content is None:
+    if content is None:
+        raise FilingError("unsupported_notion_document")
+    # Page prose (including code examples) is untrusted content, not ancestry.
+    # Only the MCP envelope preceding <content> can establish the scope.
+    envelope = value[: content.start()]
+    root = re.search(r'<page\b[^>]*\burl="([^"]+)"', envelope)
+    parent = re.search(r'<parent-page\b[^>]*\burl="([^"]+)"', envelope)
+    if root is None:
         raise FilingError("unsupported_notion_document")
     identifier = page_id(root[1])
     if declared_id is not None and declared_id != identifier:

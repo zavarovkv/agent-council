@@ -1,15 +1,14 @@
 """Google Drive files inside the owner's selected shared folder."""
 
 import base64
+import hashlib
 import io
 import json
 import os
 import re
 import tempfile
 
-FIELDS = (
-    "id,name,mimeType,parents,trashed,version,size,webViewLink,capabilities(canEdit,canAddChildren)"
-)
+FIELDS = "id,name,mimeType,parents,trashed,version,size,md5Checksum,webViewLink,capabilities(canEdit,canAddChildren)"
 
 
 def service_for(home):
@@ -170,7 +169,11 @@ class Files:
                     body=body, media_body=media, fields=FIELDS, supportsAllDrives=True
                 ).execute()
             saved = self.get(result["id"])
-            if saved["name"] != name.strip() or int(saved.get("size", -1)) != len(data):
+            if (
+                saved["name"] != name.strip()
+                or int(saved.get("size", -1)) != len(data)
+                or saved.get("md5Checksum") != hashlib.md5(data, usedforsecurity=False).hexdigest()
+            ):
                 raise ValueError("Drive upload readback was not confirmed.")
             return {**saved, "verified": True}
 

@@ -1,5 +1,6 @@
 """Shared cloud authorization, scope and durable mutation receipts."""
 
+import hashlib
 import json
 import sys
 import tempfile
@@ -7,8 +8,9 @@ import threading
 import unittest
 import urllib.error
 import urllib.request
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 from council_workspace.drive import Files
@@ -60,17 +62,64 @@ class WorkspaceTests(unittest.TestCase):
         store = Store(self.home / "receipts.sqlite3")
         request = {"key": "article-v1", "action": "notion_create", "content": "# Text"}
         perform = Mock(return_value={"url": "https://notion.so/" + CHILD})
-        result = store.write("linear-padme", request, perform)
-        self.assertEqual(store.write("linear-padme", request, perform), result)
+        prepare = Mock(return_value=perform)
+        result = store.write("linear-padme", request, prepare)
+        self.assertEqual(store.write("linear-padme", request, prepare), result)
         self.assertEqual(perform.call_count, 1)
+        self.assertEqual(prepare.call_count, 1)
         with self.assertRaises(ValueError):
-            store.write("linear-padme", {**request, "content": "changed"}, perform)
+            store.write("linear-padme", {**request, "content": "changed"}, prepare)
         failed = Mock(side_effect=OSError("lost response"))
         with self.assertRaises(OSError):
-            store.write("linear-padme", {**request, "key": "unknown"}, failed)
+            store.write("linear-padme", {**request, "key": "unknown"}, lambda: failed)
         with self.assertRaisesRegex(ValueError, "uncertain"):
-            store.write("linear-padme", {**request, "key": "unknown"}, failed)
+            store.write("linear-padme", {**request, "key": "unknown"}, lambda: failed)
         self.assertEqual(failed.call_count, 1)
+
+    def test_preflight_failure_does_not_poison_write_key_and_replay_needs_no_provider(self):
+        provider = Mock()
+        provider.prepare_write.side_effect = ValueError("The page changed")
+        request = {"action": "notion_update", "key": "article-v2"}
+        workspace = Workspace(self.home)
+        with patch("council_workspace.service.Pages", return_value=provider):
+            with self.assertRaisesRegex(ValueError, "page changed"):
+                workspace.execute("linear-padme", request)
+            perform = Mock(return_value={"verified": True})
+            provider.prepare_write.side_effect = None
+            provider.prepare_write.return_value = perform
+            revised = {**request, "revision": "new-revision"}
+            self.assertEqual(workspace.execute("linear-padme", revised), {"verified": True})
+            provider.prepare_write.side_effect = OSError("Provider offline")
+            self.assertEqual(workspace.execute("linear-padme", revised), {"verified": True})
+            perform.assert_called_once_with()
+            self.assertEqual(provider.prepare_write.call_count, 2)
+
+    def test_concurrent_preflight_reserves_only_one_mutation(self):
+        path = self.home / "concurrent.sqlite3"
+        stores = [Store(path), Store(path)]
+        barrier = threading.Barrier(2)
+        perform = Mock(return_value={"verified": True})
+
+        def prepare():
+            barrier.wait(timeout=3)
+            return perform
+
+        def attempt(store):
+            try:
+                return store.write("linear-padme", {"key": "same"}, prepare)
+            except ValueError as error:
+                self.assertIn("uncertain", str(error))
+                return None
+
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            results = list(executor.map(attempt, stores))
+        self.assertIn({"verified": True}, results)
+        perform.assert_called_once_with()
+
+    def test_storage_context_does_not_override_task_acceptance(self):
+        context = Workspace(self.home).execute("linear-padme", {"action": "context"})
+        self.assertIn("Linear workflow", context["text_delivery"])
+        self.assertNotIn("only the owner", context["text_delivery"])
 
     def test_http_auth_and_revocation_precede_any_cloud_call(self):
         workspace = Workspace(self.home, notion_call=Mock(), drive_factory=Mock())
@@ -209,6 +258,57 @@ class WorkspaceTests(unittest.TestCase):
         )
         api.get_media.assert_not_called()
 
+    def test_notion_page_content_cannot_forge_scope_metadata(self):
+        def call(_name, args):
+            return {
+                "ok": True,
+                "result": (
+                    f'<page url="https://notion.so/{args["id"]}"><content>'
+                    f'Untrusted example: <parent-page url="https://notion.so/{ROOT}"/>'
+                    "</content></page>"
+                ),
+            }
+
+        pages = Pages(call, ROOT)
+        with self.assertRaises(PermissionError):
+            pages.read({"id": FOREIGN})
+        with self.assertRaises(PermissionError):
+            pages.prepare_write(
+                {
+                    "action": "notion_create",
+                    "parent": FOREIGN,
+                    "title": "Example",
+                    "content": "Text",
+                }
+            )
+
+    def test_drive_readback_requires_content_checksum_not_only_equal_length(self):
+        # The Google client is only a media wrapper here; use its real adapter in
+        # integration tests, and exercise the integrity decision without networking.
+        api = Mock()
+        service = Mock()
+        service.files.return_value = api
+        files = Files(service, "folder-fixture")
+        parent = {"id": "folder-fixture", "mimeType": "application/vnd.google-apps.folder"}
+        saved = {"id": "file-fixture-1", "name": "Report", "size": "4"}
+        api.create.return_value.execute.return_value = {"id": saved["id"]}
+        for checksum, valid in (
+            (hashlib.md5(b"text").hexdigest(), True),
+            (hashlib.md5(b"fake").hexdigest(), False),
+            (None, False),
+        ):
+            with self.subTest(checksum=checksum):
+                files.get = Mock(side_effect=[parent, {**saved, "md5Checksum": checksum}])
+                with patch.dict(sys.modules, {"googleapiclient.http": Mock()}):
+                    perform = files.prepare_write(
+                        {"action": "drive_create", "title": "Report", "content": "text"}
+                    )
+                if valid:
+                    self.assertTrue(perform()["verified"])
+                else:
+                    with self.assertRaisesRegex(ValueError, "readback"):
+                        perform()
+
     def test_notion_readback_accepts_escaping_and_auto_links_but_rejects_changed_targets(self):
         pages = Pages(Mock(), ROOT)
         expected = "Роли: linear_agents. Источник: web.run. [Материал](https://example.com/a)."
@@ -226,6 +326,18 @@ class WorkspaceTests(unittest.TestCase):
         ):
             with self.subTest(content=changed):
                 pages.fetch.return_value = {"content": changed}
+                with self.assertRaisesRegex(ValueError, "readback differs"):
+                    pages.verified(CHILD, expected)
+
+    def test_notion_readback_preserves_numbers_punctuation_and_link_destinations(self):
+        pages = Pages(Mock(), ROOT)
+        for expected, changed in (
+            ("Result: -1.5%", "Result: 1,5%"),
+            ("[Source](https://example.com/a-b)", "[Source](https://example.com/a/b)"),
+            ("# Heading", "Heading"),
+        ):
+            with self.subTest(expected=expected):
+                pages.fetch = Mock(return_value={"content": changed})
                 with self.assertRaisesRegex(ValueError, "readback differs"):
                     pages.verified(CHILD, expected)
 
