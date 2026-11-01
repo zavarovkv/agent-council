@@ -27,6 +27,7 @@ def main():
     if not target.exists():
         with tempfile.TemporaryDirectory(prefix=".stage-", dir=RELEASES) as staging:
             stage = Path(staging)
+            stage.chmod(0o755)  # Nginx must traverse the installed release directory.
             with tarfile.open(archive, "r:gz") as tar:
                 members = tar.getmembers()
                 if len(members) > 100 or sum(m.size for m in members) > 20 * 1024 * 1024:
