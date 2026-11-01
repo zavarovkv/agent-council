@@ -14,7 +14,7 @@ import urllib.request
 from datetime import UTC, datetime
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, Mock, patch
 
 from telegram import Chat, Message, Update, User
 from telegram.ext import Application, ApplicationHandlerStop, TypeHandler
@@ -26,6 +26,44 @@ from secretary_worker.service import Server, Service
 
 
 class NativeHandlerTests(unittest.IsolatedAsyncioTestCase):
+    async def test_native_plugin_localizes_shutdown_and_unloads_without_changing_other_text(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            home = Path(temporary)
+            (home / "config.yaml").write_text(
+                json.dumps({"plugins": {"enabled": ["council-secretary"]}})
+            )
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    "-c",
+                    """
+from agent.i18n import t
+from hermes_cli.plugins import PluginManager
+keys = ('gateway.shutdown.notice_restart', 'gateway.shutdown.notice_shutdown')
+before = {(lang, key): t(key, lang=lang) for lang in ('en', 'ru') for key in keys}
+from agent.i18n import surface_catalog
+catalogs = {lang: surface_catalog(lang).copy() for lang in ('en', 'ru')}
+manager = PluginManager()
+manager.discover_and_load()
+for lang in ('en', 'ru'):
+    assert t(keys[0], lang=lang).startswith('Перезапускаюсь.'), t(keys[0], lang=lang)
+    assert t(keys[1], lang=lang).startswith('Ухожу офлайн.'), t(keys[1], lang=lang)
+    assert 'попробую продолжить' in t(keys[1], lang=lang)
+    after = surface_catalog(lang)
+    assert {key for key in after if after[key] != catalogs[lang].get(key)} == set(keys)
+manager.unload()
+for (lang, key), text in before.items():
+    assert t(key, lang=lang) == text
+print('Native shutdown translations and unload: OK')
+""",
+                ],
+                env={**os.environ, "HOME": temporary, "HERMES_HOME": temporary},
+                capture_output=True,
+                text=True,
+                timeout=45,
+            )
+            self.assertEqual(result.returncode, 0, result.stdout[-1000:] + result.stderr[-3000:])
+
     async def test_public_dm_is_intercepted_while_owner_dm_stays_with_native_handlers(self):
         root = Path("/opt/hermes/plugins/council-secretary")
         name = "council_public_fixture"
@@ -36,7 +74,9 @@ class NativeHandlerTests(unittest.IsolatedAsyncioTestCase):
         sys.modules[name] = module
         spec.loader.exec_module(module)
         factories = []
-        module.register(SimpleNamespace(register_telegram_handler=factories.append))
+        module.register(
+            SimpleNamespace(register_telegram_handler=factories.append, register_locale=Mock())
+        )
         with tempfile.TemporaryDirectory() as temporary:
             Path(temporary, "telegram-owner.json").write_text('{"telegram_id":12345}')
             application = Application.builder().token("12345:public-fixture-token").build()
@@ -138,7 +178,9 @@ class NativeHandlerTests(unittest.IsolatedAsyncioTestCase):
         sys.modules[name] = module
         spec.loader.exec_module(module)
         factories = []
-        module.register(SimpleNamespace(register_telegram_handler=factories.append))
+        module.register(
+            SimpleNamespace(register_telegram_handler=factories.append, register_locale=Mock())
+        )
         self.assertEqual(len(factories), 1)
         application = Application.builder().token("12345:fixture-token-not-a-real-bot").build()
         with patch.dict(

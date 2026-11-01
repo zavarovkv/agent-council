@@ -58,7 +58,7 @@ sudo python3 scripts/manage.py guest-mode --enable --owner-agent
 This writes schema 3 after a copied-profile smoke check. Rollback/restore must
 retain this capability even after disabling Guest Mode. The immutable owner ID
 is checked at admission, before native execution, while waiting and before each
-Telegram edit. Neither spouse, contacts, usernames nor quotes grant this route.
+Telegram delivery. Neither spouse, contacts, usernames nor quotes grant this route.
 Ordinary public DMs and Secretary Mode keep their isolated policies.
 
 A call in either a private conversation or a group now uses the main Hermes
@@ -69,9 +69,12 @@ Answers are visible to the conversation: relevant private context requested by
 the owner may be included, but unrelated memory and credentials must not be dumped.
 The bot sees the invocation and one quote, not the group's full history.
 
-The bot acknowledges via `answerGuestQuery`, stores its `inline_message_id`, and
-edits that response with progress, clarification or the final result. No
-`sendMessage` fallback, extra poller, model credential copy or approval bypass.
+The bot waits for a substantive result, clarification or approval question, then
+sends that text once through `answerGuestQuery`. It sends no initial acknowledgement
+or periodic progress placeholder. Busy/invalid requests and execution errors still
+receive a meaningful notice. No `sendMessage` fallback, extra poller, model
+credential copy or approval bypass. The returned inline receipt is recorded for
+deduplication; recovery can still edit a legacy placeholder from an older release.
 Execution uses the pinned Hermes gateway's own session and prompt protocol.
 Clarification answers can be supplied by the owner with another invocation in
 the same conversation. Dangerous-action approvals remain in the Council session.
@@ -82,7 +85,12 @@ There is one active owner guest run globally, at most 60 accepted calls/hour,
 and a 30-minute wait limit. Native interruption is requested on revocation,
 timeout or transport failure; already performed tool effects are not rolled back.
 Uncertain sends/submissions and started jobs are never automatically replayed
-following a restart. The reply tells the owner to inspect Council before retrying.
+following a restart. A definite execution failure before delivery can send one
+notice asking the owner to inspect Council. A lost or rejected final-delivery
+receipt causes no retry or second reply; a restart without a stored inline receipt
+also sends nothing. The result remains in the native Council session. Telegram
+controls guest-query validity; the local freshness check is not a guarantee that
+a delayed response will be accepted.
 The native session retains the actual execution history. Raw queue inputs are
 scrubbed when the attempt ends, with deduplication metadata retained up to a day
 and pruned on the next request in the private 0600 `owner-guest.sqlite3` database.

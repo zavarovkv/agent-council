@@ -73,7 +73,7 @@ class MonitoringTests(unittest.TestCase):
         self.check()
         self.check()
         self.assertEqual(self.sender.call_count, 2)
-        self.assertIn("восстановлено", self.sender.call_args.args[2])
+        self.assertIn("снова в порядке", self.sender.call_args.args[2])
 
     def test_unconfirmed_notification_is_retried_without_losing_the_episode(self):
         self.report["health"] = "unhealthy"
@@ -83,6 +83,41 @@ class MonitoringTests(unittest.TestCase):
         self.assertFalse(self.settings.env_file.with_name("monitor-state.json").exists())
         self.sender.side_effect = None
         self.check()
+        self.assertEqual(self.sender.call_count, 2)
+
+    def test_instruction_reasons_are_distinct_and_do_not_expose_revision_details(self):
+        cases = [
+            ({"available": False}, "проверить инструкции"),
+            ({"local_changes": True}, "сверить версии"),
+            ({"rejected_revision": "a" * 40}, "не прошла проверку"),
+            ({"timer": {"ActiveState": "inactive"}}, "включить расписание"),
+            ({"service": {"Result": "exit-code"}}, "причину сбоя"),
+        ]
+        healthy = self.report["instructions"].copy()
+        for changes, expected in cases:
+            with self.subTest(changes=changes):
+                self.report["instructions"] = {**healthy, **changes}
+                self.check()
+                message = self.sender.call_args.args[2]
+                self.assertIn(expected, message)
+                self.assertNotIn("a" * 40, message)
+                calls = self.sender.call_count
+                self.check()
+                self.assertEqual(self.sender.call_count, calls)
+        self.report["instructions"] = healthy
+        self.check()
+        self.assertEqual(
+            self.sender.call_args.args[2], "Автообновление инструкций снова в порядке."
+        )
+        calls = self.sender.call_count
+        self.check()
+        self.assertEqual(self.sender.call_count, calls)
+
+    def test_new_rejected_revision_opens_a_new_notice_without_disclosing_hash(self):
+        for revision in ("a" * 40, "b" * 40):
+            self.report["instructions"]["rejected_revision"] = revision
+            self.check()
+            self.assertNotIn(revision, self.sender.call_args.args[2])
         self.assertEqual(self.sender.call_count, 2)
 
     def test_stopped_linear_executor_with_previous_healthy_state_is_reported(self):

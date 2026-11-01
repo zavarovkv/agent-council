@@ -9,7 +9,7 @@ import tempfile
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, Mock, patch
 
 from telegram import Bot, Update
 from telegram.ext import Application, TypeHandler
@@ -98,7 +98,9 @@ class GuestSDKTests(unittest.IsolatedAsyncioTestCase):
     ):
         module = plugin("council_guest_dispatch_fixture")
         factories = []
-        module.register(SimpleNamespace(register_telegram_handler=factories.append))
+        module.register(
+            SimpleNamespace(register_telegram_handler=factories.append, register_locale=Mock())
+        )
         with tempfile.TemporaryDirectory() as temporary:
             home = Path(temporary)
             (home / "telegram-owner.json").write_text('{"telegram_id":12345}')
@@ -206,7 +208,7 @@ class GuestSDKTests(unittest.IsolatedAsyncioTestCase):
                 self.assertEqual(len(calls), 2)
                 self.assertEqual(len(request.answers), 2)
 
-    async def test_owner_agent_uses_real_guest_receipt_for_inline_edits(self):
+    async def test_owner_agent_sends_only_final_answer_through_real_sdk(self):
         module = plugin("council_owner_wire_fixture")
         guest = __import__(module.__name__ + ".guest", fromlist=["GuestBridge"])
         stores = __import__(module.__name__ + ".guest_store", fromlist=["GuestStore"])
@@ -242,7 +244,13 @@ class GuestSDKTests(unittest.IsolatedAsyncioTestCase):
                     home=home,
                     clock=lambda: 1_000_000,
                 )
-                execute = AsyncMock(return_value="Ваша команда: Квай-Гон, Декстер, Лэндо, Падме.")
+
+                async def run(job, authorized, remember):
+                    self.assertEqual(request.answers, [])
+                    self.assertEqual(request.edits, [])
+                    return "Ваша команда: Квай-Гон, Декстер, Лэндо, Падме."
+
+                execute = AsyncMock(side_effect=run)
                 bridge.owner_bridge = owner.OwnerGuestBridge(
                     bridge, owner_stores.OwnerStore(home / "owner.sqlite3"), execute=execute
                 )
@@ -251,11 +259,15 @@ class GuestSDKTests(unittest.IsolatedAsyncioTestCase):
                 await bridge.handle(event())
                 await asyncio.gather(*tasks)
                 self.assertEqual(len(request.answers), 1)
-                self.assertEqual(len(request.edits), 1)
-                self.assertEqual(request.edits[0]["inline_message_id"], "fixture-inline-message")
-                self.assertNotIn("chat_id", request.edits[0])
-                self.assertNotIn("business_connection_id", request.edits[0])
-                self.assertIn("Падме", request.edits[0]["text"])
+                self.assertEqual(request.edits, [])
+                answer = request.answers[0]
+                self.assertEqual(set(answer), {"guest_query_id", "result"})
+                result = answer["result"]
+                if isinstance(result, str):
+                    result = json.loads(result)
+                text = result["input_message_content"]["message_text"]
+                self.assertIn("Падме", text)
+                self.assertNotIn("Выполняю", text)
 
     async def test_actual_sdk_rejects_unknown_anonymous_bot_and_expired_callers(self):
         module = plugin("council_guest_identity_fixture")

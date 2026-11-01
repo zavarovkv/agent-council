@@ -16,34 +16,44 @@ from .doctor import backup_status, doctor, instruction_status, research_status
 from .runtime import Runtime
 
 LABELS = {
-    "deployment": "Не удалось проверить состояние Docker и изоляцию сервисов.",
-    "gateway": "Основной сервис недоступен или не прошёл проверку готовности.",
-    "secretary": "Сервис ответов недоступен или его политика не готова.",
-    "linear": "Исполнители Linear недоступны или их подключение не готово.",
-    "business_queue": "Очередь личных ответов недоступна или задерживается.",
-    "public_queue": "Очередь публичного бота недоступна или задерживается.",
-    "guest_queue": "Очередь гостевых вызовов недоступна или задерживается.",
-    "provider_business": "Последняя генерация в личном канале завершилась ошибкой провайдера.",
-    "provider_public": "Последняя генерация публичного бота завершилась ошибкой провайдера.",
-    "backup": "Нет свежей проверенной резервной копии R2 или отключено расписание.",
-    "instructions": "Обновление инструкций остановлено, отклонено или требует сверки файлов.",
+    "deployment": "Не удалось проверить работу сервера. Нужна проверка.",
+    "gateway": "Сейчас я недоступен. Нужно проверить основной сервис.",
+    "secretary": "Не могу отвечать в чатах. Нужно проверить сервис ответов.",
+    "linear": "Агенты пока не могут выполнять задачи в Linear. Нужно проверить подключение.",
+    "business_queue": "Ответы в твоих личных чатах задерживаются. Нужна проверка.",
+    "public_queue": "Ответы пользователям бота задерживаются. Нужна проверка.",
+    "guest_queue": "Ответы на вызовы бота в переписках задерживаются. Нужна проверка.",
+    "provider_business": "Не удалось подготовить ответ в личном чате: ошибка сервиса модели.",
+    "provider_public": "Не удалось подготовить ответ пользователю бота: ошибка сервиса модели.",
+    "backup": "Нужно проверить резервное копирование в R2: свежая копия или расписание не в порядке.",
+    "instructions": "Не удалось проверить обновление инструкций. Нужна проверка.",
     "disk": "На сервере осталось мало свободного места.",
-    "research": "Сохранение исследований требует внимания: очередь задерживается или автоматизация недоступна.",
+    "research": "Исследования не сохраняются вовремя. Нужно проверить автоматическое сохранение.",
 }
-NAMES = {
-    "deployment": "Проверка развёртывания",
-    "gateway": "Основной сервис",
-    "secretary": "Сервис ответов",
-    "linear": "Агенты Linear",
-    "business_queue": "Очередь личных ответов",
-    "public_queue": "Очередь публичного бота",
-    "guest_queue": "Гостевые вызовы",
-    "provider_business": "Провайдер личных ответов",
-    "provider_public": "Провайдер публичного бота",
-    "backup": "Резервные копии R2",
-    "instructions": "Обновление инструкций",
-    "disk": "Свободное место",
-    "research": "Сохранение исследований",
+RECOVERIES = {
+    "deployment": "Снова могу проверить работу сервера.",
+    "gateway": "Я снова на связи.",
+    "secretary": "Сервис ответов снова работает.",
+    "linear": "Подключение агентов к Linear снова в порядке.",
+    "business_queue": "Очередь ответов в твоих личных чатах снова в порядке.",
+    "public_queue": "Очередь ответов пользователям бота снова в порядке.",
+    "guest_queue": "Очередь вызовов бота в переписках снова в порядке.",
+    "provider_business": "Снова удалось подготовить ответ в личном чате.",
+    "provider_public": "Снова удалось подготовить ответ пользователю бота.",
+    "backup": "Резервное копирование в R2 снова в порядке.",
+    "instructions": "Автообновление инструкций снова в порядке.",
+    "disk": "Свободного места на сервере снова достаточно.",
+    "research": "Автоматическое сохранение исследований снова в порядке.",
+}
+INSTRUCTION_ALERTS = {
+    "unavailable": "Не удалось проверить инструкции. Нужно проверить файлы на сервере.",
+    "local_changes": (
+        "Инструкции на сервере изменились отдельно от репозитория. "
+        "Нужно сверить версии перед обновлением."
+    ),
+    "rejected": "Новая версия инструкций не прошла проверку. Нужно проверить изменения.",
+    "paused": "Автообновление инструкций выключено. Нужно включить расписание.",
+    "failed": "Не получилось обновить инструкции. Нужно проверить причину сбоя.",
 }
 
 
@@ -209,14 +219,17 @@ def issues(report, configuration, *, free_bytes, total_bytes):
     ):
         result["backup"] = "stale_or_disabled"
     instructions = report.get("instructions", {})
-    if configuration.get("watch_instructions") and (
-        not instructions.get("available")
-        or instructions.get("local_changes")
-        or instructions.get("rejected_revision")
-        or instructions.get("timer", {}).get("ActiveState") != "active"
-        or instructions.get("service", {}).get("Result", "success") != "success"
-    ):
-        result["instructions"] = instructions.get("rejected_revision", "conflict_or_disabled")
+    if configuration.get("watch_instructions"):
+        if not instructions.get("available"):
+            result["instructions"] = "unavailable"
+        elif instructions.get("local_changes"):
+            result["instructions"] = "local_changes"
+        elif instructions.get("rejected_revision"):
+            result["instructions"] = "rejected:" + instructions["rejected_revision"]
+        elif instructions.get("timer", {}).get("ActiveState") != "active":
+            result["instructions"] = "paused"
+        elif instructions.get("service", {}).get("Result", "success") != "success":
+            result["instructions"] = "failed"
     if free_bytes < max(1024**3, total_bytes // 20):
         result["disk"] = "low"
     research = report.get("research", {})
@@ -236,12 +249,13 @@ def transition(previous, current):
     changed = sorted(key for key in current if active.get(key) != current[key])
     recovered = sorted(active.keys() - current.keys())
     lines = []
-    if changed:
-        lines.append(
-            "Agent Council: требуется внимание.\n" + "\n".join(LABELS[key] for key in changed)
-        )
-    if recovered:
-        lines.append("Agent Council: восстановлено.\n" + "\n".join(NAMES[key] for key in recovered))
+    for key in changed:
+        text = LABELS[key]
+        if key == "instructions":
+            reason = current[key].partition(":")[0]
+            text = INSTRUCTION_ALERTS.get(reason, text)
+        lines.append(text)
+    lines.extend(RECOVERIES[key] for key in recovered)
     return "\n\n".join(lines)
 
 
@@ -261,7 +275,7 @@ def poll(settings, *, sender=notify, probe=None, clock=time.time, test=False):
                 sender(
                     settings,
                     configuration,
-                    "Agent Council: проверка уведомлений. Канал владельца подключён.",
+                    "Проверка связи: сюда будут приходить важные уведомления о работе команды.",
                 )
                 return {"notification_verified": True}
             try:
