@@ -50,6 +50,9 @@ def main():
         with tempfile.TemporaryDirectory(prefix="council-nginx-") as temporary:
             root = Path(temporary)
             root.chmod(0o755)  # Fixture content is public; allow Nginx's worker to traverse.
+            (root / "index.html").write_bytes(b"council static landing")
+            (root / "en").mkdir()
+            (root / "en/index.html").write_bytes(b"council english landing")
             first, second = port(), port()
             source = (repository / "config/nginx-council.conf").read_text()
             source = source.replace("listen 80;", f"listen 127.0.0.1:{first};")
@@ -58,6 +61,7 @@ def main():
             source = re.sub(r"^\s*ssl_\w+ .*;", "", source, flags=re.M)
             source = re.sub(r"^\s*(?:access_log|error_log) .*;", "", source, flags=re.M)
             source = source.replace("127.0.0.1:9119", f"127.0.0.1:{upstream.server_port}")
+            source = source.replace("/var/www/agent-council-landing", str(root))
             source = source.replace("/var/www/hermes-status", str(root))
             source = source.replace("/var/www/hermes-acme", str(root))
             config = root / "nginx.conf"
@@ -93,7 +97,9 @@ def main():
             assert response[0] == 401 and response[2] == b"application response"
             assert response[1]["X-Robots-Tag"] == "noindex, nofollow"
             landing = request("/")
-            assert landing[0] == 200 and landing[2] == b"public landing"
+            assert landing[0] == 200 and landing[2] == b"council static landing"
+            assert request("/en/")[0:3:2] == (200, b"council english landing")
+            assert request("/login?next=%2Fprofiles")[0] == 200
             assert landing[1]["X-Robots-Tag"].startswith("index, follow")
             robots = request("/robots.txt")
             assert (
