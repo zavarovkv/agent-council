@@ -4,6 +4,7 @@ import hashlib
 import importlib.util
 import io
 import os
+import subprocess
 import sys
 import unittest
 from pathlib import Path
@@ -16,6 +17,34 @@ spec.loader.exec_module(receiver)
 
 
 class ReceiverTests(unittest.TestCase):
+    def test_retries_only_temporary_operation_lock_failure(self):
+        with (
+            patch.object(
+                receiver.subprocess,
+                "run",
+                side_effect=[
+                    subprocess.CompletedProcess([], 75),
+                    subprocess.CompletedProcess([], 0),
+                ],
+            ) as run,
+            patch.object(receiver.time, "sleep") as sleep,
+        ):
+            receiver.install_archive(Path("archive"), "a" * 64)
+            self.assertEqual(run.call_count, 2)
+            sleep.assert_called_once_with(5)
+        for code, attempts in ((1, 1), (75, 5)):
+            with (
+                patch.object(
+                    receiver.subprocess, "run", return_value=subprocess.CompletedProcess([], code)
+                ) as run,
+                patch.object(receiver.time, "sleep"),
+                self.assertRaises(subprocess.CalledProcessError),
+            ):
+                try:
+                    receiver.install_archive(Path("archive"), "a" * 64)
+                finally:
+                    self.assertEqual(run.call_count, attempts)
+
     def test_rejects_any_other_command_before_reading_input(self):
         for command in (
             "",
