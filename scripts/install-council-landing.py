@@ -3,9 +3,9 @@
 import argparse
 import hashlib
 import os
-from pathlib import Path
 import tarfile
 import tempfile
+from pathlib import Path
 
 DEST = Path("/var/www")
 LINK = DEST / "agent-council-landing"
