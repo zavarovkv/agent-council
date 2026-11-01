@@ -53,6 +53,8 @@ def main():
             (root / "index.html").write_bytes(b"council static landing")
             (root / "en").mkdir()
             (root / "en/index.html").write_bytes(b"council english landing")
+            (root / "council").mkdir()
+            (root / "council/site.css").write_bytes(b"council stylesheet")
             first, second = port(), port()
             source = (repository / "config/nginx-council.conf").read_text()
             source = source.replace("listen 80;", f"listen 127.0.0.1:{first};")
@@ -99,6 +101,7 @@ def main():
             landing = request("/")
             assert landing[0] == 200 and landing[2] == b"council static landing"
             assert request("/en/")[0:3:2] == (200, b"council english landing")
+            assert request("/council/site.css")[0:3:2] == (200, b"council stylesheet")
             assert request("/login?next=%2Fprofiles")[0] == 200
             assert landing[1]["X-Robots-Tag"].startswith("index, follow")
             robots = request("/robots.txt")
