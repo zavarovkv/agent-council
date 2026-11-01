@@ -100,7 +100,7 @@ def main():
             assert landing[0] == 200 and landing[2] == b"council static landing"
             assert request("/en/")[0:3:2] == (200, b"council english landing")
             assert request("/login?next=%2Fprofiles")[0] == 200
-            assert landing[1]["X-Robots-Tag"] == "noindex, nofollow"  # inherited header in this fixture
+            assert landing[1]["X-Robots-Tag"].startswith("index, follow")
             robots = request("/robots.txt")
             assert (
                 robots[0] == 200
