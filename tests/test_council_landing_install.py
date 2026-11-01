@@ -50,14 +50,14 @@ class LandingInstallTests(unittest.TestCase):
         digest = archive(
             path,
             {
-                "index.html": b"Council",
-                "en/index.html": b"Council EN",
+                "index.html": b"<html>https://council.zavarov.com/</html>",
+                "en/index.html": b"<html>https://council.zavarov.com/en/</html>",
                 "council/avatars/qui-gon.png": b"png fixture",
             },
         )
         self.invoke(path, digest)
-        self.assertEqual((installer.LINK / "index.html").read_bytes(), b"Council")
-        self.assertEqual((installer.LINK / "en/index.html").read_bytes(), b"Council EN")
+        self.assertIn(b"council.zavarov.com", (installer.LINK / "index.html").read_bytes())
+        self.assertIn(b"council.zavarov.com", (installer.LINK / "en/index.html").read_bytes())
         self.assertTrue((installer.LINK.resolve().stat().st_mode & 0o111) != 0)
         self.invoke(path, digest)  # idempotent install
 
