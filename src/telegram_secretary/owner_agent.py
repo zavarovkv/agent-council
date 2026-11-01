@@ -86,7 +86,7 @@ async def execute(job, authorized, remember, *, connect=None, pause=asyncio.slee
                     session_id=session_id,
                     input_id=job["id"],
                     text=prompt(job),
-                    finite=True,
+                    finite=False,
                 )
                 admission = receipt["admission_id"]
             while True:

@@ -225,7 +225,7 @@ class NativeGatewayTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(remember, ["native-session"])
         params = next(params for method, params in self.calls if method == "prompt.submit")
         self.assertEqual(params["input_id"], self.job["id"])
-        self.assertTrue(params["finite"])
+        self.assertFalse(params["finite"])
         self.assertNotIn("unattended", params)
         self.assertNotIn("yolo", params)
         self.assertNotIn("tools", params)

@@ -86,6 +86,31 @@ class OwnerContextSDKTests(unittest.TestCase):
         self.assertEqual(policy.current_toolsets(effective), ("file",))
         self.assertEqual(policy.current_toolsets(self.config), ("memory", "skills"))
 
+    def test_dialog_route_keeps_skill_tools_and_can_wait_for_clarification(self):
+        from agent.oneshot_footprint import prune_oneshot_tools
+        from gateway.config import Platform
+        from gateway.run_turn_runner import TurnRunner
+        from gateway.session_finite import finite_turn_scope
+
+        tools = [{"function": {"name": "skill_manage"}}]
+        with patch("gateway.session_policy.active_policy", return_value=self.policy()):
+            self.assertEqual(prune_oneshot_tools(tools), tools)
+        turn = SimpleNamespace(
+            _ctx=SimpleNamespace(source=SimpleNamespace(platform=Platform.LOCAL)),
+            _ask_clarify_question=lambda *args, **kwargs: ("Owner answer", True),
+        )
+        questions = [dict(qid="q", question="Which project?", choices=[], multi_select=False)]
+        with (
+            finite_turn_scope(False),
+            patch("gateway.session_cli_turn.clarify_batch_turn", return_value=False),
+        ):
+            result = TurnRunner._clarify_callback_sync(turn, questions)
+        self.assertEqual(result, {"answers": {"q": "Owner answer"}, "outcome": "submitted"})
+        with finite_turn_scope(True):
+            self.assertEqual(
+                TurnRunner._clarify_callback_sync(turn, questions)["outcome"], "undelivered"
+            )
+
     def legacy(self):
         policy = self.policy("oneshot")
         sid = self.commit(policy)

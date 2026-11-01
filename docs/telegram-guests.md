@@ -74,7 +74,9 @@ the private information in the shared reply. Public team information is availabl
 The bot sees the invocation and one quote, not the group's full history.
 
 The native session surface is `telegram_guest`, mapped to Telegram rather than
-CLI. It follows the `default` profile's model, reasoning and Telegram toolsets;
+CLI. Requests use the native dialog mode, not finite single-query mode, so
+clarifications can wait for an answer instead of silently choosing assumptions.
+It follows the `default` profile's model, reasoning and Telegram toolsets;
 there is no second set of personality, style or workflow instructions. SOUL,
 skills and memory use the same native builders as direct Telegram. Audience and
 single-reply delivery constraints are added as trusted ephemeral system context
