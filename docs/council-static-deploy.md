@@ -24,3 +24,9 @@ Artifact is a ZIP containing council-landing.tar.gz. Download using authorized G
 Restore the prior Nginx route via the existing guarded route management rollback. Restore the previous static release symlink only if needed. Do not remove or reset authentication data. Never change DNS or OAuth credentials for this migration.
 
 No automatic production deployment is wired in this PR. The host installer requires an authorized operator and an explicit reviewed artifact.
+
+## Restricted SSH receiver (not installed by this PR)
+
+The reviewed `scripts/council-landing-deploy.py` reads the forced-command's `SSH_ORIGINAL_COMMAND`, accepts only `council-landing-deploy <64 lowercase hex SHA-256>`, bounds the incoming archive to 8 MiB and invokes the fixed installer with `sudo -n`. It must be installed as an immutable root-owned file outside the deploy user's writable directories. The authorized_keys entry should use `command="/usr/local/libexec/council/council-landing-deploy.py",restrict` and a separately verified Ed25519 public key. Set a dedicated `sudoers` rule for only the fixed installer path, review it with `visudo -c`, and deny all other privileged operations. Do not use the root password.
+
+**Release limitation:** this receiver installs the artifact but does not itself reload Nginx or perform an HTTP smoke test/rollback. Do not activate the GitHub workflow for production until a separately reviewed server-side verification/rollback step exists and is tested. The current pipeline is a preparation, not a production-ready one-click deployment.
