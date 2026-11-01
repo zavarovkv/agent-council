@@ -115,6 +115,13 @@ def main():
                 getattr(Bot, "edit_message_text", None)
             ):
                 raise ValueError("Owner guest execution interfaces are unavailable.")
+        if state.schema >= 4:
+            from gateway.session_policy import SURFACES
+
+            from council_owner.context import SOURCE
+
+            if SURFACES.get(SOURCE) != "telegram":
+                raise ValueError("Owner Telegram context is unavailable in this image.")
     private_instructions = home / ".council/secretary/instructions"
     mode = os.environ.get("COUNCIL_VERIFY_SECRETARY_INSTRUCTIONS", "image")
     if mode not in {"image", "profile"}:

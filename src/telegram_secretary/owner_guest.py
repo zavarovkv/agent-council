@@ -26,9 +26,11 @@ class OwnerGuestBridge:
         self.recoverable = store.interrupted()
 
     async def authorized(self, job, epoch):
+        state = load_state(self.guest.home)
         return (
             self.guest.eligible(job)
-            and load_state(self.guest.home).owner_agent
+            and state.owner_agent
+            and state.schema == 4
             and await self.guest.refresh(epoch)
         )
 

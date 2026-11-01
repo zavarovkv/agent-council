@@ -23,7 +23,7 @@ class OwnerGuestTests(unittest.IsolatedAsyncioTestCase):
     def enable(self, execute=None):
         path = self.home / RELATIVE_POLICY
         path.write_text(
-            json.dumps({"schema": 3, "enabled": True, "revision": "b" * 32, "owner_agent": True})
+            json.dumps({"schema": 4, "enabled": True, "revision": "b" * 32, "owner_agent": True})
         )
         self.bot.answer_guest_query.return_value = Object(inline_message_id="inline-fixture")
         self.bot.edit_message_text = AsyncMock()
@@ -157,7 +157,9 @@ class OwnerGuestTests(unittest.IsolatedAsyncioTestCase):
         other = {**job, "chat": 333}
         self.assertNotEqual(conversation(job), conversation(other))
         self.assertIn("untrusted_quote", prompt(job))
-        self.assertIn("everyone", prompt(job))
+        self.assertEqual(json.loads(prompt(job))["owner_request"], job["text"])
+        self.assertNotEqual(conversation(job), conversation({**job, "thread": 42}))
+        self.assertNotEqual(conversation(job), conversation({**job, "actor": 999}))
         self.assertNotIn("public visitor. Personal requests belong", prompt(job))
         self.assertFalse(load_state(self.home).owner_agent)
 
@@ -191,6 +193,8 @@ class NativeGatewayTests(unittest.IsolatedAsyncioTestCase):
             self.calls.append((method, params))
             if method == "session.resume":
                 return self.snap
+            if method == "session.info":
+                return {"source": "telegram_guest", "profile_name": "default"}
             if method == "prompt.submit":
                 return {"admission_id": "admission"}
             if method == "prompt.receipt":
@@ -221,10 +225,47 @@ class NativeGatewayTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(remember, ["native-session"])
         params = next(params for method, params in self.calls if method == "prompt.submit")
         self.assertEqual(params["input_id"], self.job["id"])
-        self.assertTrue(params["finite"])
+        self.assertFalse(params["finite"])
         self.assertNotIn("unattended", params)
         self.assertNotIn("yolo", params)
         self.assertNotIn("tools", params)
+
+    async def test_legacy_or_foreign_profile_fails_closed_before_submission(self):
+        for info in (
+            {"source": "oneshot", "profile_name": "default"},
+            {"source": "telegram_guest", "profile_name": "dexter"},
+        ):
+            self.calls.clear()
+            self.snap["info"] = info
+            result = await execute(self.job, self.authorized, lambda _: None, connect=self.connect)
+            self.assertIn("не запускалось", result)
+            self.assertNotIn("prompt.submit", [method for method, _ in self.calls])
+
+    async def test_new_conversation_follows_default_profile_without_launch_overrides(self):
+        original = self.client.rpc
+
+        async def rpc(method, **params):
+            if method == "session.resume" and "title" in params:
+                from hermes_cli.gateway_client import GatewayClientError
+
+                raise GatewayClientError("not_found")
+            if method == "session.create":
+                self.calls.append((method, params))
+                return self.snap
+            return await original(method, **params)
+
+        self.client.rpc = rpc
+        await execute(self.job, self.authorized, lambda _: None, connect=self.connect)
+        params = next(params for method, params in self.calls if method == "session.create")
+        self.assertEqual(
+            params,
+            dict(
+                request_id=self.job["id"],
+                source="telegram_guest",
+                follow_profile_config=True,
+                title=conversation(self.job),
+            ),
+        )
 
     async def test_revocation_interrupts_only_the_native_conversation(self):
         self.terminal = False

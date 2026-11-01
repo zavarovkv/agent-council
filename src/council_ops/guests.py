@@ -18,6 +18,7 @@ from .snapshots import snapshot
 CAPABILITY = "telegram-guests-v1"
 OWNER_CAPABILITY = "telegram-guest-owner-v1"
 AGENT_CAPABILITY = "telegram-guest-agent-v1"
+CONTEXT_CAPABILITY = "telegram-guest-context-v1"
 
 
 def require_compatible(runtime, *homes, image=None):
@@ -35,6 +36,8 @@ def require_compatible(runtime, *homes, image=None):
             required.append(OWNER_CAPABILITY)
         if any(load_state(home).schema >= 3 for home in homes):
             required.append(AGENT_CAPABILITY)
+        if any(load_state(home).schema >= 4 for home in homes):
+            required.append(CONTEXT_CAPABILITY)
         verify_capabilities(runtime, required, image=image)
 
 
@@ -75,10 +78,15 @@ def configure(runtime, *, enabled=None, owner_agent=None):
         }
     enabled = state.enabled if enabled is None else enabled
     owner_agent = state.owner_agent if owner_agent is None else owner_agent
-    schema = 3 if owner_agent or state.schema == 3 else 2
+    schema = (
+        4 if (enabled and owner_agent) or state.schema == 4 else (3 if state.schema == 3 else 2)
+    )
     if enabled:
         verify_capabilities(
-            runtime, [CAPABILITY, OWNER_CAPABILITY] + ([AGENT_CAPABILITY] if schema == 3 else [])
+            runtime,
+            [CAPABILITY, OWNER_CAPABILITY]
+            + ([AGENT_CAPABILITY] if schema >= 3 else [])
+            + ([CONTEXT_CAPABILITY] if schema >= 4 else []),
         )
         inspected = runtime.inspect()
         environment = dict(item.split("=", 1) for item in inspected["Config"]["Env"] if "=" in item)
@@ -115,7 +123,7 @@ def configure(runtime, *, enabled=None, owner_agent=None):
         raise OperationError("Refusing a symlinked guest configuration directory.")
     checkpoint = None
     value = {"schema": schema, "enabled": enabled, "revision": secrets.token_hex(16)}
-    if schema == 3:
+    if schema >= 3:
         value["owner_agent"] = owner_agent
     body = (json.dumps(value) + "\n").encode()
     uid, gid = identity(settings)
