@@ -4,6 +4,7 @@ import json
 import re
 from datetime import date
 
+from .acceptance import Acceptance, policy
 from .config import identifier
 from .project_scope import ProjectScope
 from .store import stable_id
@@ -46,7 +47,7 @@ def is_review(state):
 def review_state(workflow):
     states = [s for s in workflow["states"]["nodes"] if s["type"] == "started" and is_review(s)]
     if len(states) != 1:
-        raise ValueError("Configure one unambiguous In Review state; only the owner marks Done.")
+        raise ValueError("Configure one unambiguous In Review state for verified deliverables.")
     return states[0]
 
 
@@ -87,6 +88,7 @@ class Issues:
         issue = self.linear.issue_details(agent, reference)
         if not issue or issue["team"]["id"] not in registry.teams or issue.get("archivedAt"):
             raise PermissionError("The issue is outside the configured active teams.")
+        policy(self.store, issue, registry.owner)
         return issue
 
     def validate_fields(self, agent, registry, workflow, fields):
@@ -156,6 +158,10 @@ class Issues:
             "verification",
             "offset",
             "document",
+            "revision",
+            "category",
+            "evidence",
+            "artifact_version",
         }:
             raise ValueError("Unsupported issue operation parameters.")
         registry = self.service.registry()
@@ -206,6 +212,10 @@ class Issues:
         issue = None if action == "create" else self.checked_issue(agent, registry, reference)
         if scope and issue:
             scope.require(issue)
+        if action == "accept":
+            return Acceptance(self).execute(
+                agent, registry, session, issue, payload, coordinator=coordinator
+            )
         if action == "save_document":
             if is_review(issue["state"]):
                 raise ValueError("Move the task to In Progress before revising its material.")
@@ -213,6 +223,7 @@ class Issues:
         if action in {"project", "document", "comments"}:
             return self.materials(agent, registry, issue, payload)
         if action == "get":
+            issue["acceptance"] = policy(self.store, issue, registry.owner)
             # Keep the tool response bounded even when historical comments are large.
             issue.update(
                 self.excerpt(
@@ -280,7 +291,10 @@ class Issues:
                 (s for s in workflow["states"]["nodes"] if s["id"] == fields.get("stateId")), None
             )
             if state and state["type"] == "completed":
-                raise ValueError("Only the owner may mark a task Done; submit it for review.")
+                raise ValueError(
+                    "Direct Done writes are forbidden. Submit for review; Qui-Gon may use "
+                    "accept for verified ordinary tasks. Important tasks need the owner."
+                )
             if state and is_review(state) and action != "review":
                 raise ValueError(
                     "Use review with the result and verification to request acceptance."

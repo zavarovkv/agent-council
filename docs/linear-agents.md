@@ -52,8 +52,29 @@ OAuth grant is needed: the existing app already has read/write scope.
 Delegated issues enter the team's active work state when execution begins;
 a comment-only mention does not move an unrelated issue. With `linear-owner-review-v1`,
 `review` submits a verified result to In Review; the legacy `complete` action is
-only a review alias. Only the human owner moves tasks to Done. Direct agent writes
-to a completed state are rejected. Before editing a reviewed text, use `start`
+only a review alias. With `linear-coordinator-acceptance-v1`, root Qui-Gon can use
+`accept` for verified ordinary internal research, drafts, documentation, planning
+and sandbox validation. Specialists cannot self-accept. Important, urgent/high-priority,
+strategic, financial, public, production and security-sensitive work remains In Review
+for the owner. The owner can explicitly reserve any task with `acceptance:owner`.
+Direct writes to a completed state remain rejected.
+
+Before accepting, inspect the actual artifact and acceptance criteria, then read
+`get.acceptance`. Supply its exact `revision`, one allowed `category`, concise
+`result` and `verification`, an HTTPS `evidence` link and `artifact_version`.
+The server requires In Review and terminal sub-issues, re-reads the brief and
+comments before writing, and retains the decision and final receipt beyond normal
+operation cleanup. Retrying the same key reconciles uncertain writes instead of
+repeating them. A changed or reopened task requires a new review. Linear does not
+provide a transaction spanning the evidence store and the issue update: readback
+checks detect a concurrent change but do not undo a human edit.
+
+Risk signals in the brief and owner comments are conservative; they supplement
+Qui-Gon's actual review, not semantic proof of low risk. Observed owner reservations,
+high priority and risk signals survive agent edits to task text or labels. Removing
+a label does not clear that reservation; the owner can still close the issue manually.
+An incomplete discussion history also requires owner acceptance. There is no bulk
+closure of existing reviewed tasks. Before editing a reviewed text, use `start`
 to return to In Progress; submit the revised result for review again. Parent
 submission waits for active child work, but allows children awaiting owner review.
 The workflow must contain one identifiable In Review state; no fallback to Done.

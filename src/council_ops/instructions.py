@@ -87,11 +87,56 @@ def destination(home, name):
     return path
 
 
+def source_roles(source):
+    """Select explicit installable roles while keeping tooling and drafts out of profiles."""
+    directories = {
+        path.name: path for path in source.iterdir() if path.name != ".git" and path.is_dir()
+    }
+    manifest = source / "bundle.json"
+    if not manifest.exists() and not manifest.is_symlink():
+        return list(directories.values())
+    if manifest.resolve() != manifest or not manifest.is_file() or manifest.stat().st_size > 8192:
+        raise OperationError("Invalid instruction bundle manifest.")
+    value = json.loads(manifest.read_text())
+    if (
+        not isinstance(value, dict)
+        or set(value) != {"schema", "roles", "drafts", "resources"}
+        or type(value["schema"]) is not int
+        or value["schema"] != 1
+    ):
+        raise OperationError("Unsupported instruction bundle manifest.")
+    names = []
+    for key in ("roles", "drafts", "resources"):
+        group = value[key]
+        if (
+            not isinstance(group, list)
+            or len(group) > 64
+            or any(not isinstance(name, str) for name in group)
+        ):
+            raise OperationError("Invalid instruction bundle directory list.")
+        if key == "resources":
+            if any(name not in {".github", "adapters", "quality", "shared"} for name in group):
+                raise OperationError("Unsupported instruction tooling directory.")
+        elif any(not ROLE.fullmatch(name) for name in group):
+            raise OperationError("Invalid instruction bundle role name.")
+        names.extend(group)
+    if (
+        not value["roles"]
+        or len(set(names)) != len(names)
+        or set(names) != set(directories)
+        or any(path.is_symlink() for path in directories.values())
+    ):
+        raise OperationError("Declare each instruction directory exactly once.")
+    if "instruction-bundles-v2" not in source_requirements(source):
+        raise OperationError("Explicit bundles require instruction-bundles-v2.")
+    return [directories[name] for name in value["roles"]]
+
+
 def collect(source, home):
     """Read bounded text artifacts only; never import a whole Hermes profile."""
     files = {}
     bundles = []
-    roles = [path for path in source.iterdir() if path.name != ".git" and path.is_dir()]
+    roles = source_roles(source)
     for role in roles:
         if role.is_symlink() or not ROLE.fullmatch(role.name):
             raise OperationError("Invalid instruction role directory.")
@@ -121,6 +166,7 @@ def collect(source, home):
                         or not isinstance(value["role"], str)
                         or not ROLE.fullmatch(value["role"])
                         or value["role"] in {"linear", "secretary"}
+                        or value["role"] not in {item.name for item in roles}
                     ):
                         raise OperationError("Invalid shared skill source.")
                     shared = source / value["role"]

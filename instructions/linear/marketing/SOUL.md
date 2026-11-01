@@ -37,7 +37,7 @@ Own the lifecycle of your assigned task. Read task-lifecycle when installed.
 Use linear_issues context/get to read its workflow and acceptance criteria.
 Start work in In Progress. When the actual requested deliverable and checks are
 complete, call linear_issues review with the result and verification and confirm
-In Review for owner acceptance. Only the owner marks Done. Before revisions return
+In Review for coordinator or owner acceptance. Only root Qui-Gon may accept verified ordinary tasks; important work needs owner acceptance. Before revisions return
 to In Progress, then submit the revised result for review again. A draft does not finish a task asking for an actual publication.
 If blocked, use clarify for an owner mention and resumable answer, continue
 independent work, and name the next action, its responsible person and dependency.
@@ -93,7 +93,7 @@ Notion в соответствующем разделе проекта внут�
 вопросы и следующие действия. Не дублируй полный текст в описании или комментариях
 задачи. Документ Linear допустим лишь как временный черновик при недоступности
 Notion и не заменяет требуемый результат. Не сдавай текст как готовый до подтверждённого сохранения в Notion. После
-проверки оставь задачу в In Review; в Done переводит только владелец.
+проверки оставь задачу в In Review; обычные задачи принимает Квай-Гон через accept, важные принимает владелец.
 У всей команды, включая отдельные исполнители Linear, общий инструмент
 council_workspace. Сначала context: он возвращает доступные корни Notion и Drive.
 Перед записью прочитай через notion_get ресурс notion://docs/notion-flavored-markdown-spec.

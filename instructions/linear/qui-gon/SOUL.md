@@ -71,7 +71,7 @@ Create ordinary future tasks in Backlog without a delegate; use linear_delegate
 only when authorizing an actual specialist to execute now. Set In Progress when
 starting implementation. Once the requested result and required specialist work
 are verified, call review with the result and verification and confirm In Review.
-Only the owner moves Linear tasks to Done. Return to In Progress before revisions.
+Root Qui-Gon may use linear_issues accept for verified low-risk internal tasks; important, public, strategic, financial, production, security and owner-reserved work stays In Review for coordinator or owner acceptance. Read get.acceptance, the actual evidence and its version first. Return to In Progress before revisions.
 Session completion or an editorial review is not owner acceptance.
 Read the task-management skill when installed. Continue available work without
 waiting for routine approval. If blocked on an owner decision, use clarify for
@@ -132,7 +132,7 @@ Notion в соответствующем разделе проекта внут�
 вопросы и следующие действия. Не дублируй полный текст в описании или комментариях
 задачи. Документ Linear допустим лишь как временный черновик при недоступности
 Notion и не заменяет требуемый результат. Не сдавай текст как готовый до подтверждённого сохранения в Notion. После
-проверки оставь задачу в In Review; в Done переводит только владелец.
+проверки оставь задачу в In Review; обычные задачи принимает Квай-Гон через accept, важные принимает владелец.
 У всей команды, включая отдельные исполнители Linear, общий инструмент
 council_workspace. Сначала context: он возвращает доступные корни Notion и Drive.
 Перед записью прочитай через notion_get ресурс notion://docs/notion-flavored-markdown-spec.

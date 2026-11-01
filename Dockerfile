@@ -27,7 +27,7 @@ LABEL org.opencontainers.image.source="https://github.com/zavarovkv/agent-counci
 LABEL org.opencontainers.image.description="Hermes integration for Agent Council"
 LABEL org.opencontainers.image.revision="${COUNCIL_REVISION}"
 LABEL org.opencontainers.image.licenses="MIT"
-LABEL io.agent-council.capabilities="private-instructions-v1,research-filing-v1,telegram-guests-v1,telegram-guest-owner-v1,telegram-guest-agent-v1,linear-project-collaboration-v1,linear-owner-review-v1,workspace-access-v1,linear-agents-v1,agent-specialists-v1,linear-task-management-v1,telegram-reader-v1,agent-editor-v1"
+LABEL io.agent-council.capabilities="private-instructions-v1,instruction-bundles-v2,research-filing-v1,telegram-guests-v1,telegram-guest-owner-v1,telegram-guest-agent-v1,linear-project-collaboration-v1,linear-owner-review-v1,linear-coordinator-acceptance-v1,workspace-access-v1,linear-agents-v1,agent-specialists-v1,linear-task-management-v1,telegram-reader-v1,agent-editor-v1"
 
 COPY assets/agents/*.png /opt/agent-council/assets/agents/
 COPY LICENSE /opt/agent-council/LICENSE

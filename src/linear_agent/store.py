@@ -67,7 +67,16 @@ class Store:
                     request TEXT NOT NULL, state TEXT NOT NULL DEFAULT 'pending',
                     result TEXT NOT NULL DEFAULT '', created REAL NOT NULL
                 );
+                CREATE TABLE IF NOT EXISTS owner_review_issues (
+                    issue TEXT PRIMARY KEY, reasons TEXT NOT NULL
+                );
             """)
+            if "retained" not in {
+                row[1] for row in db.execute("PRAGMA table_info(issue_operations)")
+            }:
+                db.execute(
+                    "ALTER TABLE issue_operations ADD COLUMN retained INTEGER NOT NULL DEFAULT 0"
+                )
             if "parent_issue" not in {
                 row[1] for row in db.execute("PRAGMA table_info(delegations)")
             }:
@@ -105,9 +114,28 @@ class Store:
             "DELETE FROM sessions WHERE updated<? AND NOT EXISTS(SELECT 1 FROM jobs WHERE jobs.agent=sessions.agent AND jobs.session=sessions.id)",
             (self.clock() - 30 * 86400,),
         )
-        db.execute("DELETE FROM issue_operations WHERE created<?", (self.clock() - 30 * 86400,))
+        db.execute(
+            "DELETE FROM issue_operations WHERE created<? AND retained=0",
+            (self.clock() - 30 * 86400,),
+        )
 
-    def issue_operation(self, session, key, request):
+    def owner_review_reasons(self, issue, reasons=()):
+        """Reservations survive agent edits to labels, priority and task text."""
+        with self.database() as db:
+            db.execute("BEGIN IMMEDIATE")
+            row = db.execute(
+                "SELECT reasons FROM owner_review_issues WHERE issue=?", (issue,)
+            ).fetchone()
+            combined = sorted(set(reasons) | set(json.loads(row[0]) if row else ()))
+            if combined:
+                db.execute(
+                    "INSERT INTO owner_review_issues VALUES(?,?) "
+                    "ON CONFLICT(issue) DO UPDATE SET reasons=excluded.reasons",
+                    (issue, json.dumps(combined)),
+                )
+            return combined
+
+    def issue_operation(self, session, key, request, *, retained=False):
         identity = stable_id(session["agent"] + ":" + session["id"] + ":issue:" + key)
         body = json.dumps(request, sort_keys=True, ensure_ascii=False)
         with self.database() as db:
@@ -126,8 +154,9 @@ class Store:
             ):
                 raise PermissionError("Issue operation limit reached for this session.")
             db.execute(
-                "INSERT INTO issue_operations(id,agent,session,request,created) VALUES(?,?,?,?,?)",
-                (identity, session["agent"], session["id"], body, self.clock()),
+                "INSERT INTO issue_operations(id,agent,session,request,created,retained) "
+                "VALUES(?,?,?,?,?,?)",
+                (identity, session["agent"], session["id"], body, self.clock(), int(retained)),
             )
             return dict(
                 db.execute("SELECT * FROM issue_operations WHERE id=?", (identity,)).fetchone()
