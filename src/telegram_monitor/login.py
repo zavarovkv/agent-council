@@ -9,6 +9,11 @@ class SetupError(ValueError):
 
 
 MESSAGES = {
+    "qr_terminal": "Для QR-входа нужен интерактивный терминал. Запустите setup-telegram-reader.sh напрямую.",
+    "qr_size": "Увеличьте окно терминала, чтобы QR-код помещался целиком, и запустите настройку снова.",
+    "qr_expired": "QR-код не подтвержден за пять попыток. Запустите настройку снова, когда телефон будет рядом.",
+    "account_mismatch": "QR-код подтвержден другим аккаунтом. Вход отменен; выберите на телефоне аккаунт с указанным номером.",
+    "login_method": "Выберите qr или code.",
     "api_credentials": "Проверьте API ID и API hash на my.telegram.org.",
     "phone": "Введите телефон в международном формате, например +79991234567.",
     "account": "Нужен личный Telegram-аккаунт, который состоит в указанном чате.",
@@ -34,6 +39,7 @@ MESSAGES = {
 STAGES = {
     "configuration": "проверка параметров",
     "connect": "подключение к Telegram",
+    "qr": "подтверждение QR-кода",
     "send_code": "запрос кода входа",
     "sign_in": "вход в аккаунт",
     "source": "проверка доступа к чату",
@@ -61,7 +67,6 @@ def failure_message(error, stage):
 
 async def sign_in(client, phone, code_hash, *, code_prompt=None):
     from telethon.errors import (
-        PasswordHashInvalidError,
         PhoneCodeEmptyError,
         PhoneCodeInvalidError,
         SessionPasswordNeededError,
@@ -102,6 +107,12 @@ async def sign_in(client, phone, code_hash, *, code_prompt=None):
                 "Telegram отклонил код. Проверьте код для этого входа. Автоматически новый код не запрашивается.",
                 flush=True,
             )
+
+    await sign_in_password(client)
+
+
+async def sign_in_password(client):
+    from telethon.errors import PasswordHashInvalidError
 
     for attempt in range(3):
         password = getpass.getpass("Пароль двухэтапной проверки Telegram (ввод скрыт): ")

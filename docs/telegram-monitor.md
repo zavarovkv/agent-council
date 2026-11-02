@@ -25,8 +25,16 @@ From the local checkout run:
 bash scripts/setup-telegram-reader.sh SOURCE_USERNAME
 ```
 
-Enter API ID/hash, phone, login code and optional two-step password only in its
-private terminal prompts. No credentials belong in chat, argv, Git or logs.
+Enter API ID/hash and phone only in its private terminal prompts. Press Enter for
+QR login: in the phone app open **Settings → Devices → Link Desktop Device**,
+scan the QR and confirm. Select the account with the entered phone number; a
+mismatch logs out the new session without saving it. The QR is a temporary login
+credential: never share screenshots. It appears only in an interactive terminal
+on an alternate screen, is cleared on exit, and renews at most five times. Enlarge
+the terminal if it cannot fit the complete QR. Optional two-step verification
+still asks for the password privately. QR login does not request an SMS/app code.
+
+Type `code` at the method prompt to use the existing code login instead. No credentials belong in chat, argv, Git or logs.
 Input is hidden. Use Ctrl+C to cancel; Ctrl+Z suspends the SSH client and can
 leave its remote operation active until timeout. Setup reports the failed stage
 and a safe reason without printing Telegram exception text. Incorrect codes and
