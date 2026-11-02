@@ -11,6 +11,7 @@ from pathlib import Path
 from .codes import CodePrompt
 from .config import Settings, source_name
 from .login import SetupError, failure_message, sign_in
+from .qr import sign_in_qr
 
 
 async def verify_source(client, source, expected_peer=None):
@@ -44,11 +45,14 @@ async def main():
         phone = getpass.getpass("Номер Telegram с кодом страны: ").strip()
         if not re.fullmatch(r"\+[1-9][0-9]{6,14}", phone):
             raise SetupError("phone")
+        method = input("Способ входа: QR-код [Enter] или code: ").strip().lower() or "qr"
+        if method not in {"qr", "code"}:
+            raise SetupError("login_method")
         client = TelegramClient(
             StringSession(),
             int(api_id),
             api_hash,
-            receive_updates=False,
+            receive_updates=method == "qr",
             device_model="Agent Council collector",
             request_retries=1,
             connection_retries=1,
@@ -57,14 +61,23 @@ async def main():
         )
         stage = "connect"
         await client.connect()
-        stage = "send_code"
-        sent = await client.send_code_request(phone)
-        stage = "sign_in"
-        code_prompt = CodePrompt(sent)
-        await sign_in(client, phone, code_prompt.code_hash, code_prompt=code_prompt)
+        if method == "qr":
+            stage = "qr"
+            await sign_in_qr(client)
+            await client.set_receive_updates(False)
+        else:
+            stage = "send_code"
+            sent = await client.send_code_request(phone)
+            stage = "sign_in"
+            code_prompt = CodePrompt(sent)
+            await sign_in(client, phone, code_prompt.code_hash, code_prompt=code_prompt)
         account = await client.get_me()
         if account.bot:
             raise SetupError("account")
+        if str(account.phone) != phone.lstrip("+"):
+            with suppress(Exception):
+                await client.log_out()
+            raise SetupError("account_mismatch")
         stage = "source"
         print("Вход выполнен. Проверяю доступ к чату…", flush=True)
         expected = os.environ.get("COUNCIL_TG_READER_EXPECTED_PEER", "")
