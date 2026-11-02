@@ -160,7 +160,9 @@ class Handler(BaseHTTPRequestHandler):
             if self.server.internal:
                 if slug == "recurring" and action == "tasks":
                     grant = self.server.service.recurring.grant()
-                    if not hmac.compare_digest(
+                    if len(
+                        self.headers.get_all("Authorization") or []
+                    ) != 1 or not hmac.compare_digest(
                         self.headers.get("Authorization", "").encode(),
                         ("Bearer " + grant["key"]).encode(),
                     ):

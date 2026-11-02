@@ -6,6 +6,7 @@ import re
 import resource
 import sys
 import zipfile
+from contextlib import closing
 from xml.etree import ElementTree
 
 LIMIT = 1_000_000
@@ -86,11 +87,11 @@ def extract(data, extension):
     if extension == ".pdf":
         import pypdfium2 as pdfium
 
-        with pdfium.PdfDocument(data) as doc:
+        with closing(pdfium.PdfDocument(data)) as doc:
             parts = []
             size = 0
             for index in range(min(len(doc), 200)):
-                with doc[index] as page, page.get_textpage() as textpage:
+                with closing(doc[index]) as page, closing(page.get_textpage()) as textpage:
                     text = textpage.get_text_range()
                 text = f"\n[Page {index + 1}]\n" + (
                     text or "[No extractable text: inspect page image]"
@@ -124,8 +125,8 @@ def main():
             raise ValueError("Only PDF page previews use this action; images use vision directly.")
         import pypdfium2 as pdfium
 
-        with pdfium.PdfDocument(data) as doc:
-            with doc[int(number) - 1] as page:
+        with closing(pdfium.PdfDocument(data)) as doc:
+            with closing(doc[int(number) - 1]) as page:
                 width, height = page.get_size()
                 scale = min(2, 2000 / max(width, height))
                 page.render(scale=scale).to_pil().save(sys.stdout.buffer, format="PNG")
