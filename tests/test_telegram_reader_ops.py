@@ -12,7 +12,7 @@ from test_operations import FakeRuntime, Fixture
 from council_ops.config import OperationError
 from council_ops.lifecycle import restore
 from council_ops.snapshots import load_manifest, snapshot
-from council_ops.telegram_reader import collect, workspace
+from council_ops.telegram_reader import checkpoint, collect, workspace
 from telegram_monitor.evidence import ZONE, daily_window
 
 
@@ -45,6 +45,24 @@ class ReaderOperationsTests(unittest.TestCase):
             identity = patch(name, return_value=(os.getuid(), os.getgid()))
             identity.start()
             self.addCleanup(identity.stop)
+
+    def test_setup_checkpoint_records_running_services_before_stop_and_always_restarts(self):
+        self.runtime.running_services = lambda: ["hermes", "linear-adapter"]
+        with patch("council_ops.telegram_reader.smoke"):
+            backup = checkpoint(self.runtime)
+        _, manifest = load_manifest(backup)
+        self.assertEqual(manifest["running_services"], ["hermes", "linear-adapter"])
+        self.assertNotIn("pause", self.runtime.events)
+        self.assertLess(self.runtime.events.index("stop"), self.runtime.events.index("start"))
+        self.assertTrue(self.runtime.running)
+
+    def test_setup_copy_failure_preserves_login_and_restarts_services(self):
+        with patch("council_ops.telegram_reader.smoke", side_effect=OperationError("Failed")):
+            with self.assertRaises(OperationError):
+                checkpoint(self.runtime)
+        self.assertTrue(self.runtime.running)
+        self.assertIn("ready", self.runtime.events)
+        self.assertEqual(self.settings.telegram_reader_file.read_text(), reader_env())
 
     def test_expired_artifact_cannot_be_accepted_after_a_failed_collection(self):
         root = workspace(self.runtime)
