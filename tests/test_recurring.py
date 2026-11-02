@@ -186,6 +186,33 @@ class RecurringTests(unittest.TestCase):
         self.recurring.reconcile(self.service.registry())
         self.assertEqual(self.linear.creates, 0)
 
+    def test_monitor_does_not_mistake_failure_alert_for_delivered_report(self):
+        import shutil
+        from types import SimpleNamespace
+
+        from council_ops.recurring import status
+
+        bridge = self.home / ".council/linear/bridge"
+        bridge.mkdir(parents=True)
+        self.render()
+        self.recurring.execute(
+            {
+                "action": "settle",
+                "key": self.run["key"],
+                "kind": "alert",
+                "execution": self.executions.current,
+                "outcome": "delivered",
+            }
+        )
+        shutil.copy2(self.home / "linear.sqlite3", bridge / "linear.sqlite3")
+        result = status(
+            SimpleNamespace(data_dir=self.home), now=datetime(2026, 11, 2, 8, 10, tzinfo=ZONE)
+        )
+        self.assertEqual(
+            result,
+            {"configured": True, "available": True, "expected": 1, "overdue": 1, "unreported": 0},
+        )
+
     def test_moscow_cron_converts_day_when_crossing_midnight(self):
         self.assertEqual(start_schedule(VALUE), "20 4 * * 0,1,2,3,4,5,6")
         early = {**VALUE, "start_time": "01:20", "cutoff_time": "01:00", "weekdays": [0]}

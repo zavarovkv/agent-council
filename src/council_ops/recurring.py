@@ -5,6 +5,7 @@ import sqlite3
 from contextlib import closing
 from datetime import datetime
 
+from council_recurring.client import manifest
 from council_recurring.contract import ZONE, occurrence
 
 
@@ -25,24 +26,27 @@ def status(settings, *, now=None):
     marker = home / ".council/recurring/jobs.json"
     if not marker.exists():
         return {"configured": False}
-    now = now or datetime.now(ZONE)
+    now = (now or datetime.now(ZONE)).astimezone(ZONE)
     try:
-        entries = json.loads(marker.read_text())
+        entries = manifest(home)
         path = home / ".council/linear/bridge/linear.sqlite3"
         with closing(sqlite3.connect(path.as_uri() + "?mode=ro", uri=True)) as db:
             db.row_factory = sqlite3.Row
             overdue = unreported = expected = 0
             for entry in entries.values():
                 value = entry["definition"]
+                row = db.execute(
+                    "SELECT state,body FROM recurring_runs WHERE key=?",
+                    (value["id"] + ":" + now.date().isoformat(),),
+                ).fetchone()
+                if row:
+                    value = json.loads(row["body"])
                 if not entry["enabled"] or now.weekday() not in value["weekdays"]:
                     continue
                 period = occurrence(value, now.date().isoformat())
                 if now.timestamp() < period["deadline"] + 300:
                     continue
                 expected += 1
-                row = db.execute(
-                    "SELECT state FROM recurring_runs WHERE key=?", (period["key"],)
-                ).fetchone()
                 receipts = db.execute(
                     "SELECT kind,state,execution FROM recurring_deliveries WHERE run=?",
                     (period["key"],),
