@@ -315,7 +315,8 @@ def operate(arguments, settings):
             doctor(runtime)
             result = configure_workspace(runtime)
         elif arguments.action == "configure-workspace-index":
-            print(json.dumps(configure_workspace_index(runtime), indent=2))
+            doctor(runtime)
+            result = configure_workspace_index(runtime)
         elif arguments.action == "configure-recurring":
             doctor(runtime)
             result = configure_recurring(runtime)
