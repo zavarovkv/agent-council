@@ -199,3 +199,23 @@ class NavigationTests(unittest.TestCase):
         )
         with self.assertRaisesRegex(ValueError, "pagination"):
             self.navigation.drive_tree(files, set())
+
+    def test_native_mentions_preserve_paths_and_targets_without_weakening_readback(self):
+        from council_workspace.notion import content_signature
+
+        identity = "1" * 32
+        rows = [("Project / Brief", "Страница", "https://www.notion.so/" + identity)]
+        native = self.navigation.content(rows, [], "fixture", native=True)
+        self.assertIn(
+            f'- Project / Brief – <mention url="https://app.notion.com/p/{identity}" />', native
+        )
+        self.assertIn(
+            f"[Project / Brief](https://www.notion.so/{identity})",
+            self.navigation.content(rows, [], "fixture"),
+        )
+        self.assertNotEqual(
+            content_signature(native), content_signature(native.replace(identity, "2" * 32))
+        )
+        self.assertNotEqual(
+            content_signature(native), content_signature(native.replace("Project / ", ""))
+        )
