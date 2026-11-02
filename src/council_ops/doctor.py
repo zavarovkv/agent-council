@@ -406,9 +406,11 @@ def doctor(runtime):
     research = research_status(runtime.settings)
     research["timer"] = unit_status(runtime, "agent-council-research.timer")
     from .recurring import status as recurring_status
+    from .workspace_index import status as index_status
 
     return {
         "recurring": recurring_status(runtime.settings),
+        "workspace_index": index_status(runtime.settings),
         "status": inspected["State"]["Status"],
         "health": inspected["State"].get("Health", {}).get("Status"),
         "image": inspected["Image"],

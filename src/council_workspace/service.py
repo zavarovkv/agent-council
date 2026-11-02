@@ -5,11 +5,20 @@ import threading
 
 from .attachments import snapshot
 from .drive import Files, service_for
+from .index import Navigation
 from .notion import Pages
 from .policy import server_policy
 from .store import Store
 
-READS = {"context", "notion_get", "drive_get", "drive_list", "drive_read"}
+READS = {
+    "context",
+    "notion_get",
+    "drive_get",
+    "drive_list",
+    "drive_read",
+    "index_status",
+    "index_refresh",
+}
 WRITES = {
     "notion_create",
     "notion_update",
@@ -45,6 +54,7 @@ class Workspace:
         self.home, self.notion_call, self.drive_factory = home, notion_call, drive_factory
         self.lock = threading.Lock()
         self.store = Store(home / ".council/workspace/receipts.sqlite3")
+        self.navigation = Navigation(self)
 
     def execute(self, client, args):
         if not isinstance(args, dict) or not set(args) <= {
@@ -71,6 +81,10 @@ class Workspace:
             policy = server_policy(self.home)
             if client not in policy["clients"]:
                 raise PermissionError("Workspace grant was revoked.")
+            if action == "index_status":
+                return self.navigation.status()
+            if action == "index_refresh":
+                return self.navigation.start()
             attachment = None
             if action == "drive_upload":
                 if client != "native-qui-gon":
@@ -85,6 +99,7 @@ class Workspace:
                 return {
                     "notion_root": policy["notion_root"],
                     "drive_root": policy["drive_root"],
+                    "navigation": self.navigation.status(),
                     "notion": "formatted pages",
                     "drive": "read, list, upload and edit files in the shared folder",
                     "text_delivery": "Save formatted text in Notion; put its verified link in Linear. Task transitions and acceptance are governed by the Linear workflow and task tools.",
@@ -98,7 +113,7 @@ class Workspace:
                 )
 
             if action in WRITES:
-                return self.store.write(
+                result = self.store.write(
                     client,
                     args,
                     lambda: (
@@ -107,6 +122,8 @@ class Workspace:
                         else provider().prepare_write(args)
                     ),
                 )
+                self.navigation.dirty()
+                return result
             return provider().read(args)
         finally:
             self.lock.release()

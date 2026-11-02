@@ -47,6 +47,15 @@ ok,document,output,error=_run_no_agent_job(job,job['id'],'fixture',None)
 assert ok and output.strip()=='Verified script execution', (ok,output,error)
 executions.finish_execution(identity,success=True,delivery_outcome='delivered')
 assert executions.get_execution(identity)['status']=='completed'
+import importlib.util
+atomic_json(home/'.council/workspace/access.json', {'schema':1,'enabled':True,'notion_root':'1'*32,'drive_root':'folder-fixture','clients':{'native-qui-gon':{'role':'qui-gon','key':'e'*64}}})
+spec=importlib.util.spec_from_file_location('index_setup','/opt/agent-council/provision-workspace-index.py')
+setup=importlib.util.module_from_spec(spec); spec.loader.exec_module(setup)
+assert setup.configure(home)['daily_time']=='06:30'
+assert setup.configure(home)['workspace_index_configured']
+indices=[j for j in jobs.list_jobs(include_disabled=True) if j.get('name')=='council-workspace-index']
+assert len(indices)==1 and indices[0]['no_agent']
+assert indices[0]['schedule']['value']=='30 3 * * *', indices[0]['schedule']
 print('Native cron contract verified')
 """
             result = subprocess.run(

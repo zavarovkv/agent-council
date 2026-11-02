@@ -21,6 +21,9 @@ def root(settings):
 def require_capability(runtime, *homes, image=None):
     from .instructions import verify_capabilities
 
+    if any((home / ".council/workspace/index-config.json").exists() for home in homes):
+        verify_capabilities(runtime, ["workspace-index-v1"], image=image)
+
     if any((home / ".council/recurring/client.json").exists() for home in homes):
         verify_capabilities(runtime, ["recurring-tasks-v1"], image=image)
 

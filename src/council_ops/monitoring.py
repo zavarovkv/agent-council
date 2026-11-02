@@ -16,6 +16,7 @@ from .doctor import backup_status, doctor, instruction_status, research_status
 from .runtime import Runtime
 
 LABELS = {
+    "workspace_index": "Навигация по материалам не обновилась. Сохранена последняя подтвержденная версия; нужна проверка доступа к Notion и Drive.",
     "deployment": "Не удалось проверить работу сервера. Нужна проверка.",
     "gateway": "Сейчас я недоступен. Нужно проверить основной сервис.",
     "secretary": "Не могу отвечать в чатах. Нужно проверить сервис ответов.",
@@ -32,6 +33,7 @@ LABELS = {
     "recurring": "Регулярный отчет не доставлен к сроку, и уведомление о задержке не подтверждено. Квай-Гону нужно проверить задачу в Linear и доставку в Cron.",
 }
 RECOVERIES = {
+    "workspace_index": "Навигация по Notion и Drive снова актуальна.",
     "deployment": "Снова могу проверить работу сервера.",
     "gateway": "Я снова на связи.",
     "secretary": "Сервис ответов снова работает.",
@@ -236,6 +238,11 @@ def issues(report, configuration, *, free_bytes, total_bytes):
         result["disk"] = "low"
     research = report.get("research", {})
     recurring = report.get("recurring", {})
+    index = report.get("workspace_index", {})
+    if index.get("configured") and (
+        not index.get("available") or index.get("failed") or index.get("stale")
+    ):
+        result["workspace_index"] = "navigation_stale_or_failed"
     if recurring.get("configured") and (
         not recurring.get("available") or recurring.get("unreported", 0)
     ):

@@ -33,7 +33,7 @@ LABEL org.opencontainers.image.source="https://github.com/zavarovkv/agent-counci
 LABEL org.opencontainers.image.description="Hermes integration for Agent Council"
 LABEL org.opencontainers.image.revision="${COUNCIL_REVISION}"
 LABEL org.opencontainers.image.licenses="MIT"
-LABEL io.agent-council.capabilities="private-instructions-v1,instruction-bundles-v2,instruction-composition-v1,research-filing-v1,telegram-guests-v1,telegram-guest-owner-v1,telegram-guest-agent-v1,telegram-guest-context-v1,linear-project-collaboration-v1,linear-owner-review-v1,linear-coordinator-acceptance-v1,workspace-access-v1,recurring-tasks-v1,material-intake-v1,linear-agents-v1,agent-specialists-v1,linear-task-management-v1,telegram-reader-v1,agent-editor-v1"
+LABEL io.agent-council.capabilities="private-instructions-v1,instruction-bundles-v2,instruction-composition-v1,research-filing-v1,telegram-guests-v1,telegram-guest-owner-v1,telegram-guest-agent-v1,telegram-guest-context-v1,linear-project-collaboration-v1,linear-owner-review-v1,linear-coordinator-acceptance-v1,workspace-access-v1,recurring-tasks-v1,material-intake-v1,workspace-index-v1,linear-agents-v1,agent-specialists-v1,linear-task-management-v1,telegram-reader-v1,agent-editor-v1"
 
 COPY assets/agents/*.png /opt/agent-council/assets/agents/
 COPY LICENSE /opt/agent-council/LICENSE
@@ -44,6 +44,7 @@ COPY --from=web-assets /vendor/advanced-delegation/ /opt/hermes/plugins/advanced
 COPY instructions/ /opt/agent-council/instructions/
 COPY scripts/provision-researcher.py scripts/provision-research-workflow.py /opt/agent-council/
 COPY scripts/configure-drive.py /opt/agent-council/configure-drive.py
+COPY scripts/provision-workspace-index.py /opt/agent-council/provision-workspace-index.py
 COPY scripts/provision-workspace.py /opt/agent-council/provision-workspace.py
 COPY scripts/provision-recurring.py /opt/agent-council/provision-recurring.py
 RUN chmod -R a+rX,go-w /opt/hermes/plugins/advanced-delegation /opt/agent-council/instructions \
