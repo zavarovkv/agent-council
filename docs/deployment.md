@@ -270,6 +270,17 @@ For repositories, pull requests and CI, follow [GitHub MCP setup](github.md).
 Its interactive setup uses a dedicated fine-grained token and verifies access
 before enabling the native coordinator's connection.
 
+Telegram's long-running status is a gateway display setting, not an agent skill.
+Merge [the Telegram display settings](../config/telegram-display.json) into
+`display.platforms.telegram` in the native owner's private `config.yaml`,
+preserving other keys. `long_running_notifications: generic` keeps the periodic
+notification and edits the existing bubble. The replacement phrase catalog
+removes English defaults and raw tool names; it deliberately does not claim a
+specific action that the gateway has not verified. `tool_progress: off` prevents
+separate raw tool-call messages; it does not disable the long-running heartbeat.
+The existing interval and cleanup preference remain unchanged. Apply between
+turns; a running turn retains the display settings it started with.
+
 OAuth may expose the selected Notion workspace rather than only the preferred
 CouncilBase page. The owner must accept that scope. A filing instruction is not
 an API permission boundary. If access must be limited to one page, use a separate

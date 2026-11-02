@@ -1,0 +1,16 @@
+{
+  "long_running_notifications": "generic",
+  "tool_progress": "off",
+  "status_phrases": {
+    "mode": "replace",
+    "phrases": {
+      "status": [
+        "Еще работаю над задачей. Напишу, когда будет результат.",
+        "Задача занимает больше времени. Продолжаю работу."
+      ],
+      "generic": [
+        "Работаю над задачей."
+      ]
+    }
+  }
+}
