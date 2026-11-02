@@ -318,7 +318,9 @@ def main():
         raise SystemExit("Workspace index could not start.")
     started = reply.get("started", time.time())
     for _ in range(120):
-        if not reply.get("running"):
+        # A transient HTTP/busy error has no completion state. Keep polling
+        # the same rebuild instead of reporting a failure while it continues.
+        if reply.get("configured") is True and reply.get("running") is False:
             if reply.get("error") or reply.get("last_success", 0) < started:
                 raise SystemExit(
                     "Workspace index refresh was not confirmed; previous index retained."

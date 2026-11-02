@@ -24,6 +24,60 @@ class NavigationTests(unittest.TestCase):
             SimpleNamespace(home=self.home, store=Workspace(self.home).store, lock=threading.Lock())
         )
 
+    def test_status_and_start_remain_authorized_and_available_during_cloud_operation(self):
+        workspace = Workspace(self.home)
+        with (
+            workspace.lock,
+            patch.object(workspace.navigation, "start", return_value={"running": True}),
+        ):
+            self.assertFalse(
+                workspace.execute("linear-qui-gon", {"action": "index_status"})["running"]
+            )
+            self.assertTrue(
+                workspace.execute("linear-qui-gon", {"action": "index_refresh"})["running"]
+            )
+            for action in ("index_status", "index_refresh"):
+                with self.assertRaises(PermissionError):
+                    workspace.execute("revoked-client", {"action": action})
+
+    def test_polling_transport_errors_do_not_mark_a_running_rebuild_failed(self):
+        from council_workspace.index import main
+
+        replies = [
+            {"configured": True, "running": True, "started": 100},
+            {"error": "Workspace busy; retry"},
+            {"error": "Response was not confirmed"},
+            {"configured": True, "running": False, "last_success": 101},
+        ]
+        with (
+            patch(
+                "council_workspace.client.call", side_effect=[json.dumps(r) for r in replies]
+            ) as call,
+            patch("council_workspace.index.time.sleep"),
+        ):
+            main()
+        self.assertEqual(
+            [c.args[0]["action"] for c in call.call_args_list],
+            ["index_refresh", "index_status", "index_status", "index_status"],
+        )
+
+    def test_confirmed_worker_failure_and_persistent_transport_failure_are_not_success(self):
+        from council_workspace.index import main
+
+        initial = json.dumps({"configured": True, "running": True, "started": 100})
+        cases = [
+            [initial, json.dumps({"configured": True, "running": False, "error": "Failed scan"})],
+            [initial] + [json.dumps({"error": "Unavailable"})] * 120,
+        ]
+        for replies in cases:
+            with (
+                self.subTest(length=len(replies)),
+                patch("council_workspace.client.call", side_effect=replies),
+                patch("council_workspace.index.time.sleep"),
+                self.assertRaises(SystemExit),
+            ):
+                main()
+
     def test_refresh_publishes_two_indices_without_recreating_them_and_preserves_on_failure(self):
         from council_recurring.client import atomic_json
         from council_workspace.notion import revision
