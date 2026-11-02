@@ -358,15 +358,52 @@ class Recurring:
 
     @staticmethod
     def brief(value, period):
-        return f"""{value["brief"]}
+        start = datetime.fromisoformat(period["window_start"]).astimezone(ZONE)
+        end = datetime.fromisoformat(period["window_end"]).astimezone(ZONE)
+        return f"""## Задача
 
-Reporting occurrence: `{period["key"]}`.
-Window: {period["window_start"]} → {period["window_end"]}.
-Deliver by {value["delivery_time"]} Europe/Moscow. This is an owner-authorized recurring assignment.
-Use Linear as the task tracker. Start the task, delegate research to Dexter with linear_delegate, verify his sources and result. Do not use native Kanban, shell launchers or research_archive. Missing optional Telegram evidence is a coverage gap; proceed with public sources.
-Save the reviewed formatted report under Notion parent {value["notion_parent"]}. Include the exact occurrence marker `{period["key"]}` and reporting window. For publication/executive copy request Padme review; apply the existing acceptance policy.
-Submit the task for review with its verified Notion URL. Then call recurring_result with the Notion page ID/revision and a concise Russian summary (maximum 700 characters). This registers a candidate; delivery independently verifies the saved artifact. Do not send Telegram messages: the schedule owns delivery. If blocked, record one concrete next action and the responsible agent in Linear. No new schedules or credentials are needed.
+{value["brief"].strip()}
+
+## Период и срок
+
+- Период: {start:%d.%m.%Y %H:%M} – {end:%d.%m.%Y %H:%M}, МСК.
+- Выпуск: {period["day"]}, до {value["delivery_time"]} МСК.
+
+## Результат
+
+- Форматированный отчет в [закрытом разделе Notion](https://www.notion.so/{value["notion_parent"]}).
+- В задаче – ссылка, краткий итог и существенные ограничения. Проверки и источники – в отчете.
+- Доставку выполняет существующее расписание после проверки результата.
 """
+
+    def execution_context(self, registry, agent, issue, sid):
+        """Keep delivery metadata in the authorized run, not the human task brief."""
+        run = self.authorized(registry, agent, issue, sid)
+        if not run:
+            return None
+        value = json.loads(run["body"])
+        period = occurrence(value, run["day"])
+        return {
+            "occurrence": run["key"],
+            "window_start": period["window_start"],
+            "window_end": period["window_end"],
+            "deadline": run["deadline"],
+            "notion_parent": value["notion_parent"],
+            "instructions": (
+                "Use Linear and the shared workflow/handoff skills. Delegate research to Dexter "
+                "when relevant and verify the result. Missing optional Telegram evidence is a "
+                "coverage gap; proceed with public sources. Save the formatted report under "
+                "notion_parent, including this exact occurrence marker and reporting window. "
+                "Obtain Padme review for publication/executive copy. Submit the task for review "
+                "with its verified Notion URL, then call recurring_result with the saved page "
+                "ID/revision and a concise Russian summary (maximum 700 characters). This only "
+                "registers a candidate; the scheduler independently verifies and delivers it. "
+                "Do not send Telegram messages or create schedules. If blocked, record one "
+                "concrete next action and responsible agent. Apply the existing acceptance "
+                "policy after confirmed delivery. Keep technical metadata and source logs "
+                "out of comments; use the artifact and structured tool fields."
+            ),
+        }
 
     def submit(self, slug, payload):
         if slug != "qui-gon":

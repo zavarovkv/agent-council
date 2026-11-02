@@ -332,6 +332,11 @@ class Service:
                 },
                 ensure_ascii=False,
             )
+        recurring_context = self.recurring.execution_context(
+            registry, agent, remote["issue"]["id"], job["session"]
+        )
+        if recurring_context:
+            text = json.dumps({"request": text, "recurring": recurring_context}, ensure_ascii=False)
         self.store.update_job(job["key"], state="starting")
         result = self.hermes.start(agent, session["hermes"], text, job["key"])
         run_id = self.hermes.run_id(result.get("run_id"))

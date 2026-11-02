@@ -20,6 +20,12 @@ main-profile grant. It does not expose Linear OAuth credentials to the assistant
 Install compatible reviewed `recurring-work`/`travel-digest` skills. Ask Qui-Gon to
 configure the report through `recurring_tasks` with a stable ID, self-contained
 brief, weekdays (Monday=0), reporting window, preparation and delivery times.
+Keep the brief about the requested work and its acceptance criteria, using short
+paragraphs and lists. Generated Linear descriptions show the brief, reporting
+period, deadline and Notion destination. The adapter supplies exact occurrence
+metadata and delivery instructions separately to each authorized executor run,
+including continuations, from the occurrence's immutable snapshot. Do not copy
+tool instructions, identifiers or the team's operating manual into the brief.
 Times are explicitly Europe/Moscow; native UTC cron expressions also shift weekdays.
 The tool pins the team, private Notion research destination and owner recipient.
 
