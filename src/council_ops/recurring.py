@@ -66,7 +66,10 @@ def status(settings, *, now=None):
                             ).fetchone()
                         if outcome == ("completed", "delivered"):
                             delivered.add(receipt["kind"])
-                if row and (row["state"] == "delivered" or "report" in delivered):
+                if row and (
+                    row["state"] in {"delivered", "no_updates", "cancelled"}
+                    or "report" in delivered
+                ):
                     continue
                 overdue += 1
                 if "alert" not in delivered:

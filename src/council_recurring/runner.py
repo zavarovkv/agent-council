@@ -102,7 +102,11 @@ def render(home, identifier, phase, *, native, executions, remote=call, workspac
     status = remote(home, {"action": "status", "key": period["key"]})
     settle(home, status, executions, remote)
     status = remote(home, {"action": "status", "key": period["key"]})
-    if now.timestamp() < period["deadline"] or status["state"] == "delivered":
+    if now.timestamp() < period["deadline"] or status["state"] in {
+        "delivered",
+        "no_updates",
+        "cancelled",
+    }:
         return ""
     result = status.get("result")
     if any(

@@ -34,6 +34,12 @@ time; `status` shows editions and errors. `configure` updates the same ID;
 `pause/resume` controls future fires, not an already active Linear task. Existing
 occurrences retain their original brief, period and destination after edits.
 
+When the owner wants reports only for significant findings, set `skip_empty: true`
+on the existing definition (`recurring-no-updates-v1`). Omitted policy on a later
+tool edit preserves the saved choice. Existing definitions default to producing
+a report. Each substantive edition has one reader-facing Notion page shared by
+authors and editors; internal source checks belong in handoffs or a working archive.
+
 The owner dashboard's `/cron?profile=default` lists both managed records: a
 preparation trigger and a five-minute delivery/recovery check. The check uses no
 LLM and stays silent before the deadline. Edit these records through
@@ -53,6 +59,17 @@ parent and occurrence marker. The native delivery queue sends its output. Only a
 confirmed native receipt marks the edition delivered; ambiguous sends are not
 blindly replayed. A confirmed delivery triggers one coordinator continuation for
 acceptance under the normal low-risk/owner-reserved policy.
+
+For an explicitly configured empty-report policy, a completed check with no
+significant findings uses `recurring_result` with `outcome: no_updates`, a concise
+`summary` and bounded `verification`, without `page` or `revision`. Only the
+authorized coordinator can submit it after task review and finished specialist
+work. The terminal result stays in the recurring record: no page, no Telegram
+edition, no overdue alert. Normal acceptance still applies, with one coordinator
+continuation using the task's research evidence rather than a publication link.
+Inaccessible sources or incomplete work must not be relabeled as no news. A
+material blocker still gets an actionable failure notice. Once report delivery
+is claimed, an empty result cannot replace it; reconcile that send first.
 
 If the report is not ready, send one failure status and create an idempotent
 Linear follow-up with a concrete next action. A verified late report may be sent
