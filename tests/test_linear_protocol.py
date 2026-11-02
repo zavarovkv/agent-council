@@ -222,6 +222,34 @@ class LinearProtocolTests(unittest.TestCase):
                 server.server_close()
                 thread.join(timeout=3)
 
+    def test_schedule_admission_has_an_independent_internal_owner_grant(self):
+        from council_recurring.client import atomic_json
+
+        atomic_json(self.home / "recurring.json", {"schema": 1, "key": "d" * 64, "owner": uid(2)})
+        service = Service(self.home, store=self.store, linear=FakeLinear(), hermes=FakeHermes())
+        for internal in (False, True):
+            server = Server(("127.0.0.1", 0), service, internal=internal)
+            thread = threading.Thread(target=server.serve_forever, daemon=True)
+            thread.start()
+            try:
+                path = "/recurring/tasks" if internal else "/integrations/linear/recurring/tasks"
+                for key in (None, self.agent.executor_key, "d" * 64):
+                    headers = {"Content-Type": "application/json"}
+                    if key:
+                        headers["Authorization"] = "Bearer " + key
+                    connection = http.client.HTTPConnection(*server.server_address, timeout=3)
+                    connection.request("POST", path, body='{"action":"list"}', headers=headers)
+                    response = connection.getresponse()
+                    self.assertEqual(
+                        response.status, (200 if key == "d" * 64 else 401) if internal else 404
+                    )
+                    response.read()
+                    connection.close()
+            finally:
+                server.shutdown()
+                server.server_close()
+                thread.join(timeout=3)
+
     def test_prepare_never_copies_owner_grants_and_preserves_executor_state(self):
         home = self.home / "profile"
         home.mkdir()

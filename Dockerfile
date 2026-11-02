@@ -20,14 +20,20 @@ RUN /opt/hermes/.venv/bin/python -m venv /opt/telegram-reader \
     && /opt/telegram-reader/bin/python -m pip install --no-cache-dir --require-hashes --no-build-isolation -r /tmp/requirements-telegram-reader.txt \
     && /opt/telegram-reader/bin/python -m pip uninstall --yes setuptools wheel packaging pip
 
+FROM telegram-reader AS document-reader
+COPY requirements-document-reader.txt /tmp/
+RUN /opt/hermes/.venv/bin/python -m venv /tmp/document-build \
+    && /tmp/document-build/bin/python -m pip install --no-cache-dir --require-hashes --only-binary=:all: --no-deps --target /opt/document-libs -r /tmp/requirements-document-reader.txt
+
 FROM nousresearch/hermes-agent:v0.22.5@sha256:9c5561579f3ffdf333401797094ac3a743738d6c25d40f4331c7bf77b694238d
+COPY --from=document-reader /opt/document-libs/ /opt/document-libs/
 
 ARG COUNCIL_REVISION=development
 LABEL org.opencontainers.image.source="https://github.com/zavarovkv/agent-council"
 LABEL org.opencontainers.image.description="Hermes integration for Agent Council"
 LABEL org.opencontainers.image.revision="${COUNCIL_REVISION}"
 LABEL org.opencontainers.image.licenses="MIT"
-LABEL io.agent-council.capabilities="private-instructions-v1,instruction-bundles-v2,instruction-composition-v1,research-filing-v1,telegram-guests-v1,telegram-guest-owner-v1,telegram-guest-agent-v1,telegram-guest-context-v1,linear-project-collaboration-v1,linear-owner-review-v1,linear-coordinator-acceptance-v1,workspace-access-v1,linear-agents-v1,agent-specialists-v1,linear-task-management-v1,telegram-reader-v1,agent-editor-v1"
+LABEL io.agent-council.capabilities="private-instructions-v1,instruction-bundles-v2,instruction-composition-v1,research-filing-v1,telegram-guests-v1,telegram-guest-owner-v1,telegram-guest-agent-v1,telegram-guest-context-v1,linear-project-collaboration-v1,linear-owner-review-v1,linear-coordinator-acceptance-v1,workspace-access-v1,recurring-tasks-v1,material-intake-v1,workspace-index-v1,linear-agents-v1,agent-specialists-v1,linear-task-management-v1,telegram-reader-v1,agent-editor-v1"
 
 COPY assets/agents/*.png /opt/agent-council/assets/agents/
 COPY LICENSE /opt/agent-council/LICENSE
@@ -38,7 +44,9 @@ COPY --from=web-assets /vendor/advanced-delegation/ /opt/hermes/plugins/advanced
 COPY instructions/ /opt/agent-council/instructions/
 COPY scripts/provision-researcher.py scripts/provision-research-workflow.py /opt/agent-council/
 COPY scripts/configure-drive.py /opt/agent-council/configure-drive.py
+COPY scripts/provision-workspace-index.py /opt/agent-council/provision-workspace-index.py
 COPY scripts/provision-workspace.py /opt/agent-council/provision-workspace.py
+COPY scripts/provision-recurring.py /opt/agent-council/provision-recurring.py
 RUN chmod -R a+rX,go-w /opt/hermes/plugins/advanced-delegation /opt/agent-council/instructions \
     && chmod 0444 /opt/agent-council/provision-researcher.py /opt/agent-council/configure-drive.py
 
@@ -61,6 +69,9 @@ COPY src/council_team/ /opt/hermes/council_team/
 COPY src/council_workspace/ /opt/hermes/council_workspace/
 COPY src/council_skills/ /opt/hermes/council_skills/
 COPY src/council_owner/ /opt/hermes/council_owner/
+COPY src/council_recurring/ /opt/hermes/council_recurring/
+COPY src/council_recurring/ /opt/agent-council/council_recurring/
+RUN ln -s /opt/hermes/.venv/bin/hermes /usr/local/bin/hermes
 COPY scripts/install-owner-context.py /opt/agent-council/install-owner-context.py
 RUN python3 /opt/agent-council/install-owner-context.py /opt/hermes
 COPY src/research_filing/ /opt/hermes/research_filing/

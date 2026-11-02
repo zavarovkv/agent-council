@@ -9,6 +9,12 @@ The project is in early development, built around
 - Runs a personal agent with a web dashboard and Telegram messaging.
 - Coordinates Квай-Гон, Декстер, Лэндо and Падме through Linear tasks, specialist
   sub-issues, clarification and reviewed deliverables.
+- Processes owner [photos and documents](docs/material-intake.md), keeping originals
+  in Drive and structured results in Notion.
+- Rebuilds shared [Notion/Drive navigation](docs/workspace-navigation.md) daily,
+  including materials added manually by the owner.
+- Manages [recurring team reports](docs/recurring-work.md) through native Cron, Linear
+  execution and verified artifact/delivery receipts.
 - Supports optional [Telegram source collection](docs/telegram-monitor.md)
   for native agent research workflows.
 - Supports ChatGPT / Codex model login and explicit Notion / Google Drive setup.

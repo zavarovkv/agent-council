@@ -20,6 +20,7 @@ from .instructions import sync as sync_instructions
 from .lifecycle import deploy, restore, smoke
 from .monitoring import configure as configure_monitoring
 from .monitoring import poll as monitor
+from .recurring import configure as configure_recurring
 from .research import configure as configure_research
 from .research import flush as flush_research
 from .restic import Restic, cloud_backup
@@ -31,6 +32,7 @@ from .snapshots import snapshot
 from .telegram_reader import collect as collect_telegram
 from .telegram_reader import configure as configure_telegram
 from .workspace import configure as configure_workspace
+from .workspace_index import configure as configure_workspace_index
 
 
 def pause_instruction_updates(runtime):
@@ -158,6 +160,10 @@ def parser():
         "configure-research", help="Prepare coordinator-only Kanban and Notion filing"
     )
     commands.add_parser("flush-research", help="Resume queued research filing without model calls")
+    commands.add_parser(
+        "configure-workspace-index", help="Prepare daily Notion and Drive navigation"
+    )
+    commands.add_parser("configure-recurring", help="Prepare the owner-pinned scheduling grant")
     commands.add_parser(
         "configure-monitoring", help="Pin operational notifications to the verified owner"
     )
@@ -308,6 +314,12 @@ def operate(arguments, settings):
         elif arguments.action == "configure-workspace":
             doctor(runtime)
             result = configure_workspace(runtime)
+        elif arguments.action == "configure-workspace-index":
+            doctor(runtime)
+            result = configure_workspace_index(runtime)
+        elif arguments.action == "configure-recurring":
+            doctor(runtime)
+            result = configure_recurring(runtime)
         elif arguments.action == "configure-research":
             result = configure_research(runtime)
         elif arguments.action == "flush-research":

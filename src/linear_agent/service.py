@@ -29,6 +29,9 @@ class Service:
         self.halt = threading.Event()
         self.wake = threading.Event()
         self.ready_until = {}
+        from .recurring import Recurring
+
+        self.recurring = Recurring(self)
 
     def registry(self):
         return Registry.load(self.home)
@@ -55,7 +58,12 @@ class Service:
             raise PermissionError("Unrecognized app installation.")
         if event.actor != registry.owner:
             child = self.store.delegation(slug, payload["agentSession"].get("issueId", ""))
-            if event.action != "created" or child is None:
+            scheduled = self.recurring.authorized(
+                registry, agent, payload["agentSession"].get("issueId", ""), event.session
+            )
+            if event.action != "created" or (
+                child is None and not (scheduled and event.actor == installation["app_user"])
+            ):
                 return False
         result = self.store.admit(event, registry.revision)
         self.wake.set()
@@ -121,7 +129,18 @@ class Service:
                 raise PermissionError("Sub-issue lineage is not authorized.")
             self.authorize(registry, registry.agents[parent["agent"]], parent["id"])
         elif owner != registry.owner:
-            raise PermissionError("Only the configured owner may initiate agent work.")
+            scheduled = self.recurring.authorized(registry, agent, issue_id, sid)
+            if (
+                not scheduled
+                or owner != installation["app_user"]
+                or (issue.get("creator") or {}).get("id") != installation["app_user"]
+                or (issue.get("delegate") or {}).get("id") != installation["app_user"]
+                or issue["team"]["id"] != json.loads(scheduled["body"])["team"]
+            ):
+                raise PermissionError(
+                    "Only the owner or a registered owner schedule may initiate work."
+                )
+            self.recurring.bind(scheduled["key"], sid)
         if job and job["action"] == "prompted":
             activity = self.linear.activity(agent, job["activity"])
             if (
@@ -167,6 +186,7 @@ class Service:
 
     def step(self):
         registry = self.registry()
+        self.recurring.reconcile(registry)
         jobs = self.store.jobs()
         for saved in jobs:
             job = self.store.job(saved["key"])
@@ -283,6 +303,8 @@ class Service:
             "thought",
             "Начинаю работу над задачей."
             if job["action"] == "created"
+            else "Продолжаю выполнение регулярного задания."
+            if job["action"] == "scheduled_followup"
             else "Продолжаю работу с вашим уточнением.",
         )
         self.flush_outbox(registry)

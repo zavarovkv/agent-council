@@ -8,7 +8,7 @@ import os
 import re
 import tempfile
 
-FIELDS = "id,name,mimeType,parents,trashed,version,size,md5Checksum,webViewLink,capabilities(canEdit,canAddChildren)"
+FIELDS = "id,name,mimeType,parents,trashed,version,size,md5Checksum,webViewLink,appProperties,capabilities(canEdit,canAddChildren)"
 
 
 def service_for(home):
@@ -73,7 +73,7 @@ class Files:
                 q=f"'{item['id']}' in parents and trashed=false",
                 pageSize=100,
                 pageToken=args.get("cursor"),
-                fields="nextPageToken,files(" + FIELDS + ")",
+                fields="nextPageToken,incompleteSearch,files(" + FIELDS + ")",
                 supportsAllDrives=True,
                 includeItemsFromAllDrives=True,
             ).execute()
@@ -106,7 +106,7 @@ class Files:
             "next_offset": offset + len(chunk) if more else None,
         }
 
-    def prepare_write(self, args):
+    def prepare_write(self, args, *, attachment=None):
         from googleapiclient.http import MediaIoBaseUpload
 
         name = args.get("title")
@@ -136,14 +136,18 @@ class Files:
                 body=body, fields=FIELDS, supportsAllDrives=True
             ).execute()
         content, encoded = args.get("content"), args.get("base64")
-        if (content is None) == (encoded is None):
+        if attachment is None and (content is None) == (encoded is None):
             raise ValueError("Provide either UTF-8 content or base64 file bytes.")
         data = (
-            content.encode()
-            if isinstance(content, str)
-            else base64.b64decode(encoded, validate=True)
+            attachment
+            if attachment is not None
+            else (
+                content.encode()
+                if isinstance(content, str)
+                else base64.b64decode(encoded, validate=True)
+            )
         )
-        if len(data) > 65536:
+        if attachment is None and len(data) > 65536:
             raise ValueError("Use files up to 64 KiB per shared upload.")
         mime = args.get("mime_type", "text/plain")
         if (
@@ -152,7 +156,36 @@ class Files:
             or mime.startswith("application/vnd.google-apps.")
         ):
             raise ValueError("Use a real upload MIME type, not a native Google document type.")
-        media = MediaIoBaseUpload(io.BytesIO(data), mimetype=mime, resumable=False)
+        media = MediaIoBaseUpload(
+            io.BytesIO(data), mimetype=mime, chunksize=1024 * 1024, resumable=attachment is not None
+        )
+        if attachment is not None:
+            digest = hashlib.sha256(data).hexdigest()
+            body["appProperties"] = {"council_sha256": digest}
+            # Deduplicate the same bytes in the selected destination, even when
+            # Telegram assigned the repeated attachment another local filename.
+            existing = (
+                self.api.list(
+                    q=f"'{parent['id']}' in parents and trashed=false and appProperties has {{ key='council_sha256' and value='{digest}' }}",
+                    fields="files(" + FIELDS + ")",
+                    pageSize=2,
+                    supportsAllDrives=True,
+                    includeItemsFromAllDrives=True,
+                )
+                .execute()
+                .get("files", [])
+            )
+            if len(existing) > 1:
+                raise ValueError("Multiple existing copies require reconciliation.")
+            if existing:
+                saved = self.get(existing[0]["id"])
+                if (
+                    int(saved.get("size", -1)) != len(data)
+                    or saved.get("md5Checksum")
+                    != hashlib.md5(data, usedforsecurity=False).hexdigest()
+                ):
+                    raise ValueError("The existing attachment checksum differs.")
+                return lambda: {**saved, "verified": True, "reused": True}
 
         def write():
             if action == "drive_update":

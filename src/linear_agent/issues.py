@@ -213,6 +213,11 @@ class Issues:
         if scope and issue:
             scope.require(issue)
         if action == "accept":
+            scheduled = self.service.recurring.authorized(registry, agent, issue["id"])
+            if scheduled and scheduled["state"] != "delivered":
+                raise ValueError(
+                    "The scheduled edition must have a confirmed delivery receipt before acceptance. Keep it in review."
+                )
             return Acceptance(self).execute(
                 agent, registry, session, issue, payload, coordinator=coordinator
             )

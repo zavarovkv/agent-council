@@ -65,8 +65,9 @@ settings()
 manager = PluginManager()
 manager.discover_and_load()
 definitions = registry.get_definitions({'council_workspace'})
-assert len(definitions) == 1, definitions
-assert definitions[0]['function']['name'] == 'council_workspace'
+names={d['function']['name'] for d in definitions}
+assert 'council_workspace' in names, names
+assert names <= {'council_workspace','material_read'}, names
 manager.unload()
 print('workspace tool available')
 """,

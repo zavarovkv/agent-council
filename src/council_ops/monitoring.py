@@ -16,6 +16,7 @@ from .doctor import backup_status, doctor, instruction_status, research_status
 from .runtime import Runtime
 
 LABELS = {
+    "workspace_index": "Навигация по материалам не обновилась. Сохранена последняя подтвержденная версия; нужна проверка доступа к Notion и Drive.",
     "deployment": "Не удалось проверить работу сервера. Нужна проверка.",
     "gateway": "Сейчас я недоступен. Нужно проверить основной сервис.",
     "secretary": "Не могу отвечать в чатах. Нужно проверить сервис ответов.",
@@ -29,8 +30,10 @@ LABELS = {
     "instructions": "Не удалось проверить обновление инструкций. Нужна проверка.",
     "disk": "На сервере осталось мало свободного места.",
     "research": "Исследования не сохраняются вовремя. Нужно проверить автоматическое сохранение.",
+    "recurring": "Регулярный отчет не доставлен к сроку, и уведомление о задержке не подтверждено. Квай-Гону нужно проверить задачу в Linear и доставку в Cron.",
 }
 RECOVERIES = {
+    "workspace_index": "Навигация по Notion и Drive снова актуальна.",
     "deployment": "Снова могу проверить работу сервера.",
     "gateway": "Я снова на связи.",
     "secretary": "Сервис ответов снова работает.",
@@ -44,6 +47,7 @@ RECOVERIES = {
     "instructions": "Автообновление инструкций снова в порядке.",
     "disk": "Свободного места на сервере снова достаточно.",
     "research": "Автоматическое сохранение исследований снова в порядке.",
+    "recurring": "Контроль регулярных отчетов снова работает: результат или уведомление о задержке доставлены.",
 }
 INSTRUCTION_ALERTS = {
     "unavailable": "Не удалось проверить инструкции. Нужно проверить файлы на сервере.",
@@ -233,6 +237,16 @@ def issues(report, configuration, *, free_bytes, total_bytes):
     if free_bytes < max(1024**3, total_bytes // 20):
         result["disk"] = "low"
     research = report.get("research", {})
+    recurring = report.get("recurring", {})
+    index = report.get("workspace_index", {})
+    if index.get("configured") and (
+        not index.get("available") or index.get("failed") or index.get("stale")
+    ):
+        result["workspace_index"] = "navigation_stale_or_failed"
+    if recurring.get("configured") and (
+        not recurring.get("available") or recurring.get("unreported", 0)
+    ):
+        result["recurring"] = "deadline_or_receipt_missing"
     if configuration.get("watch_research") and (
         not research.get("available")
         or research.get("oldest_pending_age_seconds", 0) > 1800

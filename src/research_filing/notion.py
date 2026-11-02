@@ -45,6 +45,8 @@ def document(value):
             or not isinstance(wrapped.get("metadata"), dict)
             or wrapped["metadata"].get("type") != "page"
             or not isinstance(wrapped.get("text"), str)
+            or wrapped.get("truncated")
+            or wrapped.get("unknown_block_count", 0)
         ):
             raise FilingError("unsupported_notion_document")
         declared_id = page_id(wrapped.get("url"))

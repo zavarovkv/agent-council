@@ -325,6 +325,23 @@ class Linear:
         if result.get("success") is not True or result["issue"]["id"] != fields["id"]:
             raise RemoteError()
 
+    def recurring_issue(self, agent, issue):
+        """Empty query is a confirmed absence; transport errors never mean absent."""
+        result = self.query(
+            agent,
+            "query CouncilRecurringIssue($id:ID!){issues(first:1,filter:{id:{eq:$id}}){nodes{id title url team{id} creator{id} delegate{id} agentSessions(first:20){nodes{id appUser{id} creator{id} dismissedAt archivedAt} pageInfo{hasNextPage}}}}}",
+            {"id": identifier(issue)},
+        )["issues"]["nodes"]
+        if not result:
+            return None
+        if (
+            len(result) != 1
+            or result[0]["id"] != issue
+            or result[0]["agentSessions"]["pageInfo"]["hasNextPage"]
+        ):
+            raise PermissionError("Ambiguous recurring issue identity.")
+        return result[0]
+
     def update_issue(self, agent, issue, fields):
         result = self.query(
             agent,
