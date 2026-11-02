@@ -5,66 +5,69 @@ import getpass
 import logging
 import os
 import re
+from contextlib import suppress
 from pathlib import Path
 
 from .config import Settings, source_name
+from .login import SetupError, failure_message, sign_in
 
 
 async def verify_source(client, source, expected_peer=None):
     peer = await client.get_entity(source)
-    if (
-        type(peer).__name__ != "Channel"
-        or getattr(peer, "left", False)
-        or (expected_peer is not None and peer.id != expected_peer)
-    ):
-        raise ValueError("The source pin or existing membership is not valid.")
+    if type(peer).__name__ != "Channel" or getattr(peer, "left", False):
+        raise SetupError("source")
+    if expected_peer is not None and peer.id != expected_peer:
+        raise SetupError("source_changed")
     await client.get_messages(peer, limit=1)
     return peer
 
 
 async def main():
     from telethon import TelegramClient
-    from telethon.errors import SessionPasswordNeededError
     from telethon.sessions import StringSession
 
     logging.disable(logging.CRITICAL)
     os.umask(0o077)
-    source = source_name(os.environ["COUNCIL_TG_READER_SOURCE"])
-    api_id = getpass.getpass("Telegram API ID: ").strip()
-    api_hash = getpass.getpass("Telegram API hash: ").strip()
-    if (
-        not re.fullmatch(r"[0-9]{1,16}", api_id)
-        or int(api_id) <= 0
-        or not re.fullmatch(r"[a-f0-9]{32}", api_hash)
-    ):
-        raise ValueError("Invalid Telegram API credentials.")
-    phone = getpass.getpass("Telegram account phone with country code: ").strip()
-    if not re.fullmatch(r"\+[1-9][0-9]{6,14}", phone):
-        raise ValueError("Use an international account phone number.")
-    client = TelegramClient(
-        StringSession(),
-        int(api_id),
-        api_hash,
-        receive_updates=False,
-        device_model="Agent Council collector",
-        request_retries=1,
-        connection_retries=1,
-        flood_sleep_threshold=0,
-        timeout=15,
-    )
+    client, stage = None, "configuration"
     try:
+        source = source_name(os.environ["COUNCIL_TG_READER_SOURCE"])
+        print("Подключение Telegram. Ввод скрыт; для отмены нажмите Ctrl+C.", flush=True)
+        api_id = getpass.getpass("Telegram API ID: ").strip()
+        api_hash = getpass.getpass("Telegram API hash: ").strip()
+        if (
+            not re.fullmatch(r"[0-9]{1,16}", api_id)
+            or int(api_id) <= 0
+            or not re.fullmatch(r"[a-f0-9]{32}", api_hash)
+        ):
+            raise SetupError("api_credentials")
+        phone = getpass.getpass("Номер Telegram с кодом страны: ").strip()
+        if not re.fullmatch(r"\+[1-9][0-9]{6,14}", phone):
+            raise SetupError("phone")
+        client = TelegramClient(
+            StringSession(),
+            int(api_id),
+            api_hash,
+            receive_updates=False,
+            device_model="Agent Council collector",
+            request_retries=1,
+            connection_retries=1,
+            flood_sleep_threshold=0,
+            timeout=15,
+        )
+        stage = "connect"
         await client.connect()
+        stage = "send_code"
         sent = await client.send_code_request(phone)
-        code = getpass.getpass("Telegram login code (hidden): ").strip()
-        try:
-            await client.sign_in(phone, code=code, phone_code_hash=sent.phone_code_hash)
-        except SessionPasswordNeededError:
-            await client.sign_in(password=getpass.getpass("Telegram two-step password (hidden): "))
+        stage = "sign_in"
+        await sign_in(client, phone, sent.phone_code_hash)
         account = await client.get_me()
         if account.bot:
-            raise ValueError("Use an existing user account that is a member of the source.")
+            raise SetupError("account")
+        stage = "source"
+        print("Вход выполнен. Проверяю доступ к чату…", flush=True)
         expected = os.environ.get("COUNCIL_TG_READER_EXPECTED_PEER", "")
         peer = await verify_source(client, source, int(expected) if expected else None)
+        stage = "save"
         values = {
             "COUNCIL_TG_READER_API_ID": api_id,
             "COUNCIL_TG_READER_API_HASH": api_hash,
@@ -85,15 +88,15 @@ async def main():
         print(
             f"Authorized user account {account.id}; pinned source @{source} ({peer.id}). Credentials saved privately; no messages sent."
         )
+        return 0
+    except (Exception, KeyboardInterrupt) as error:
+        print(failure_message(error, stage), flush=True)
+        return 1
     finally:
-        await client.disconnect()
+        if client is not None:
+            with suppress(Exception):
+                await client.disconnect()
 
 
 if __name__ == "__main__":
-    try:
-        asyncio.run(main())
-    except (Exception, KeyboardInterrupt):
-        print(
-            "Telegram reader setup did not complete. No account or source was joined automatically; credentials were not printed."
-        )
-        raise SystemExit(1) from None
+    raise SystemExit(asyncio.run(main()))

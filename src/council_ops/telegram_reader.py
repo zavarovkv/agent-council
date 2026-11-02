@@ -16,6 +16,7 @@ from telegram_secretary.policy import pinned_owner
 from .config import OperationError, atomic_write, read_settings
 from .instructions import verify_capabilities
 from .lifecycle import identity, smoke
+from .linear_state import maintenance
 from .snapshots import snapshot
 
 
@@ -119,6 +120,7 @@ def configure(runtime, source, *, reauthorize=False):
         raise OperationError(
             "Use the interactive setup script; never pass credentials as arguments."
         )
+    print("Проверяю готовность подключения Telegram…", flush=True)
     verify_capabilities(runtime, ["telegram-reader-v1"])
     runtime.require_idle()
     settings = runtime.settings
@@ -192,8 +194,12 @@ def configure(runtime, source, *, reauthorize=False):
             atomic_write(target, result.read_bytes())
     reader = load_reader(target)
     settings.update_values({"COUNCIL_TG_READER_ENV_FILE": str(target)})
-    backup = snapshot(runtime, automatic=True)
-    smoke(runtime, backup)
+    print(
+        "Подключение сохранено. Проверяю резервную копию; это может занять несколько минут.",
+        flush=True,
+    )
+    backup = checkpoint(runtime)
+    print("Читаю сообщения доступного чата…", flush=True)
     result = collect(runtime)
     if result["status"] == "unavailable":
         raise OperationError(
@@ -227,3 +233,17 @@ def configure(runtime, source, *, reauthorize=False):
         "backup": str(backup),
         "credentials_exposed_to_agents": False,
     }
+
+
+@maintenance
+def checkpoint(runtime):
+    # The profile can exceed the short online freeze budget. Record all running
+    # services before stopping and always bring them back after copy validation.
+    backup = snapshot(runtime, restart=False, automatic=True)
+    try:
+        smoke(runtime, backup)
+    finally:
+        runtime.start()
+        runtime.ready()
+        runtime.check_protected()
+    return backup

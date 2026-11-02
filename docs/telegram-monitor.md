@@ -27,6 +27,12 @@ bash scripts/setup-telegram-reader.sh SOURCE_USERNAME
 
 Enter API ID/hash, phone, login code and optional two-step password only in its
 private terminal prompts. No credentials belong in chat, argv, Git or logs.
+Input is hidden. Use Ctrl+C to cancel; Ctrl+Z suspends the SSH client and can
+leave its remote operation active until timeout. Setup reports the failed stage
+and a safe reason without printing Telegram exception text. Incorrect codes and
+two-step passwords allow up to three attempts in the same session. Expired codes
+require a new setup run; rate limits stop immediately without requesting another
+code. Use the latest code from Telegram, not the my.telegram.org website login.
 Authorization verifies real membership/access and pins immutable account/source
 IDs. Reassigned usernames fail closed, including during reauthorization.
 
@@ -36,6 +42,9 @@ in `${HERMES_HOME}/.council/telegram-reader.json` and daily evidence under
 `/workspace/monitoring/telegram/raw/YYYY-MM-DD.json`.
 Existing valid login is reused; `--reauthorize` explicitly replaces it while
 preserving the source pin. Interrupted later setup can retry without another login.
+After login, setup records a consistent checkpoint with the owned services
+briefly stopped, validates a copied profile, and restarts services even if that
+validation fails. Progress messages distinguish this step from waiting for input.
 The standard unit templates assume `/opt/agent-council` and `/etc/agent-council`;
 review them before using different deployment paths.
 

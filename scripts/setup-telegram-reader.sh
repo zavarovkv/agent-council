@@ -12,6 +12,7 @@ if [[ $# -eq 2 && "$2" != --reauthorize ]]; then
 fi
 reader_source="$1"
 reader_flag="${2:-}"
+echo "Подключаюсь к серверу и проверяю готовность. Ввод данных появится после проверки."
 # Both remote arguments are restricted to validated literals above.
 # shellcheck disable=SC2029
 exec ssh -tt \
