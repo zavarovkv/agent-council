@@ -23,6 +23,9 @@ creates a separate private bearer grant pinned to the registry owner and team.
 It preserves OAuth configuration and other MCP servers while limiting personal
 Linear MCP tools to `get_*`, `list_*` and `search_*`; team mutations use the app
 route. It is idempotent and rejects changed owner/destination grants.
+Managed skills remain repository-controlled: setup disables Hermes' automatic
+background skill rewrite, while keeping ordinary memory and model settings.
+Read-only task status remains available during maintenance; new work is paused.
 
 The endpoint `/coordinator/tasks` exists only on the internal adapter listener.
 Do not expose it through Nginx or copy the main-profile key to specialist/public

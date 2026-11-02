@@ -48,6 +48,9 @@ def configure(home):
     if config_path.resolve() != config_path:
         raise ValueError("Refusing a linked profile configuration.")
     config = yaml.load(config_path.read_text())
+    # Reviewed skills are released from their canonical repository. Background
+    # rewrites of installed files otherwise block the next guarded release.
+    config.setdefault("auxiliary", {}).setdefault("background_review", {})["enabled"] = False
     plugins = config.setdefault("plugins", {})
     if "council-workspace" in plugins.get("disabled", []):
         raise ValueError("The native task plugin is explicitly disabled.")
