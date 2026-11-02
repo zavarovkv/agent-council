@@ -47,6 +47,21 @@ class WorkspaceIntegrationTests(unittest.TestCase):
             )
             self.assertEqual(second.returncode, 0, second.stderr[-2000:])
             self.assertEqual(policy, (home / ".council/workspace/access.json").read_bytes())
+            recurring = home / ".council/recurring/client.json"
+            recurring.parent.mkdir(parents=True)
+            recurring.write_text(
+                json.dumps(
+                    {
+                        "schema": 1,
+                        "key": "a" * 64,
+                        "team": "1" * 32,
+                        "project": None,
+                        "notion_parent": "2" * 32,
+                        "delivery": "telegram:12345",
+                    }
+                )
+            )
+            recurring.chmod(0o600)
             for target in profiles + executors:
                 self.assertEqual((target / "workspace-client.json").stat().st_mode & 0o777, 0o600)
                 if target != home:
@@ -64,10 +79,11 @@ from council_workspace.client import settings
 settings()
 manager = PluginManager()
 manager.discover_and_load()
-definitions = registry.get_definitions({'council_workspace'})
+definitions = registry.get_definitions({'council_workspace', 'material_read', 'recurring_tasks'})
 names={d['function']['name'] for d in definitions}
-assert 'council_workspace' in names, names
-assert names <= {'council_workspace','material_read'}, names
+from hermes_constants import get_hermes_home
+main=(get_hermes_home()/'.council/recurring/client.json').exists()
+assert names == ({'council_workspace','material_read','recurring_tasks'} if main else {'council_workspace'}), names
 manager.unload()
 print('workspace tool available')
 """,

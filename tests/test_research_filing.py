@@ -192,3 +192,31 @@ class FilingTests(unittest.TestCase):
         wrapped["metadata"]["type"] = "database"
         with self.assertRaisesRegex(FilingError, "unsupported_notion_document"):
             notion.fetch(PARENT)
+
+    def test_native_blank_page_preserves_scope_and_rejects_incomplete_content(self):
+        envelope = (
+            f'<page url="https://app.notion.com/p/{PAGE}">\n'
+            f'<ancestor-path><parent-page url="https://app.notion.com/p/{PARENT}"/></ancestor-path>\n'
+            '<properties>{"title":"Empty page"}</properties>\n'
+        )
+        wrapped = {
+            "metadata": {"type": "page"},
+            "url": "https://app.notion.com/p/" + PAGE,
+            "text": envelope
+            + "<blank-page>This page is blank and has no content.</blank-page>\n</page>",
+        }
+        notion = Notion(lambda *_args: {"ok": True, "result": json.dumps(wrapped)})
+        self.assertEqual(notion.fetch(PAGE), {"id": PAGE, "parent": PARENT, "content": ""})
+        wrapped["truncated"] = True
+        with self.assertRaisesRegex(FilingError, "unsupported_notion_document"):
+            notion.fetch(PAGE)
+        wrapped.pop("truncated")
+        for body in (
+            "</page>",
+            "<blank-page>Example</blank-page>\nunread content\n</page>",
+            "<content>unclosed body\n</page>",
+        ):
+            with self.subTest(body=body):
+                wrapped["text"] = envelope + body
+                with self.assertRaisesRegex(FilingError, "unsupported_notion_document"):
+                    notion.fetch(PAGE)
