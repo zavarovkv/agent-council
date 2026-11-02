@@ -3,36 +3,15 @@
 import base64
 import hashlib
 import io
-import json
-import os
 import re
-import tempfile
+
+from .google_auth import service_for as google_service
 
 FIELDS = "id,name,mimeType,parents,trashed,version,size,md5Checksum,webViewLink,appProperties,capabilities(canEdit,canAddChildren)"
 
 
 def service_for(home):
-    from google.auth.transport.requests import Request
-    from google.oauth2.credentials import Credentials
-    from googleapiclient.discovery import build
-
-    path = home / "google_token.json"
-    if path.resolve() != path or path.stat().st_mode & 0o077:
-        raise PermissionError("A private existing Drive grant is required.")
-    credentials = Credentials.from_authorized_user_file(str(path))
-    if not credentials.has_scopes(["https://www.googleapis.com/auth/drive"]):
-        raise PermissionError("The existing grant lacks Drive access.")
-    if not credentials.valid:
-        credentials.refresh(Request())
-        data = json.loads(credentials.to_json())
-        data["type"] = "authorized_user"
-        with tempfile.NamedTemporaryFile(dir=home, delete=False) as output:
-            os.fchmod(output.fileno(), 0o600)
-            output.write(json.dumps(data).encode())
-            output.flush()
-            os.fsync(output.fileno())
-        os.replace(output.name, path)
-    return build("drive", "v3", credentials=credentials, cache_discovery=False)
+    return google_service(home, "drive")
 
 
 class Files:

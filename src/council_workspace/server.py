@@ -7,6 +7,7 @@ import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
+from .google import Google
 from .policy import server_policy
 from .service import Workspace
 
@@ -21,6 +22,7 @@ class Server(ThreadingHTTPServer):
 
     def __init__(self, address, workspace):
         self.workspace = workspace
+        self.google = Google(workspace.home)
         self.capacity = threading.BoundedSemaphore(8)
         super().__init__(address, Handler)
 
@@ -61,7 +63,7 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         try:
-            if self.path != "/workspace":
+            if self.path not in {"/workspace", "/google"}:
                 self.respond(404, {"error": "not_found"})
                 return
             policy = server_policy(self.server.workspace.home)
@@ -88,10 +90,16 @@ class Handler(BaseHTTPRequestHandler):
             body = self.rfile.read(int(length))
             if len(body) != int(length):
                 raise ValueError("Incomplete request.")
-            result = self.server.workspace.execute(client, json.loads(body))
+            executor = self.server.google if self.path == "/google" else self.server.workspace
+            result = executor.execute(client, json.loads(body))
             self.respond(200, result)
         except PermissionError:
-            self.respond(403, {"error": "Workspace access is not authorized for this material."})
+            self.respond(
+                403,
+                {
+                    "error": "Access is not authorized for this agent or the Google grant lacks the requested scope."
+                },
+            )
         except BlockingIOError:
             self.respond(429, {"error": "Workspace busy; retry with the same write key."})
         except ValueError as error:

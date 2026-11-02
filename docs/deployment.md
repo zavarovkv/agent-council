@@ -227,7 +227,8 @@ documents and generated skills outside Git and the image.
 Google Drive uses Hermes' bundled `google-workspace` integration. Its setup
 requires a Google Cloud Desktop OAuth client and user consent. Request only
 the needed file services. The pinned upstream setup command requests mail,
-calendar and contacts too; Council's setup requests only the Drive scope.
+calendar and contacts too; Council's setup defaults to the Drive scope. Explicit
+service expansion is described in [Google services](google-services.md).
 Client credentials and renewable grants
 belong in the persistent profile, not in chat, command arguments or logs.
 Verify access to the chosen folder before claiming cloud storage is ready.
@@ -245,7 +246,7 @@ exchange through a temporary callback on the private container bridge. An SSH
 tunnel binds only local `127.0.0.1:8765`; no Docker port or firewall rule is added.
 The browser must run on the same computer as this command. Open the printed
 Google consent URL and approve access. The callback closes after completion or
-five minutes. Grants persist privately as `google_token.json`, in the format
+ten minutes. Grants persist privately as `google_token.json`, in the format
 consumed by Hermes' Google Workspace tools. Verification refreshes the grant,
 reads the selected folder and checks that it permits new files, without writes.
 Both setup and verification hold the shared maintenance lock, since refreshing

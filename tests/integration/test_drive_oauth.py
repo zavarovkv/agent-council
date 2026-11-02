@@ -7,7 +7,10 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import MagicMock, patch
 from urllib.parse import parse_qs, urlsplit
+
+from google.oauth2.credentials import Credentials
 
 SPEC = importlib.util.spec_from_file_location(
     "council_drive", "/opt/agent-council/configure-drive.py"
@@ -17,6 +20,61 @@ SPEC.loader.exec_module(drive)
 
 
 class DriveOAuthIntegrationTests(unittest.TestCase):
+    def test_expanded_scopes_keep_drive_and_exclude_unrequested_google_services(self):
+        scopes = drive.requested_scopes(["calendar", "gmail", "analytics"])
+        self.assertIn("https://www.googleapis.com/auth/drive", scopes)
+        self.assertIn("https://www.googleapis.com/auth/gmail.modify", scopes)
+        self.assertIn("https://www.googleapis.com/auth/calendar.events", scopes)
+        self.assertIn("https://www.googleapis.com/auth/analytics.readonly", scopes)
+        self.assertFalse(
+            any(
+                "contacts" in s or "analytics.edit" in s or s == "https://mail.google.com/"
+                for s in scopes
+            )
+        )
+
+    def test_failed_expansion_keeps_previous_grant_and_wrong_account_is_rejected(self):
+        with tempfile.TemporaryDirectory() as directory:
+            home = Path(directory)
+            (home / "council-workspace.json").write_text(
+                json.dumps({"files": {"provider": "google_drive", "folder_id": "folder-fixture"}})
+            )
+            previous = Credentials(
+                "old-token",
+                refresh_token="old-refresh",
+                token_uri="https://oauth2.googleapis.com/token",
+                client_id="fixture",
+                client_secret="fixture-secret",
+                scopes=drive.SCOPES,
+            )
+            drive.save_credentials(home, previous)
+            original = (home / "google_token.json").read_bytes()
+            expanded = Credentials(
+                "new-token",
+                refresh_token="new-refresh",
+                token_uri="https://oauth2.googleapis.com/token",
+                client_id="fixture",
+                client_secret="fixture-secret",
+                scopes=drive.requested_scopes(["calendar"]),
+            )
+            api, flow = MagicMock(), MagicMock()
+            api.about().get().execute.return_value = {"user": {"emailAddress": "owner@example.com"}}
+            flow.run_local_server.return_value = expanded
+            with (
+                patch("googleapiclient.discovery.build", return_value=api),
+                patch.object(drive, "build_flow", return_value=flow),
+                patch.object(Credentials, "refresh"),
+                patch.object(drive, "check_services", side_effect=drive.SetupError("API disabled")),
+            ):
+                with self.assertRaises(drive.SetupError):
+                    drive.authorize(home, ["calendar"])
+            self.assertEqual((home / "google_token.json").read_bytes(), original)
+            with (
+                patch("googleapiclient.discovery.build", return_value=api),
+                self.assertRaisesRegex(drive.SetupError, "same Google account"),
+            ):
+                drive.check_services(home, expanded, ["calendar"], "different@example.com")
+
     def test_real_sdk_uses_drive_only_pkce_and_no_secret_in_authorization_url(self):
         with tempfile.TemporaryDirectory() as directory, contextlib.redirect_stdout(io.StringIO()):
             home = Path(directory)

@@ -25,15 +25,17 @@ def settings(home=None):
     return value
 
 
-def call(args, *, home=None):
+def call(args, *, home=None, endpoint="workspace"):
     class NoRedirect(urllib.request.HTTPRedirectHandler):
         def redirect_request(self, *_args, **_kwargs):
             return None
 
     try:
+        if endpoint not in {"workspace", "google"}:
+            raise ValueError("Unknown workspace endpoint")
         key = settings(home)["key"]
         request = urllib.request.Request(
-            "http://hermes:9123/workspace",
+            "http://hermes:9123/" + endpoint,
             data=json.dumps(args, ensure_ascii=False).encode(),
             headers={"Authorization": "Bearer " + key, "Content-Type": "application/json"},
             method="POST",
