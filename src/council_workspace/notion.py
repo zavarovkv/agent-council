@@ -6,6 +6,7 @@ import json
 import re
 
 from research_filing.notion import Notion, page_id
+from research_filing.store import FilingError
 
 
 def revision(content):
@@ -32,6 +33,17 @@ class Pages:
         self.notion, self.root = Notion(call), root
 
     def fetch(self, identifier):
+        try:
+            return self._fetch(identifier)
+        except FilingError as error:
+            if str(error) == "notion_page_deleted":
+                raise ValueError(
+                    "The Notion page is deleted. Do not restore it or create a replacement "
+                    "unless the owner requests that."
+                ) from None
+            raise
+
+    def _fetch(self, identifier):
         identifier = page_id(identifier)
         page = self.notion.fetch(identifier)
         current, seen = page, set()

@@ -60,11 +60,13 @@ def document(value):
     # body, can contain human-authored strings that resemble structural tags.
     body_start = content.start() if content is not None else blank.start()
     envelope = re.split(r"<properties\b", value[:body_start], maxsplit=1)[0]
-    root = re.search(r'<page\b[^>]*\burl="([^"]+)"', envelope)
+    root = re.search(r'<page\b[^>]*\burl="([^"]+)"[^>]*>', envelope)
     ancestry = re.search(r"<ancestor-path>(.*?)</ancestor-path>", envelope, re.S)
     parent = re.search(r'<parent-page\b[^>]*\burl="([^"]+)"', ancestry[1] if ancestry else "")
     if root is None:
         raise FilingError("unsupported_notion_document")
+    if re.search(r"\sdeleted(?=\s|>)", root[0]):
+        raise FilingError("notion_page_deleted")
     identifier = page_id(root[1])
     if declared_id is not None and declared_id != identifier:
         raise FilingError("notion_page_identity_mismatch")

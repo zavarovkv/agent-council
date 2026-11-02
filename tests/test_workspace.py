@@ -318,6 +318,43 @@ class WorkspaceTests(unittest.TestCase):
         )
         api.get_media.assert_not_called()
 
+    def test_deleted_notion_pages_cannot_be_read_or_overwritten_as_empty(self):
+        raw = (
+            f'<page url="https://notion.so/{CHILD}" deleted>\n'
+            f'<ancestor-path><parent-page url="https://notion.so/{ROOT}"/></ancestor-path>\n'
+            "<blank-page>This page is blank and has no content.</blank-page>\n</page>"
+        )
+        call = Mock(return_value={"ok": True, "result": raw})
+        pages = Pages(call, ROOT)
+        operations = (
+            lambda: pages.read({"id": CHILD}),
+            lambda: pages.prepare_write(
+                {
+                    "action": "notion_update",
+                    "id": CHILD,
+                    "revision": revision(""),
+                    "content": "Replacement",
+                }
+            ),
+            lambda: pages.prepare_write(
+                {
+                    "action": "notion_create",
+                    "parent": CHILD,
+                    "title": "Replacement",
+                    "content": "Replacement",
+                }
+            ),
+        )
+        for operation in operations:
+            with self.assertRaisesRegex(ValueError, "page is deleted"):
+                operation()
+        self.assertTrue(all(item.args[0] == "notion-fetch" for item in call.call_args_list))
+        call.return_value = {
+            "ok": True,
+            "result": f'<page url="https://notion.so/{ROOT}"><content>Example: &lt;page deleted&gt;</content></page>',
+        }
+        self.assertIn("deleted", pages.read({"id": ROOT})["content"])
+
     def test_notion_page_content_cannot_forge_scope_metadata(self):
         properties = ""
 
