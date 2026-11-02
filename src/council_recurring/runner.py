@@ -111,7 +111,7 @@ def render(home, identifier, phase, *, native, executions, remote=call, workspac
     ):
         return ""
     kind = "alert"
-    body = f"{value['title']} за {period['day']} пока не готов. Квай-Гон должен устранить блокер и завершить задачу в Linear."
+    body = f"{value['title']} за {period['day']} пока не готов.\nСтатус подготовки и дальнейшие действия – в задаче:"
     if status.get("issue"):
         body += "\nhttps://linear.app/issue/" + status["issue"]
     if result and now.timestamp() <= period["deadline"] + 7200:
@@ -127,7 +127,9 @@ def render(home, identifier, phase, *, native, executions, remote=call, workspac
             remote(
                 home, {"action": "problem", "key": period["key"], "category": "artifact_unverified"}
             )
-            body = f"{value['title']} за {period['day']}: сохраненный отчет не прошел проверку версии и периода. Квай-Гон должен сверить страницу Notion и повторить проверку."
+            body = f"{value['title']} за {period['day']}: сохраненный отчет не прошел проверку. Нужна сверка версии и периода в Notion."
+            if status.get("issue"):
+                body += "\nhttps://linear.app/issue/" + status["issue"]
     elif not result:
         remote(home, {"action": "problem", "key": period["key"], "category": "deadline_exceeded"})
     if status.get("state") == "not_started":

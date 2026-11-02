@@ -52,12 +52,20 @@ If the report is not ready, send one failure status and create an idempotent
 Linear follow-up with a concrete next action. A verified late report may be sent
 once within two hours, explicitly marked delayed. Optional missing Telegram data
 is a coverage gap, not a reason to fabricate news or skip public-source research.
+Set `cron.wrap_response: false` in the native profile to deliver the prepared
+message without Hermes's English job-name/ID header and management footer.
+This affects presentation only; schedules and native delivery receipts remain intact.
 Technical script failures stay in Cron; the host monitor reports unacknowledged
 missed editions after the delivery deadline plus five minutes. `doctor` reports
 expected, overdue and unreported editions independently of container health.
 
 The receipt provides evidence of transport success, not that the owner read it.
 This design does not promise exactly-once behavior for an unknowable remote send.
+
+Linear may return `creator: null` for an automatically delegated agent session.
+Scheduled work accepts this only for an existing owner-granted occurrence whose
+issue creator, delegate, team and session identity match the installed app.
+It does not authorize ordinary creatorless sessions or non-owner continuations.
 
 ## Existing travel jobs
 
