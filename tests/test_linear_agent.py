@@ -133,6 +133,9 @@ class FakeLinear:
         value.setdefault("labels", {"nodes": []})
         return copy.deepcopy(value)
 
+    def task_status(self, agent, issue):
+        return self.issue_details(agent, issue)
+
     def issues(self, agent, teams, *, query="", cursor=None, scope=None):
         rows = list(self.issue_records.values()) + [s["issue"] for s in self.sessions.values()]
         rows = {r["id"]: r for r in rows if r["team"]["id"] in teams}
@@ -281,14 +284,19 @@ class LinearAgentTests(unittest.TestCase):
         self.addCleanup(directory.cleanup)
         self.home = Path(directory.name).resolve()
         self.config = configuration(self.home)
-        self.store = Store(self.home, clock=lambda: NOW)
+        self.now = NOW
+        self.store = Store(self.home, clock=lambda: self.now)
         for index, slug in enumerate(("qui-gon", "dexter")):
             self.store.install(
                 slug, uid(1000 + index), uid(1), "fixture-access", "fixture-refresh", NOW + 86400
             )
         self.linear, self.hermes = FakeLinear(), FakeHermes()
         self.service = Service(
-            self.home, store=self.store, linear=self.linear, hermes=self.hermes, clock=lambda: NOW
+            self.home,
+            store=self.store,
+            linear=self.linear,
+            hermes=self.hermes,
+            clock=lambda: self.now,
         )
 
     def event(
@@ -309,8 +317,8 @@ class LinearAgentTests(unittest.TestCase):
             "organizationId": uid(1),
             "oauthClientId": self.config["agents"][slug]["client_id"],
             "appUserId": remote["appUser"]["id"],
-            "createdAt": datetime.fromtimestamp(NOW, UTC).isoformat(),
-            "webhookTimestamp": NOW * 1000,
+            "createdAt": datetime.fromtimestamp(self.now, UTC).isoformat(),
+            "webhookTimestamp": self.now * 1000,
             "promptContext": text,
             "agentSession": {
                 "id": uid(sid),
@@ -348,6 +356,7 @@ class LinearAgentTests(unittest.TestCase):
 
     def tick(self, count=1):
         for _ in range(count):
+            self.now += 61
             self.service.step()
 
     def test_owner_only_admission_signature_replay_and_immutable_identity(self):
@@ -439,10 +448,10 @@ class LinearAgentTests(unittest.TestCase):
         self.linear.owner_url = "https://linear.app/fixture/profiles/renamed-owner"
         self.service = Service(
             self.home,
-            store=Store(self.home, clock=lambda: NOW),
+            store=Store(self.home, clock=lambda: self.now),
             linear=self.linear,
             hermes=self.hermes,
-            clock=lambda: NOW,
+            clock=lambda: self.now,
         )
         self.tick(3)
         questions = [
@@ -462,10 +471,10 @@ class LinearAgentTests(unittest.TestCase):
         self.tick()
         self.service = Service(
             self.home,
-            store=Store(self.home, clock=lambda: NOW),
+            store=Store(self.home, clock=lambda: self.now),
             linear=self.linear,
             hermes=self.hermes,
-            clock=lambda: NOW,
+            clock=lambda: self.now,
         )
         self.tick()
         self.assertEqual(len(self.hermes.requests), 1)
@@ -509,10 +518,10 @@ class LinearAgentTests(unittest.TestCase):
         self.store.child_finished("dexter", uid(11), first)
         self.service = Service(
             self.home,
-            store=Store(self.home, clock=lambda: NOW),
+            store=Store(self.home, clock=lambda: self.now),
             linear=self.linear,
             hermes=self.hermes,
-            clock=lambda: NOW,
+            clock=lambda: self.now,
         )
         self.tick(3)
         child = self.store.children("qui-gon", uid(10))[0]

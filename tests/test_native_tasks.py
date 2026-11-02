@@ -226,6 +226,7 @@ class NativeTasksTests(unittest.TestCase):
         self.service.hermes.runs[original["run_id"]]["pending_controls"] = [
             {"kind": "clarify", "prompt_id": "which-market", "question": "Which market?"}
         ]
+        self.clock += 31
         self.service.step()
         self.assertEqual(self.store.job(original["key"])["state"], "waiting")
         reply = {

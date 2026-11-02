@@ -224,6 +224,7 @@ class Intake:
                 title=issue["title"],
                 human_assignee=issue.get("assignee"),
                 delegate=issue.get("delegate"),
+                work_status=self.service.task_status.describe(issue),
             )
             with self.store.database() as db:
                 job = db.execute(

@@ -195,6 +195,9 @@ and child-result aggregation. Do not create test issues in a production team.
 
 ## Runtime and recovery
 
+See [the task status contract](task-workflow.md) for responsibility, parent/child
+transitions and the difference between task acceptance and execution completion.
+
 `linear-adapter` owns the queue, OAuth grants, outbox and delegation ledger. Its
 only public upstream is loopback 9121; executor tool RPC uses unpublished 9122.
 `linear-executor` and `dexter-executor` each mount only their own profile and
@@ -228,7 +231,29 @@ An ambiguous clarification receipt stops the run and requests human review.
 Unsupported approval prompts are rejected. Cancelling a coordinator also stops
 its children through lineage revalidation. A stopped session cannot restart:
 start a new Linear agent session for new work. Individual runs are limited to
-30 minutes, clarification waits to 24 hours, and admission to 60 events/hour.
+30 minutes of observed execution, clarification waits to 24 hours, and admission to 60 events/hour.
+Waiting for sub-issues has no execution timeout. Network failures never cancel
+an admitted run, discard its children or launch a replacement model turn. Polling
+is scheduled durably: active runs every 30 seconds, input/child waits every 60.
+Tools still verify current authorization on each call; no positive authorization
+cache is introduced. Explicit stops and policy revocation bypass the normal poll delay.
+
+The `recovery` ledger stores retry deadlines and exponential backoff (10–300 seconds
+plus bounded jitter), independently of execution progress timestamps. All queries
+using an installed app share a persisted cooldown. HTTP and GraphQL rate limits
+honor `Retry-After` and exhausted request/complexity/endpoint reset headers, including
+successful responses with no remaining budget, following
+[Linear's rate-limit contract](https://linear.app/developers/rate-limiting).
+Restarts retain cooldowns. Job polling, publication and child handoffs recover
+independently with their original identifiers. `doctor` exposes safe recovery counts.
+An actual failed/unknown model run still requires a deliberate continuation; it
+is never silently retried as if no work had happened.
+
+Configure exactly one `Blocked` state of type `started` in each managed team.
+The adapter projects input waits, execution failures and blocked children into
+that state while retaining the delegated agent. It restores only its own automatic
+blocks when work resumes. An unavailable Linear API can delay this projection;
+the durable execution status remains authoritative about that interruption.
 Completed webhook records remain seven days; avoid replaying historic events.
 
 To stop execution without restarting the personal assistant:

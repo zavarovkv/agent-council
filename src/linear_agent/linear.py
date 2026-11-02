@@ -9,7 +9,8 @@ from base64 import urlsafe_b64encode
 from urllib.parse import unquote, urlencode, urlsplit
 
 from .config import SCOPES, identifier
-from .transport import RemoteError, request_json
+from .recovery import Recovery
+from .transport import JsonResponse, RemoteError, rate_limited, request_json, retry_deadline
 
 API = "https://api.linear.app/graphql"
 TOKEN = "https://api.linear.app/oauth/token"
@@ -32,6 +33,7 @@ class Linear:
     def __init__(self, store, *, request=request_json, clock=time.time):
         self.store, self.request, self.clock = store, request, clock
         self.lock = threading.RLock()
+        self.recovery = Recovery(store)
 
     def authorization(self, registry, agent, browser):
         if self.store.installation(agent.slug):
@@ -166,17 +168,58 @@ class Linear:
         except RemoteError as error:
             if error.status in {401, 403}:
                 raise PermissionError("Linear application access was revoked or denied.") from None
+            error.retry_at = max(error.retry_at, retry_deadline(error.headers, self.clock()))
             raise
+        if rate_limited(result):
+            raise RemoteError(
+                429, retry_at=retry_deadline(getattr(result, "headers", {}), self.clock())
+            )
+        if (
+            isinstance(result, dict)
+            and isinstance(result.get("errors"), list)
+            and any(
+                isinstance(error, dict)
+                and isinstance(error.get("extensions"), dict)
+                and error["extensions"].get("code")
+                in ("FORBIDDEN", "AUTHENTICATION_ERROR", "UNAUTHENTICATED")
+                for error in result["errors"]
+            )
+        ):
+            raise PermissionError("Linear application access was revoked or denied.")
         if (
             not isinstance(result, dict)
             or result.get("errors")
             or not isinstance(result.get("data"), dict)
         ):
             raise RemoteError()
-        return result["data"]
+        return JsonResponse(result["data"], getattr(result, "headers", {}))
 
     def query(self, agent, query, variables):
-        return self.raw(self.access(agent), query, variables)
+        # One durable cooldown for all tools and reconciliation using this app grant.
+        # Serialize the check and response so concurrent calls cannot overrun the gate.
+        with self.lock:
+            installation = self.store.installation(agent.slug)
+            if not installation:
+                raise PermissionError("Install this Linear application first.")
+            key = "api:" + installation["organization"] + ":" + installation["app_user"]
+            state = self.recovery.get(key)
+            if state["next_at"] > self.clock():
+                raise RemoteError(
+                    429 if state["category"] == "rate_limited" else 503,
+                    retry_at=state["next_at"],
+                )
+            try:
+                result = self.raw(self.access(agent), query, variables)
+            except RemoteError as error:
+                error.retry_at = max(error.retry_at, retry_deadline(error.headers, self.clock()))
+                error.retry_at = self.recovery.failure(key, error)
+                raise
+            until = retry_deadline(result.headers, self.clock())
+            if until > self.clock():
+                self.recovery.failure(key, RemoteError(429, retry_at=until))
+            else:
+                self.recovery.success(key)
+            return result
 
     def session(self, agent, sid):
         return self.query(agent, SESSION_QUERY, {"id": identifier(sid)})["agentSession"]
@@ -346,7 +389,7 @@ class Linear:
         """Read routing and status without downloading comments or attachments."""
         return self.query(
             agent,
-            "query CouncilTaskStatus($id:String!){issue(id:$id){id title url team{id} state{id name type} assignee{id} delegate{id} project{id}}}",
+            "query CouncilTaskStatus($id:String!){issue(id:$id){id title url team{id} state{id name type} assignee{id name} delegate{id name} project{id}}}",
             {"id": identifier(issue)},
         )["issue"]
 
