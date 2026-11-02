@@ -108,10 +108,10 @@ class HandoffTests(unittest.TestCase):
         self.settle_child(details)
         self.service = Service(
             self.home,
-            store=Store(self.home, clock=lambda: fixture.NOW),
+            store=Store(self.home, clock=lambda: self.now),
             linear=self.linear,
             hermes=self.hermes,
-            clock=lambda: fixture.NOW,
+            clock=lambda: self.now,
         )
         child = self.store.children("qui-gon", fixture.uid(10))[0]
         event_id = self.store.handoff_id(child["result_key"])
@@ -173,10 +173,10 @@ class HandoffTests(unittest.TestCase):
         first = self.submit()
         self.service = Service(
             self.home,
-            store=Store(self.home, clock=lambda: fixture.NOW),
+            store=Store(self.home, clock=lambda: self.now),
             linear=self.linear,
             hermes=self.hermes,
-            clock=lambda: fixture.NOW,
+            clock=lambda: self.now,
         )
         self.assertEqual(first, self.submit())
         with self.assertRaises(ValueError):

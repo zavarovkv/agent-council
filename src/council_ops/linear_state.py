@@ -117,6 +117,15 @@ def status(settings):
                 raise ValueError("Invalid integration store")
             jobs = dict(db.execute("SELECT state,count(*) FROM jobs GROUP BY state"))
             outbox = dict(db.execute("SELECT state,count(*) FROM outbox GROUP BY state"))
+            recovery = {}
+            if db.execute(
+                "SELECT 1 FROM sqlite_master WHERE type='table' AND name='recovery'"
+            ).fetchone():
+                recovery = dict(
+                    db.execute(
+                        "SELECT category,count(*) FROM recovery WHERE failures>0 GROUP BY category"
+                    )
+                )
             installed = db.execute(
                 "SELECT count(*) FROM installations WHERE organization=?", (registry.organization,)
             ).fetchone()[0]
@@ -129,6 +138,7 @@ def status(settings):
             "installed_agents": installed,
             "jobs": jobs,
             "outbox": outbox,
+            "recovery": recovery,
             "admission_paused": (directory / "runtime/maintenance").exists(),
         }
     except (OSError, ValueError, KeyError, TypeError, sqlite3.Error):

@@ -45,6 +45,20 @@ def call(path, args):
                 return json.dumps(json.loads(error.read(4096)), ensure_ascii=False)
             except (ValueError, OSError):
                 pass
+        if error.code in {429, 503}:
+            try:
+                value = json.loads(error.read(4096))
+                delay = value.get("retry_after")
+                if value.get("retryable") is True and type(delay) is int and delay > 0:
+                    return json.dumps(
+                        {
+                            "error": "Linear is temporarily unavailable. This is not a permission denial or lost document. Wait before retrying; do not ask the owner to restore access. For writes, reuse the same request key and verify the receipt before claiming success.",
+                            "retryable": True,
+                            "retry_after": delay,
+                        }
+                    )
+            except (ValueError, OSError, AttributeError):
+                pass
         return json.dumps(
             {
                 "error": "Linear operation was not confirmed. Reuse the same request key; do not claim success."

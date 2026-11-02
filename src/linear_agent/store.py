@@ -80,6 +80,15 @@ class Store:
                 CREATE TABLE IF NOT EXISTS owner_review_issues (
                     issue TEXT PRIMARY KEY, reasons TEXT NOT NULL
                 );
+                CREATE TABLE IF NOT EXISTS recovery (
+                    key TEXT PRIMARY KEY, next_at REAL NOT NULL, failures INTEGER NOT NULL,
+                    category TEXT NOT NULL, updated REAL NOT NULL
+                );
+                CREATE TABLE IF NOT EXISTS task_projections (
+                    issue TEXT PRIMARY KEY, fingerprint TEXT NOT NULL,
+                    blocked_by_adapter INTEGER NOT NULL DEFAULT 0,
+                    state_id TEXT NOT NULL DEFAULT '', updated REAL NOT NULL
+                );
             """)
             if "retained" not in {
                 row[1] for row in db.execute("PRAGMA table_info(issue_operations)")
@@ -116,6 +125,10 @@ class Store:
             db.close()
 
     def _prune(self, db):
+        db.execute(
+            "DELETE FROM recovery WHERE updated<? AND next_at<?",
+            (self.clock() - 30 * 86400, self.clock()),
+        )
         db.execute("DELETE FROM oauth_states WHERE expires<?", (self.clock(),))
         db.execute(
             "DELETE FROM handoffs WHERE created<? "
@@ -334,6 +347,16 @@ class Store:
                 "SELECT * FROM sessions WHERE agent=? AND id=?", (agent, sid)
             ).fetchone()
             return dict(row) if row else None
+
+    def task_jobs(self):
+        """Latest execution per issue; a finished run is not a completed task."""
+        with self.database() as db:
+            rows = db.execute(
+                "SELECT j.*,j.rowid AS sequence,s.issue,s.owner FROM jobs j JOIN sessions s "
+                "ON j.agent=s.agent AND j.session=s.id "
+                "WHERE NOT (j.state='done' AND j.run_id='') ORDER BY j.rowid"
+            ).fetchall()
+            return {row["issue"]: dict(row) for row in rows}
 
     def bind(self, agent, sid, issue, owner, *, parent=None):
         with self.database() as db:
@@ -633,6 +656,11 @@ class Store:
     def status(self):
         with self.database() as db:
             return {
+                "recovery": dict(
+                    db.execute(
+                        "SELECT category,count(*) FROM recovery WHERE failures>0 GROUP BY category"
+                    )
+                ),
                 "jobs": dict(db.execute("SELECT state,count(*) FROM jobs GROUP BY state")),
                 "outbox": dict(db.execute("SELECT state,count(*) FROM outbox GROUP BY state")),
                 "children": dict(

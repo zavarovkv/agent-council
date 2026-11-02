@@ -14,6 +14,7 @@ from .handoff import LEGACY_LIMIT, Handoffs
 from .hermes import Hermes
 from .issues import Issues
 from .linear import Linear
+from .recovery import Recovery
 from .store import Store, stable_id
 from .transport import RemoteError
 
@@ -30,6 +31,10 @@ class Service:
         self.halt = threading.Event()
         self.wake = threading.Event()
         self.ready_until = {}
+        self.recovery = Recovery(self.store)
+        from .task_status import TaskStatus
+
+        self.task_status = TaskStatus(self)
         from .intake import Intake
         from .recurring import Recurring
 
@@ -169,6 +174,9 @@ class Service:
 
     def flush_outbox(self, registry):
         for record in self.store.outbound():
+            key = "outbox:" + record["id"]
+            if not self.recovery.due(key):
+                continue
             agent = registry.agents.get(record["agent"])
             if not agent:
                 continue
@@ -176,12 +184,17 @@ class Service:
                 self.authorize(registry, agent, record["session"])
                 self.linear.ensure_activity(agent, record)
                 self.store.publication(record["id"], confirmed=True)
+                self.recovery.success(key)
             except PermissionError:
                 self.store.cancel(agent.slug, record["session"])
-            except RemoteError:
+            except RemoteError as error:
                 self.store.publication(record["id"], confirmed=False)
+                self.recovery.failure(key, error)
 
     def _cancel(self, agent, job):
+        key = "cancel:" + job["key"]
+        if not self.recovery.due(key):
+            return
         if job["run_id"]:
             try:
                 self.hermes.stop(agent, job["run_id"])
@@ -190,6 +203,7 @@ class Service:
                 # start another model turn merely to recover a stop receipt.
                 if error.status != 404:
                     self.store.update_job(job["key"], state="cancelling")
+                    self.recovery.failure(key, error)
                     return
         self.store.update_job(
             job["key"],
@@ -197,6 +211,7 @@ class Service:
             output="Подзадача остановлена; подтвержденного результата нет.",
         )
         self.store.child_finished(agent.slug, job["session"], job["key"])
+        self.recovery.success(key)
 
     def step(self):
         registry = self.registry()
@@ -219,26 +234,33 @@ class Service:
                 self.store.cancel(agent.slug, job["session"])
                 self._cancel(agent, job)
                 continue
+            key = "job:" + job["key"]
+            if not self.recovery.due(key):
+                continue
             try:
                 self._job(registry, agent, job, self.store.jobs())
+                current = self.store.job(job["key"])
+                self.recovery.success(
+                    key,
+                    delay=60
+                    if current["state"] in {"waiting", "waiting_children"}
+                    else 30
+                    if current["state"] == "running"
+                    else 5,
+                )
             except PermissionError:
                 self.store.cancel(agent.slug, job["session"])
                 self._cancel(agent, job)
-            except RemoteError:
-                # Accepted run IDs and outputs persist. A temporary outage is
-                # retried without repeating provider spend or losing the turn.
-                age = self.clock() - (
-                    job["received"] if job["state"] in {"starting", "waiting"} else job["updated"]
-                )
-                if age > (86400 if job["state"] == "waiting" else 1800):
-                    self._cancel(agent, job)
-                logger.warning(
-                    "Linear integration temporarily unavailable; private details omitted."
-                )
+            except RemoteError as error:
+                # Remote availability is not execution failure. Preserve the run,
+                # children and progress timestamps for arbitrarily long outages.
+                self.recovery.failure(key, error)
+                logger.warning("Linear work deferred after integration failure; state retained.")
             except (KeyError, ValueError, TypeError):
                 self._fail(agent, job, "protocol_error")
         self.flush_outbox(registry)
         self._notify_children(registry)
+        self.task_status.reconcile(registry)
 
     def _job(self, registry, agent, job, jobs):
         session, remote = self.authorize(registry, agent, job["session"], job)
@@ -552,6 +574,9 @@ class Service:
                 "issue_id": child["issue"],
                 "agent": child["child_agent"],
                 "state": child["state"],
+                "work_status": self.task_status.describe(
+                    self.linear.task_status(agent, child["issue"])
+                ),
                 "result": child["result"],
                 "event_id": self.store.handoff_id(child["result_key"]),
             }
@@ -594,6 +619,9 @@ class Service:
             if pair in seen:
                 continue
             seen.add(pair)
+            key = "children:" + pair[0] + ":" + pair[1]
+            if not self.recovery.due(key):
+                continue
             parent = self.store.session(*pair)
             children = self.store.children(*pair)
             active = [job for job in self.store.jobs() if (job["agent"], job["session"]) == pair]
@@ -617,9 +645,12 @@ class Service:
                         ],
                         registry.revision,
                     )
+                    self.recovery.success(key)
                 except PermissionError:
                     for item in children:
                         self.store.child_notified(item["id"])
+                except RemoteError as error:
+                    self.recovery.failure(key, error)
 
     def loop(self):
         while not self.halt.is_set():

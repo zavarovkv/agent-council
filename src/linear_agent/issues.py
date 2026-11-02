@@ -10,6 +10,7 @@ from .document_content import matches_document
 from .project_scope import ProjectScope
 from .store import stable_id
 from .transport import RemoteError
+from .workflow import TERMINAL, first_state, is_blocked, is_review, review_state
 
 FIELDS = {
     "title",
@@ -22,34 +23,6 @@ FIELDS = {
     "labelIds",
     "dueDate",
 }
-
-
-def first_state(workflow, category):
-    states = [
-        s
-        for s in workflow["states"]["nodes"]
-        if s["type"] == category and (category != "started" or not is_review(s))
-    ]
-    if not states:
-        raise ValueError("The team has no workflow state of the requested type.")
-    return min(states, key=lambda s: (s["position"], s["id"]))
-
-
-def is_review(state):
-    return state.get("name", "").strip().casefold() in {
-        "in review",
-        "review",
-        "на проверке",
-        "на ревью",
-        "на согласовании",
-    }
-
-
-def review_state(workflow):
-    states = [s for s in workflow["states"]["nodes"] if s["type"] == "started" and is_review(s)]
-    if len(states) != 1:
-        raise ValueError("Configure one unambiguous In Review state for verified deliverables.")
-    return states[0]
 
 
 def matches(issue, fields):
@@ -223,13 +196,16 @@ class Issues:
                 agent, registry, session, issue, payload, coordinator=coordinator
             )
         if action == "save_document":
-            if is_review(issue["state"]):
+            if is_review(issue["state"]) or is_blocked(issue["state"]):
                 raise ValueError("Move the task to In Progress before revising its material.")
+            if issue["state"]["type"] in TERMINAL:
+                raise ValueError("Do not edit the accepted material of a terminal issue.")
             return self.save_document(agent, registry, session, issue, payload)
         if action in {"project", "document", "comments"}:
             return self.materials(agent, registry, issue, payload)
         if action == "get":
             issue["acceptance"] = policy(self.store, issue, registry.owner)
+            issue["work_status"] = self.service.task_status.describe(issue)
             # Keep the tool response bounded even when historical comments are large.
             issue.update(
                 self.excerpt(
@@ -307,11 +283,20 @@ class Issues:
                 )
             if (
                 issue
-                and is_review(issue["state"])
+                and (is_review(issue["state"]) or is_blocked(issue["state"]))
                 and {"title", "description"} & fields.keys()
                 and (not state or state["type"] != "started" or is_review(state))
             ):
                 raise ValueError("Move the task to In Progress before revising its material.")
+            if (
+                issue
+                and issue["state"]["type"] in TERMINAL
+                and (
+                    {"title", "description"} & fields.keys()
+                    or (state and state["id"] != issue["state"]["id"])
+                )
+            ):
+                raise ValueError("Do not automatically reopen or revise a terminal issue.")
         if action == "create" and any(
             s["id"] == fields["stateId"] and s["type"] == "canceled"
             for s in workflow["states"]["nodes"]
@@ -491,7 +476,9 @@ class Issues:
         current = self.linear.issue_details(agent, issue["id"])
         if (current.get("delegate") or {}).get("id") != installation["app_user"]:
             return
-        if current["state"]["type"] in {"started", "completed", "canceled", "duplicate"}:
+        if current["state"]["type"] in TERMINAL or (
+            current["state"]["type"] == "started" and not is_blocked(current["state"])
+        ):
             return
         state = first_state(self.linear.workflow(agent, issue["team"]["id"]), "started")
         self.linear.update_issue(agent, issue["id"], {"stateId": state["id"]})

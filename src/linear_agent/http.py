@@ -2,6 +2,7 @@
 
 import hmac
 import json
+import math
 import secrets
 import threading
 import time
@@ -229,5 +230,10 @@ class Handler(BaseHTTPRequestHandler):
             self.respond(503, {"error": "temporarily_unavailable"}, headers={"Retry-After": "30"})
         except (KeyError, ValueError, TypeError, OSError):
             self.respond(400, {"error": "invalid_request"})
-        except RemoteError:
-            self.respond(503, {"error": "operation_uncertain"})
+        except RemoteError as error:
+            delay = max(10, math.ceil(error.retry_at - self.server.service.clock()))
+            self.respond(
+                503,
+                {"error": "operation_uncertain", "retryable": True, "retry_after": delay},
+                headers={"Retry-After": str(delay)},
+            )

@@ -30,7 +30,11 @@ class DocumentLookupTests(unittest.TestCase):
             return response
 
         linear = Linear(None, request=request)
-        linear.access = lambda agent: "fixture-access"
+        # These tests isolate document shape and transport classification. App
+        # installation/cooldown behavior is exercised with a real store separately.
+        linear.query = lambda agent, query, variables: linear.raw(
+            "fixture-access", query, variables
+        )
         return linear, requests
 
     def test_complete_filtered_lookup_returns_absence_or_same_document_shape(self):
