@@ -487,6 +487,72 @@ class LinearAgentTests(unittest.TestCase):
     def test_sub_issue_delegation_is_idempotent_and_returns_results_to_parent(self):
         self.assert_specialist_roundtrip("dexter")
 
+    def test_revised_child_result_notifies_parent_once_even_with_same_summary(self):
+        self.assert_specialist_roundtrip("dexter")
+        first = next(k for k, r in self.hermes.requests.items() if r["agent"] == "dexter")
+        self.ingest(
+            self.event(
+                slug="dexter", sid=11, action="prompted", aid=61, text="Revise the artifact"
+            ),
+            slug="dexter",
+        )
+        self.tick()
+        latest = next(reversed(self.hermes.requests))
+        self.hermes.finish(self.hermes.requests[latest]["run_id"], "Verified competitor findings")
+        self.tick(4)
+        parents = [r for r in self.hermes.requests.values() if r["agent"] == "qui-gon"]
+        self.assertEqual(len(parents), 3)
+        self.assertIn("Verified competitor findings", parents[-1]["text"])
+        self.hermes.finish(parents[-1]["run_id"], "Reviewed revised findings")
+        self.tick(3)
+        self.store.child_finished("dexter", uid(11), latest)
+        self.store.child_finished("dexter", uid(11), first)
+        self.service = Service(
+            self.home,
+            store=Store(self.home, clock=lambda: NOW),
+            linear=self.linear,
+            hermes=self.hermes,
+            clock=lambda: NOW,
+        )
+        self.tick(3)
+        child = self.store.children("qui-gon", uid(10))[0]
+        self.assertEqual(child["result_key"], latest)
+        self.assertTrue(child["notified"])
+        self.assertEqual(
+            len([r for r in self.hermes.requests.values() if r["agent"] == "qui-gon"]), 3
+        )
+
+    def test_failed_child_keeps_checkpoint_private_and_does_not_retry_itself(self):
+        self.assert_specialist_roundtrip("dexter")
+        self.ingest(
+            self.event(slug="dexter", sid=11, action="prompted", aid=62, text="Check new sources"),
+            slug="dexter",
+        )
+        self.tick()
+        run = next(
+            r["run_id"]
+            for r in reversed(list(self.hermes.requests.values()))
+            if r["agent"] == "dexter"
+        )
+        checkpoint = "Partial source journal saved; verification remains unfinished."
+        self.hermes.runs[run].update(status="failed", output=checkpoint)
+        self.tick(4)
+        parents = [r for r in self.hermes.requests.values() if r["agent"] == "qui-gon"]
+        self.assertEqual(len(parents), 3)
+        self.assertIn(checkpoint, parents[-1]["text"])
+        self.assertIn("Исполнение не завершено", parents[-1]["text"])
+        self.assertEqual(
+            len([r for r in self.hermes.requests.values() if r["agent"] == "dexter"]), 2
+        )
+        self.assertFalse(any(checkpoint in p["body"] for p in self.linear.posts.values()))
+        self.assertTrue(any(p["kind"] == "error" for p in self.linear.posts.values()))
+
+    def test_child_completion_rejects_another_session_job(self):
+        self.assert_specialist_roundtrip("dexter")
+        parent_job = next(k for k, r in self.hermes.requests.items() if r["agent"] == "qui-gon")
+        with self.assertRaisesRegex(ValueError, "child session"):
+            self.store.child_finished("dexter", uid(11), parent_job)
+
     def test_finished_rounds_free_capacity_and_followup_parent_needs_no_owner_mention(self):
         self.ingest(self.event())
         self.tick()

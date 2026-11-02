@@ -28,6 +28,12 @@ the personal assistant's existing MCP connection.
 5. Each specialist publishes its result in its own session. Once children finish,
    Qui-Gon resumes, reviews the findings and returns a combined answer in the
    parent session. Human assignees and issue workflow states are preserved.
+   Each completed specialist run has its own handoff identity: revisions to the
+   same sub-issue notify the coordinator again, even when the short summary is
+   unchanged. Replayed receipts do not repeat a handoff or replace a newer result.
+   Failed runs keep their partial output in the authorized handoff, clearly marked
+   unfinished; Linear receives a short error instead of the full checkpoint.
+   This does not automatically retry failed model runs or accept unfinished work.
 
 Only the explicitly pinned human Linear user can start or continue work.
 Usernames, issue text and mentions cannot grant permissions. Agent-created child
