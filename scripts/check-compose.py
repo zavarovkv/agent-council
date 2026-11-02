@@ -37,7 +37,10 @@ def main():
             "import base64,os; "
             "assert os.environ['HERMES_TELEGRAM_CLIENT_SECRET'] == "
             f"base64.b64decode('{base64.b64encode(literal.encode()).decode()}')"
-            ".decode(), 'Compose changed a literal secret value'"
+            ".decode(), 'Compose changed a literal secret value'; "
+            "from tools.transcription_tools import _get_provider; "
+            "assert _get_provider({}) == 'local_command', 'Local voice engine is unavailable'; "
+            "assert os.environ['HERMES_LOCAL_STT_LANGUAGE'] == 'ru'"
         )
         fixture.write_text(
             "services:\n"
