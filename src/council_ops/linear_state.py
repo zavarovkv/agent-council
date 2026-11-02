@@ -38,6 +38,28 @@ def require_capability(runtime, *homes, image=None):
         verify_capabilities(runtime, ["agent-specialists-v1"], image=image)
     if any((home / ".council/linear/padme/config.yaml").exists() for home in homes):
         verify_capabilities(runtime, ["agent-editor-v1"], image=image)
+    if any(has_handoffs(home) for home in homes):
+        verify_capabilities(runtime, ["linear-handoff-v1"], image=image)
+
+
+def has_handoffs(home):
+    """Inspect retained protocol state without creating or migrating a live store."""
+    path = home / ".council/linear/bridge/linear.sqlite3"
+    if not path.exists() and not path.is_symlink():
+        return False
+    if path.is_symlink() or path.resolve() != path:
+        raise OperationError("Refusing a symlinked Linear handoff store.")
+    try:
+        with closing(sqlite3.connect(path.as_uri() + "?mode=ro", uri=True)) as db:
+            if db.execute("PRAGMA quick_check").fetchall() != [("ok",)]:
+                raise sqlite3.DatabaseError("Invalid integration store")
+            if not db.execute(
+                "SELECT 1 FROM sqlite_master WHERE type='table' AND name='handoffs'"
+            ).fetchone():
+                return False
+            return bool(db.execute("SELECT 1 FROM handoffs LIMIT 1").fetchone())
+    except (OSError, sqlite3.Error) as error:
+        raise OperationError("Cannot verify retained Linear handoff compatibility.") from error
 
 
 @contextmanager
