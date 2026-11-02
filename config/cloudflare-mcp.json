@@ -1,0 +1,10 @@
+{
+  "url": "https://mcp.cloudflare.com/mcp",
+  "auth": "oauth",
+  "enabled": false,
+  "tools": {
+    "include": ["search", "execute", "docs", "whoami"],
+    "prompts": false,
+    "resources": false
+  }
+}

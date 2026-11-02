@@ -270,6 +270,10 @@ For repositories, pull requests and CI, follow [GitHub MCP setup](github.md).
 Its interactive setup uses a dedicated fine-grained token and verifies access
 before enabling the native coordinator's connection.
 
+[Cloudflare MCP setup](cloudflare.md) uses the official API server and Hermes'
+native OAuth flow. The account and permissions are selected in Cloudflare's
+consent screen; the existing R2 backup credential stays separate.
+
 Telegram's long-running status is a gateway display setting, not an agent skill.
 Merge [the Telegram display settings](../config/telegram-display.json) into
 `display.platforms.telegram` in the native owner's private `config.yaml`,
