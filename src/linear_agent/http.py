@@ -158,8 +158,13 @@ class Handler(BaseHTTPRequestHandler):
             if parsed.query:
                 raise ValueError("Query parameters are not accepted.")
             if self.server.internal:
-                if slug == "recurring" and action == "tasks":
-                    grant = self.server.service.recurring.grant()
+                if slug in {"recurring", "coordinator"} and action == "tasks":
+                    endpoint = (
+                        self.server.service.recurring
+                        if slug == "recurring"
+                        else self.server.service.intake
+                    )
+                    grant = endpoint.grant()
                     if len(
                         self.headers.get_all("Authorization") or []
                     ) != 1 or not hmac.compare_digest(
@@ -171,7 +176,7 @@ class Handler(BaseHTTPRequestHandler):
                     payload = json.loads(self.read_body())
                     if not isinstance(payload, dict):
                         raise ValueError("Object required.")
-                    self.respond(200, self.server.service.recurring.execute(payload))
+                    self.respond(200, endpoint.execute(payload))
                     return
                 registry = self.server.service.registry()
                 agent = registry.agents[slug]
