@@ -20,6 +20,9 @@ services:
       HERMES_PUBLIC_URL: ${HERMES_PUBLIC_URL:?Set the HTTPS public URL in compose.env}
       HERMES_HOME: /opt/data
       HERMES_WRITE_SAFE_ROOT: /opt/data
+      # Native voice preprocessing stays local, bounded by this service's CPU/RAM limits.
+      HERMES_LOCAL_STT_COMMAND: /opt/voice/whisper-cli -m /opt/voice/models/small-q5_1.bin -f {input_path} -l {language} -t 1 -bs 1 -bo 1 -ng -nt -otxt -of {output_dir}/transcript --vad -vm /opt/voice/models/silero-v6.2.0.bin -vsd 500
+      HERMES_LOCAL_STT_LANGUAGE: ru
       HERMES_DASHBOARD: "1"
       HERMES_DASHBOARD_HOST: 0.0.0.0
       HERMES_DASHBOARD_PORT: "9119"

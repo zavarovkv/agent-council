@@ -25,8 +25,24 @@ COPY requirements-document-reader.txt /tmp/
 RUN /opt/hermes/.venv/bin/python -m venv /tmp/document-build \
     && /tmp/document-build/bin/python -m pip install --no-cache-dir --require-hashes --only-binary=:all: --no-deps --target /opt/document-libs -r /tmp/requirements-document-reader.txt
 
+FROM nousresearch/hermes-agent:v0.22.5@sha256:9c5561579f3ffdf333401797094ac3a743738d6c25d40f4331c7bf77b694238d AS voice-builder
+# CPU-only upstream CLI; no Python dependency changes or runtime downloads.
+ADD --checksum=sha256:ff1a9053feb509ff9d7729703355541ae9690073a6b1c40eb692c962e0dc1720 https://codeload.github.com/ggml-org/whisper.cpp/tar.gz/refs/tags/v1.9.5 /tmp/whisper.tar.gz
+RUN mkdir /whisper && tar -xzf /tmp/whisper.tar.gz -C /whisper --strip-components=1 \
+    && cmake -S /whisper -B /whisper/build -DCMAKE_BUILD_TYPE=Release \
+       -DBUILD_SHARED_LIBS=OFF -DGGML_NATIVE=OFF -DGGML_OPENMP=OFF \
+       -DWHISPER_BUILD_TESTS=OFF -DWHISPER_BUILD_SERVER=OFF \
+    && cmake --build /whisper/build --target whisper-cli --parallel 2 \
+    && strip /whisper/build/bin/whisper-cli
+ADD --checksum=sha256:ae85e4a935d7a567bd102fe55afc16bb595bdb618e11b2fc7591bc08120411bb https://huggingface.co/ggerganov/whisper.cpp/resolve/5359861c739e955e79d9a303bcbc70fb988958b1/ggml-small-q5_1.bin /voice-models/small-q5_1.bin
+ADD --checksum=sha256:2aa269b785eeb53a82983a20501ddf7c1d9c48e33ab63a41391ac6c9f7fb6987 https://huggingface.co/ggml-org/whisper-vad/resolve/9ffd54a1e1ee413ddf265af9913beaf518d1639b/ggml-silero-v6.2.0.bin /voice-models/silero-v6.2.0.bin
+
 FROM nousresearch/hermes-agent:v0.22.5@sha256:9c5561579f3ffdf333401797094ac3a743738d6c25d40f4331c7bf77b694238d
 COPY --from=document-reader /opt/document-libs/ /opt/document-libs/
+COPY --from=voice-builder /whisper/build/bin/whisper-cli /opt/voice/whisper-cli
+COPY --from=voice-builder /whisper/LICENSE /opt/voice/LICENSE
+COPY --from=voice-builder /voice-models/ /opt/voice/models/
+RUN chmod 0555 /opt/voice/whisper-cli && chmod 0444 /opt/voice/LICENSE /opt/voice/models/*
 
 ARG COUNCIL_REVISION=development
 LABEL org.opencontainers.image.source="https://github.com/zavarovkv/agent-council"
