@@ -181,10 +181,12 @@ class Service:
                 if error.status != 404:
                     self.store.update_job(job["key"], state="cancelling")
                     return
-        self.store.update_job(job["key"], state="cancelled")
-        self.store.child_finished(
-            agent.slug, job["session"], "Подзадача остановлена; подтверждённого результата нет."
+        self.store.update_job(
+            job["key"],
+            state="cancelled",
+            output="Подзадача остановлена; подтвержденного результата нет.",
         )
+        self.store.child_finished(agent.slug, job["session"], job["key"])
 
     def step(self):
         registry = self.registry()
@@ -290,7 +292,7 @@ class Service:
             output_id = stable_id(job["key"] + ":final")
             if self.store.published(output_id):
                 self.store.update_job(job["key"], state="failed" if job["error"] else "done")
-                self.store.child_finished(agent.slug, job["session"], job["output"])
+                self.store.child_finished(agent.slug, job["session"], job["key"])
             return
         if job["state"] in {"running", "waiting"}:
             self._poll(registry, agent, session, job)
@@ -351,6 +353,7 @@ class Service:
                 agent,
                 job,
                 "execution_unknown" if result["status"] == "unknown" else "execution_failed",
+                checkpoint=result.get("output") if result["status"] == "failed" else None,
             )
             return
         controls = result.get("pending_controls") or []
@@ -407,12 +410,19 @@ class Service:
             self._cancel(agent, job)
             self._fail(agent, job, "execution_timeout")
 
-    def _fail(self, agent, job, category):
+    def _fail(self, agent, job, category, *, checkpoint=None):
         message = "Не удалось завершить работу. Состояние сохранено; автоматический повтор выполнения отключён."
         if category == "clarification_uncertain":
             message = "Не удалось подтвердить применение вашего уточнения. Работа остановлена; ответ не отправлен повторно. Проверьте результат и создайте новую сессию."
         self.store.publish(agent.slug, job["session"], job["key"] + ":final", "error", message)
-        self.store.update_job(job["key"], state="publishing", error=category, output=message)
+        # Keep partial work available to the authorized coordinator without posting
+        # a tool transcript or treating a failed run as completed research.
+        output = message
+        if isinstance(checkpoint, str) and checkpoint.strip():
+            output = (
+                "Исполнение не завершено. Частичный результат для продолжения:\n\n" + checkpoint
+            )[:16000]
+        self.store.update_job(job["key"], state="publishing", error=category, output=output)
 
     def delegate(self, slug, payload):
         registry = self.registry()

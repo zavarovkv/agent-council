@@ -83,6 +83,8 @@ class Store:
                 db.execute(
                     "ALTER TABLE delegations ADD COLUMN parent_issue TEXT NOT NULL DEFAULT ''"
                 )
+            if "result_key" not in {row[1] for row in db.execute("PRAGMA table_info(delegations)")}:
+                db.execute("ALTER TABLE delegations ADD COLUMN result_key TEXT NOT NULL DEFAULT ''")
             self._prune(db)
         self.path.chmod(0o600)
 
@@ -391,7 +393,10 @@ class Store:
     def notify_parent(self, parent, children, revision):
         # Admission and notification acknowledgment are one transaction, so a
         # restart cannot lose or duplicate the coordinator continuation.
-        keys = sorted(child["id"] for child in children)
+        keys = sorted(
+            child["id"] + (":" + child["result_key"] if child["result_key"] else "")
+            for child in children
+        )
         key = hashlib.sha256((parent["id"] + ":children:" + ",".join(keys)).encode()).hexdigest()
         text = json.dumps(
             {
@@ -511,11 +516,21 @@ class Store:
                 )
             ]
 
-    def child_finished(self, agent, sid, result):
+    def child_finished(self, agent, sid, identity):
         with self.database() as db:
+            db.execute("BEGIN IMMEDIATE")
+            job = db.execute(
+                "SELECT rowid AS sequence,output FROM jobs WHERE key=? AND agent=? AND session=? AND state IN ('done','failed','cancelled')",
+                (identity, agent, sid),
+            ).fetchone()
+            if not job:
+                raise ValueError("A completed job from this child session is required.")
+            # A late publication receipt must not replace a newer completed revision.
             db.execute(
-                "UPDATE delegations SET state='done',result=? WHERE child_agent=? AND child_session=?",
-                (result[:16000], agent, sid),
+                "UPDATE delegations SET state='done',result=?,notified=CASE WHEN result_key=? THEN notified ELSE 0 END,result_key=? "
+                "WHERE child_agent=? AND child_session=? AND NOT EXISTS "
+                "(SELECT 1 FROM jobs prior WHERE prior.key=delegations.result_key AND prior.rowid>?)",
+                (job["output"][:16000], identity, identity, agent, sid, job["sequence"]),
             )
 
     def ready_children(self):
