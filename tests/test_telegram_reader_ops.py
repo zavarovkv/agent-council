@@ -5,7 +5,7 @@ import os
 import tempfile
 import unittest
 from datetime import UTC, datetime, timedelta
-from unittest.mock import patch
+from unittest.mock import call, patch
 
 from test_operations import FakeRuntime, Fixture
 
@@ -63,6 +63,28 @@ class ReaderOperationsTests(unittest.TestCase):
         self.assertTrue(self.runtime.running)
         self.assertIn("ready", self.runtime.events)
         self.assertEqual(self.settings.telegram_reader_file.read_text(), reader_env())
+
+    def test_private_evidence_ancestor_is_owned_by_the_runtime_not_the_operator(self):
+        with patch("council_ops.telegram_reader.identity", return_value=(12345, 23456)):
+            with patch("council_ops.telegram_reader.os.chown") as chown:
+                previous = os.umask(0o077)
+                try:
+                    root = workspace(self.runtime)
+                    # Repeated setup also repairs the ancestor of existing data.
+                    root.parent.chmod(0o755)
+                    workspace(self.runtime)
+                finally:
+                    os.umask(previous)
+        self.assertEqual(chown.call_args_list.count(call(root.parent, 12345, 23456)), 2)
+        self.assertEqual(root.parent.stat().st_mode & 0o777, 0o700)
+
+    def test_linked_monitoring_ancestor_is_rejected_before_ownership_changes(self):
+        parent = self.settings.workspace_dir / "monitoring"
+        parent.symlink_to(self.fixture.data, target_is_directory=True)
+        with patch("council_ops.telegram_reader.os.chown") as chown:
+            with self.assertRaises(OperationError):
+                workspace(self.runtime)
+        chown.assert_not_called()
 
     def test_expired_artifact_cannot_be_accepted_after_a_failed_collection(self):
         root = workspace(self.runtime)
