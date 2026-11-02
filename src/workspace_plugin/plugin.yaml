@@ -4,6 +4,6 @@ kind: standalone
 version: 1.0.0
 requires_hermes: ">=0.22.5"
 description: Shared Notion and Drive materials for the trusted Council agents.
-provides_tools: [council_workspace, material_read, recurring_tasks]
+provides_tools: [council_workspace, material_read, recurring_tasks, council_google]
 provides_hooks: []
 

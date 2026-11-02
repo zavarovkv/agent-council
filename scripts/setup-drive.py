@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Connect the deployment to Drive without putting credentials in SSH arguments."""
+"""Connect Google services without putting credentials in SSH arguments."""
 
 import argparse
 import ipaddress
@@ -30,7 +30,7 @@ def ssh_options():
     ]
 
 
-def remote_command(action):
+def remote_command(action, services="drive"):
     # Only versioned public Python source enters the command line. Credentials
     # arrive on stdin; the OAuth callback arrives through the SSH tunnel.
     source = Path(__file__).with_name("configure-drive.py").read_text()
@@ -50,6 +50,8 @@ def remote_command(action):
             "-c",
             source,
             action,
+            "--services",
+            services,
         ]
     )
 
@@ -65,6 +67,9 @@ def callback_address(networks):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
+        "--services", default="drive", help="Comma-separated drive,calendar,gmail,analytics"
+    )
+    parser.add_argument(
         "--client-json", type=Path, help="Downloaded Desktop OAuth JSON; never copied to Git."
     )
     mode = parser.add_mutually_exclusive_group()
@@ -75,6 +80,8 @@ def main():
         "--import-only", action="store_true", help="Save the client without starting consent."
     )
     args = parser.parse_args()
+    if not set(args.services.split(",")) <= {"drive", "calendar", "gmail", "analytics"}:
+        parser.error("Unknown Google service")
     if args.import_only and not args.client_json:
         parser.error("--import-only requires --client-json")
     host = os.environ.get("COUNCIL_SSH_HOST", "root@2.29.13.129")
@@ -91,7 +98,9 @@ def main():
     if args.import_only:
         return
     if args.verify:
-        subprocess.run(ssh_options() + ["-T", host, remote_command("verify")], check=True)
+        subprocess.run(
+            ssh_options() + ["-T", host, remote_command("verify", args.services)], check=True
+        )
         return
     inspect = shlex.join(
         [
@@ -116,7 +125,7 @@ def main():
             "-L",
             forward,
             host,
-            remote_command("authorize"),
+            remote_command("authorize", args.services),
         ],
         check=True,
     )

@@ -12,3 +12,7 @@ def register(ctx):
     from council_workspace.materials import register as register_materials
 
     register_materials(ctx)
+
+    from council_workspace.google_client import register as register_google
+
+    register_google(ctx)
