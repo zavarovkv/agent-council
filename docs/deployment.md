@@ -266,6 +266,10 @@ Hermes handles the HTTPS callback at `/api/mcp/oauth/callback/notion`; no token
 needs to be copied into chat. Retain only the needed tools: connection identity,
 tool-access metadata, search, fetch, create pages and update a page.
 
+For repositories, pull requests and CI, follow [GitHub MCP setup](github.md).
+Its interactive setup uses a dedicated fine-grained token and verifies access
+before enabling the native coordinator's connection.
+
 OAuth may expose the selected Notion workspace rather than only the preferred
 CouncilBase page. The owner must accept that scope. A filing instruction is not
 an API permission boundary. If access must be limited to one page, use a separate
