@@ -296,11 +296,28 @@ class Linear:
         )["project"]
 
     def document(self, agent, document):
-        return self.query(
+        identity = identifier(document)
+        # The singular document query is non-nullable and raises for missing IDs.
+        # An ID-filtered connection distinguishes a confirmed absence from errors.
+        result = self.query(
             agent,
-            "query CouncilDocument($id:String!){document(id:$id){id title url content project{id} issue{id}}}",
-            {"id": identifier(document)},
-        )["document"]
+            "query CouncilDocument($id:ID!){documents(filter:{id:{eq:$id}},first:1,includeArchived:true){nodes{id title url content project{id} issue{id}} pageInfo{hasNextPage}}}",
+            {"id": identity},
+        ).get("documents")
+        if (
+            not isinstance(result, dict)
+            or not isinstance(result.get("nodes"), list)
+            or len(result["nodes"]) > 1
+            or not isinstance(result.get("pageInfo"), dict)
+            or result["pageInfo"].get("hasNextPage") is not False
+        ):
+            raise RemoteError()
+        if not result["nodes"]:
+            return None
+        found = result["nodes"][0]
+        if not isinstance(found, dict) or found.get("id") != identity:
+            raise RemoteError()
+        return found
 
     def save_document(self, agent, identity, fields, *, create=False):
         operation = "documentCreate" if create else "documentUpdate"

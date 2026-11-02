@@ -25,7 +25,7 @@ the personal assistant's existing MCP connection.
    You can also create a sub-issue under a known Qui-Gon task and delegate it
    to an installed specialist yourself. The child must be created by the configured
    owner or coordinator, in an allowed team. Specialists cannot delegate further.
-5. Each specialist publishes its result in its own session. Once children finish,
+5. Each specialist publishes its concise result in its own session. Once children finish,
    Qui-Gon resumes, reviews the findings and returns a combined answer in the
    parent session. Human assignees and issue workflow states are preserved.
    Each completed specialist run has its own handoff identity: revisions to the
@@ -35,10 +35,16 @@ the personal assistant's existing MCP connection.
    unfinished; Linear receives a short error instead of the full checkpoint.
    This does not automatically retry failed model runs or accept unfinished work.
 
+With `linear-handoff-v1`, `linear_handoff` separates the visible summary from
+complete internal evidence. A technical blocker wakes Qui-Gon even while siblings
+are still running. Qui-Gon can resolve the dependency and explicitly resume the
+same specialist session. Human decisions still use `clarify`. See the
+[message protocol and rollout](linear-handoff.md) for limits, receipts and retries.
+
 Only the explicitly pinned human Linear user can start or continue work.
 Usernames, issue text and mentions cannot grant permissions. Agent-created child
 sessions also require a durable delegation record and verified parent lineage.
-Results are visible to everyone who can read their Linear issue: these executors
+Published results are visible to everyone who can read their Linear issue: these executors
 receive no personal Telegram history, owner memory or personal MCP grants.
 They have public web research, clarification, reviewed profile-local skills and
 project-scoped task and material tools. `council_skill` reads only those skill instructions and
