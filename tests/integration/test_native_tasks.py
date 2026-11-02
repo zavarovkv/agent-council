@@ -39,6 +39,7 @@ first = settings(home)
 assert setup.configure(home)['native_tasks_configured'] and settings(home)==first
 value=YAML().load((home/'config.yaml').read_text())
 assert value['model']==original['model']
+assert value['auxiliary']['background_review']['enabled'] is False
 assert value['mcp_servers']['notion']==original['mcp_servers']['notion']
 linear = dict(value['mcp_servers']['linear'])
 assert linear.pop('tools') == {'include':['get_*','list_*','search_*']}

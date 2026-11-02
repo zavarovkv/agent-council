@@ -13,7 +13,9 @@ from .snapshots import snapshot
 def configure(runtime, *, capability, script, result_key, probe):
     verify_capabilities(runtime, [capability])
     runtime.require_idle()
-    backup = snapshot(runtime, automatic=True)
+    # Activation already requires a restart. Record the running services before
+    # stopping, then copy consistently without the short online freeze budget.
+    backup = snapshot(runtime, restart=False, automatic=True)
     uid, gid = identity(runtime.settings)
 
     def provision(home):
@@ -56,10 +58,10 @@ def configure(runtime, *, capability, script, result_key, probe):
             raise OperationError("Profile configuration was not confirmed.")
         return value
 
-    smoke(runtime, backup, prepare_copy=provision)
-    runtime.require_idle()
-    runtime.stop()
     try:
+        smoke(runtime, backup, prepare_copy=provision)
+        runtime.require_idle()
+        runtime.stop()
         result = provision(runtime.settings.data_dir)
         runtime.start()
         runtime.ready()

@@ -272,8 +272,15 @@ class NativeTasksTests(unittest.TestCase):
         self.intake.execute(self.request)
         (self.home / "runtime").mkdir(exist_ok=True)
         (self.home / "runtime/maintenance").touch()
+        self.assertEqual(len(self.intake.execute({"action": "list"})["tasks"]), 1)
+        self.assertEqual(
+            self.intake.execute({"action": "get", "key": self.request["key"]})["state"],
+            "queued",
+        )
         with self.assertRaises(BlockingIOError):
-            self.intake.execute({"action": "list"})
+            self.intake.execute(self.request)
+        with self.assertRaises(BlockingIOError):
+            self.intake.execute({"action": "reply", "key": self.request["key"]})
         self.intake.reconcile(self.service.registry())
         self.assertEqual(self.linear.creates, 0)
         (self.home / "runtime/maintenance").unlink()

@@ -77,9 +77,11 @@ class Intake:
 
     def execute(self, payload):
         grant, registry = self.grant(), self.service.registry()
-        if not registry.enabled or (self.service.home / "runtime/maintenance").exists():
-            raise BlockingIOError("Native task admission is paused.")
         action = payload.get("action")
+        if not registry.enabled or (
+            (self.service.home / "runtime/maintenance").exists() and action not in {"list", "get"}
+        ):
+            raise BlockingIOError("Native task admission is paused.")
         if action == "list" and set(payload) == {"action"}:
             with self.store.database() as db:
                 rows = db.execute(
