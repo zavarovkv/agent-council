@@ -63,6 +63,19 @@ windows prioritize OTA keyword context and recent text and are marked partial.
 Text/captions are covered; images, audio and attachments are outside the scan.
 No sender names or IDs are collected as metadata. Missing data is not no events.
 
+Images with `telegram-evidence-v1` expose collected text to the trusted team via
+`council_workspace`. `context` reports whether the source is connected;
+`telegram_list` returns available collection days and their actual coverage;
+`telegram_read` reads one day using `id=YYYY-MM-DD`. Follow `next_offset` with
+the returned `revision` to avoid mixing versions during a collector refresh.
+The source username and immutable peer must match the configured collector.
+These reads use existing per-profile workspace grants, rechecked on every call;
+public profiles receive no access. No account credential, arbitrary file path,
+Telegram login, joining or message-sending operation is available to agents.
+The seven-day retention does not provide retrospective monthly coverage.
+Community messages are leads or attributed observations, not independently
+verified company news. Check significant claims against primary sources.
+
 The collector has its own network, no ports, read-only root, bounded resources,
 no capabilities and only the evidence-directory mount. Docker logging is disabled.
 The private session is `/etc/agent-council/telegram-reader.env`, outside Git and
