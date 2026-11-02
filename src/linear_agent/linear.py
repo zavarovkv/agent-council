@@ -342,6 +342,14 @@ class Linear:
             raise PermissionError("Ambiguous recurring issue identity.")
         return result[0]
 
+    def task_status(self, agent, issue):
+        """Read routing and status without downloading comments or attachments."""
+        return self.query(
+            agent,
+            "query CouncilTaskStatus($id:String!){issue(id:$id){id title url team{id} state{id name type} assignee{id} delegate{id} project{id}}}",
+            {"id": identifier(issue)},
+        )["issue"]
+
     def update_issue(self, agent, issue, fields):
         result = self.query(
             agent,
@@ -389,6 +397,7 @@ class Linear:
                     "parentId": parent_issue,
                     "teamId": team,
                     "delegateId": delegate,
+                    "assigneeId": None,
                     "title": child["title"],
                     "description": child["description"],
                 }

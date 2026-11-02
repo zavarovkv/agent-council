@@ -27,6 +27,9 @@ def require_capability(runtime, *homes, image=None):
     if any((home / ".council/recurring/client.json").exists() for home in homes):
         verify_capabilities(runtime, ["recurring-tasks-v1"], image=image)
 
+    if any((home / ".council/tasks-client.json").exists() for home in homes):
+        verify_capabilities(runtime, ["native-task-routing-v1"], image=image)
+
     if any((home / ".council/workspace/access.json").exists() for home in homes):
         verify_capabilities(runtime, ["workspace-access-v1"], image=image)
     if any((home / ".council/linear/.managed").exists() for home in homes):

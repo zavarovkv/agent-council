@@ -29,9 +29,18 @@ class Service:
         self.halt = threading.Event()
         self.wake = threading.Event()
         self.ready_until = {}
+        from .intake import Intake
         from .recurring import Recurring
 
         self.recurring = Recurring(self)
+        self.intake = Intake(self)
+
+    def root_admission(self, registry, agent, issue, sid=None):
+        for source in (self.recurring, self.intake):
+            row = source.authorized(registry, agent, issue, sid)
+            if row:
+                return source, row
+        return None, None
 
     def registry(self):
         return Registry.load(self.home)
@@ -58,7 +67,7 @@ class Service:
             raise PermissionError("Unrecognized app installation.")
         if event.actor != registry.owner:
             child = self.store.delegation(slug, payload["agentSession"].get("issueId", ""))
-            scheduled = self.recurring.authorized(
+            _, scheduled = self.root_admission(
                 registry, agent, payload["agentSession"].get("issueId", ""), event.session
             )
             if event.action != "created" or (
@@ -129,20 +138,20 @@ class Service:
                 raise PermissionError("Sub-issue lineage is not authorized.")
             self.authorize(registry, registry.agents[parent["agent"]], parent["id"])
         elif owner != registry.owner:
-            scheduled = self.recurring.authorized(registry, agent, issue_id, sid)
+            source, scheduled = self.root_admission(registry, agent, issue_id, sid)
             if (
                 not scheduled
                 # Linear leaves creator null for automatically delegated sessions.
-                # Only the pinned schedule and app-owned issue grant this exception.
+                # Only a pinned owner admission and app-owned issue grant this exception.
                 or owner not in {None, installation["app_user"]}
                 or (issue.get("creator") or {}).get("id") != installation["app_user"]
                 or (issue.get("delegate") or {}).get("id") != installation["app_user"]
                 or issue["team"]["id"] != json.loads(scheduled["body"])["team"]
             ):
                 raise PermissionError(
-                    "Only the owner or a registered owner schedule may initiate work."
+                    "Only the owner or a registered owner request may initiate work."
                 )
-            self.recurring.bind(scheduled["key"], sid)
+            source.bind(scheduled["key"], sid)
         if job and job["action"] == "prompted":
             activity = self.linear.activity(agent, job["activity"])
             if (
@@ -191,6 +200,7 @@ class Service:
     def step(self):
         registry = self.registry()
         self.recurring.reconcile(registry)
+        self.intake.reconcile(registry)
         jobs = self.store.jobs()
         for saved in jobs:
             job = self.store.job(saved["key"])
@@ -251,7 +261,7 @@ class Service:
             and item["state"] not in FINAL
         ]
         waiting = next((item for item in prior if item["state"] == "waiting"), None)
-        if job["action"] == "prompted" and waiting:
+        if job["action"] in {"prompted", "native_reply"} and waiting:
             control = json.loads(waiting["control"])
             try:
                 self.hermes.clarify(agent, waiting["run_id"], control, job["text"])

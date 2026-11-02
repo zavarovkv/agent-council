@@ -5,6 +5,9 @@ def register(ctx):
     from council_workspace.client import register as register_workspace
 
     register_workspace(ctx)
+    from council_tasks import register as register_tasks
+
+    register_tasks(ctx)
     from council_recurring.client import register as register_recurring
 
     register_recurring(ctx)

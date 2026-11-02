@@ -20,6 +20,7 @@ from .instructions import sync as sync_instructions
 from .lifecycle import deploy, restore, smoke
 from .monitoring import configure as configure_monitoring
 from .monitoring import poll as monitor
+from .profile_setup import configure as configure_profile
 from .recurring import configure as configure_recurring
 from .research import configure as configure_research
 from .research import flush as flush_research
@@ -164,6 +165,7 @@ def parser():
         "configure-workspace-index", help="Prepare daily Notion and Drive navigation"
     )
     commands.add_parser("configure-recurring", help="Prepare the owner-pinned scheduling grant")
+    commands.add_parser("configure-native-tasks", help="Enable app-owned native team requests")
     commands.add_parser(
         "configure-monitoring", help="Pin operational notifications to the verified owner"
     )
@@ -320,6 +322,15 @@ def operate(arguments, settings):
         elif arguments.action == "configure-recurring":
             doctor(runtime)
             result = configure_recurring(runtime)
+        elif arguments.action == "configure-native-tasks":
+            doctor(runtime)
+            result = configure_profile(
+                runtime,
+                capability="native-task-routing-v1",
+                script="provision-native-tasks.py",
+                result_key="native_tasks_configured",
+                probe="from council_tasks import call; assert 'tasks' in call({'action':'list'}); print('Native task grant verified')",
+            )
         elif arguments.action == "configure-research":
             result = configure_research(runtime)
         elif arguments.action == "flush-research":
