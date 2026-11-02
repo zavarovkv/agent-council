@@ -10,6 +10,7 @@ from pathlib import Path
 from .catalog import LIMITATIONS, ROLES
 from .config import Registry, identifier
 from .events import parse_event, verified_payload
+from .handoff import LEGACY_LIMIT, Handoffs
 from .hermes import Hermes
 from .issues import Issues
 from .linear import Linear
@@ -341,6 +342,10 @@ class Service:
             if job["action"] == "created"
             else "Продолжаю выполнение регулярного задания."
             if job["action"] == "scheduled_followup"
+            else "Продолжаю работу после сообщения координатора."
+            if job["action"] == "coordinator_reply"
+            else "Проверяю результаты исполнителей."
+            if job["action"] == "children"
             else "Продолжаю работу с вашим уточнением.",
         )
         self.flush_outbox(registry)
@@ -371,6 +376,7 @@ class Service:
         )
         if recurring_context:
             text = json.dumps({"request": text, "recurring": recurring_context}, ensure_ascii=False)
+        self.store.child_started(agent.slug, job["session"])
         self.store.update_job(job["key"], state="starting")
         result = self.hermes.start(agent, session["hermes"], text, job["key"])
         run_id = self.hermes.run_id(result.get("run_id"))
@@ -419,9 +425,17 @@ class Service:
             output = result.get("output")
             if not isinstance(output, str) or not output.strip():
                 raise ValueError("Executor returned no final result.")
+            if len(output) > LEGACY_LIMIT:
+                self._fail(agent, job, "result_too_large")
+                return
             children = self.store.children(agent.slug, job["session"])
             if any(
-                child["state"] != "done" or child["origin_job"] == job["key"] for child in children
+                child["state"] in {"reserved", "active"}
+                or (
+                    not child["notified"]
+                    and (child["state"] == "blocked" or child["origin_job"] == job["key"])
+                )
+                for child in children
             ):
                 self.store.publish(
                     agent.slug,
@@ -430,12 +444,30 @@ class Service:
                     "thought",
                     "Жду результаты подзадач от исполнителей.",
                 )
-                self.store.update_job(job["key"], state="waiting_children", output=output[:16000])
+                self.store.update_job(job["key"], state="waiting_children", output=output)
+                return
+            handoffs = Handoffs(self)
+            try:
+                event = handoffs.legacy(session, job, output)
+            except ValueError:
+                self._fail(agent, job, "handoff_storage_rejected", checkpoint=output)
+                return
+            # Review already posted the verified result in this run. The internal
+            # handoff still reaches the coordinator, without another public copy.
+            if event["payload"]["kind"] == "result" and self.store.reviewed(
+                job["key"], session["issue"]
+            ):
+                self.store.update_job(job["key"], state="done", output=output)
+                self.store.child_finished(agent.slug, job["session"], job["key"])
                 return
             self.store.publish(
-                agent.slug, job["session"], job["key"] + ":final", "response", output[:16000]
+                agent.slug,
+                job["session"],
+                job["key"] + ":final",
+                "response",
+                event["payload"]["display"],
             )
-            self.store.update_job(job["key"], state="publishing", output=output[:16000])
+            self.store.update_job(job["key"], state="publishing", output=output)
         elif self.clock() - (job["received"] if job["state"] == "waiting" else job["updated"]) > (
             86400 if job["state"] == "waiting" else 1800
         ):
@@ -444,16 +476,34 @@ class Service:
 
     def _fail(self, agent, job, category, *, checkpoint=None):
         message = "Не удалось завершить работу. Состояние сохранено; автоматический повтор выполнения отключён."
+        if category == "result_too_large":
+            message = "Результат превышает лимит внутреннего хранилища; он не принят и не обрезан. Сохраните полный материал в документ и передайте ссылку."
         if category == "clarification_uncertain":
             message = "Не удалось подтвердить применение вашего уточнения. Работа остановлена; ответ не отправлен повторно. Проверьте результат и создайте новую сессию."
-        self.store.publish(agent.slug, job["session"], job["key"] + ":final", "error", message)
         # Keep partial work available to the authorized coordinator without posting
         # a tool transcript or treating a failed run as completed research.
+        prefix = "Исполнение не завершено. Частичный результат для продолжения:\n\n"
         output = message
-        if isinstance(checkpoint, str) and checkpoint.strip():
-            output = (
-                "Исполнение не завершено. Частичный результат для продолжения:\n\n" + checkpoint
-            )[:16000]
+        if isinstance(checkpoint, str) and len(prefix) + len(checkpoint) > LEGACY_LIMIT:
+            message += " Частичный результат превышает лимит хранилища и не сохранён; обрезанная копия не принята."
+            output = message
+        if (
+            isinstance(checkpoint, str)
+            and checkpoint.strip()
+            and len(prefix) + len(checkpoint) <= LEGACY_LIMIT
+        ):
+            output = prefix + checkpoint
+        session = self.store.session(agent.slug, job["session"])
+        if session:
+            try:
+                Handoffs(self).legacy(session, job, output, failed=True)
+            except ValueError:
+                # Quota failure must not recursively prevent terminalization.
+                # The bounded executor output remains in the job checkpoint.
+                message += " Внутреннее хранилище результатов недоступно; передача полного результата не подтверждена."
+                if not checkpoint:
+                    output = message
+        self.store.publish(agent.slug, job["session"], job["key"] + ":final", "error", message)
         self.store.update_job(job["key"], state="publishing", error=category, output=output)
 
     def delegate(self, slug, payload):
@@ -506,6 +556,9 @@ class Service:
         )
         return {"issue_id": issue["id"], "url": issue["url"], "agent": target.slug}
 
+    def handoff(self, slug, payload):
+        return Handoffs(self).execute(slug, payload)
+
     def issue_tasks(self, slug, payload):
         return Issues(self).execute(slug, payload)
 
@@ -525,6 +578,7 @@ class Service:
                     self.linear.task_status(agent, child["issue"])
                 ),
                 "result": child["result"],
+                "event_id": self.store.handoff_id(child["result_key"]),
             }
             for child in self.store.children(slug, session["id"])
         ]
@@ -574,14 +628,21 @@ class Service:
             if (
                 parent
                 and children
-                and all(item["state"] == "done" for item in children)
+                and (
+                    all(item["state"] in {"done", "blocked"} for item in children)
+                    or any(item["state"] == "blocked" and not item["notified"] for item in children)
+                )
                 and not any(job["state"] != "waiting_children" for job in active)
             ):
                 try:
                     self.authorize(registry, registry.agents[pair[0]], pair[1])
                     self.store.notify_parent(
                         parent,
-                        [item for item in children if not item["notified"]],
+                        [
+                            item
+                            for item in children
+                            if not item["notified"] and item["state"] in {"done", "blocked"}
+                        ],
                         registry.revision,
                     )
                     self.recovery.success(key)

@@ -5,6 +5,7 @@ import json
 import logging
 
 from .catalog import ROLES
+from .handoff import Handoffs
 from .transport import RemoteError
 from .workflow import TERMINAL, first_state, is_blocked, is_review, named_state
 
@@ -25,12 +26,21 @@ PHASES = {
     "cancelled": ("Выполнение остановлено", "Решить, продолжать работу или отменить задачу."),
     "cancelling": ("Останавливается", "Ожидается подтверждение остановки."),
     "retrying": ("Ждет восстановления связи", "Система повторит запрос автоматически."),
+    "blocked": ("Нужна помощь координатора", "Координатор должен устранить причину блокировки."),
     "blocked_children": (
         "Подзадаче нужна помощь",
         "Координатор должен устранить блокировку подзадачи.",
     ),
 }
-BLOCKING = {"waiting", "failed", "cancelled", "cancelling", "retrying", "blocked_children"}
+BLOCKING = {
+    "waiting",
+    "failed",
+    "cancelled",
+    "cancelling",
+    "retrying",
+    "blocked",
+    "blocked_children",
+}
 
 
 class TaskStatus:
@@ -46,6 +56,9 @@ class TaskStatus:
             phase = "retrying"
         if phase == "publishing" and job["error"]:
             phase = "failed"
+        handoff = Handoffs(self.service).for_job(job["key"])
+        if phase in {"done", "publishing"} and handoff and handoff["payload"]["kind"] == "blocked":
+            phase = "blocked"
         children = []
         if job["agent"] == "qui-gon":
             jobs = self.store.task_jobs() if jobs is None else jobs
@@ -63,6 +76,8 @@ class TaskStatus:
             ):
                 phase = "blocked_children"
         label, next_action = PHASES[phase]
+        if phase == "blocked" and handoff:
+            next_action = handoff["payload"]["next_action"]
         return {
             "state": phase,
             "label": label,
@@ -70,9 +85,10 @@ class TaskStatus:
             "waiting_on": "owner"
             if phase == "waiting"
             else "coordinator"
-            if phase in {"blocked_children", "failed", "cancelled"}
+            if phase in {"blocked", "blocked_children", "failed", "cancelled"}
             else None,
             "next_action": next_action,
+            "reason": handoff["payload"]["summary"] if phase == "blocked" and handoff else None,
             "retry_at": retry["next_at"] if phase == "retrying" else None,
             "children": children,
             "has_active_children": any(

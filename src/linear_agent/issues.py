@@ -6,6 +6,7 @@ from datetime import date
 
 from .acceptance import Acceptance, policy
 from .config import identifier
+from .document_content import matches_document
 from .project_scope import ProjectScope
 from .store import stable_id
 from .transport import RemoteError
@@ -399,6 +400,8 @@ class Issues:
             result = self.linear.project_materials(agent, scope.project)
         else:
             result = self.linear.document(agent, identifier(payload.get("document")))
+            if result is None:
+                raise ValueError("The requested document no longer exists.")
             linked_issue = (result.get("issue") or {}).get("id")
             if linked_issue:
                 scope.require(scope.get(linked_issue))
@@ -439,22 +442,25 @@ class Issues:
         if operation["state"] == "done":
             return json.loads(operation["result"])
         identity = document or operation["id"]
-        try:
-            existing = self.linear.document(agent, identity)
-        except RemoteError:
-            existing = None
-        if existing and any(existing.get(name) != value for name, value in fields.items()):
+        # Only a successful document lookup returning None proves absence. A transport or
+        # GraphQL error (including an HTTP 404) must not authorize another write.
+        existing = self.linear.document(agent, identity)
+        if existing is not None and not matches_document(existing, fields):
             if not document or not self.store.claim_issue_operation(operation["id"]):
                 raise RemoteError()  # Never overwrite a later human edit on an uncertain retry.
             self.linear.save_document(agent, identity, fields)
-        elif not existing:
+        elif existing is None:
             if document:
                 raise ValueError("The requested document no longer exists.")
+            if not self.store.claim_issue_operation(operation["id"]):
+                # An earlier create may have succeeded and then been deleted.
+                # Do not resurrect it or repeat an in-flight mutation on retry.
+                raise RemoteError()
             self.linear.save_document(
                 agent, identity, {**fields, "issueId": issue["id"]}, create=True
             )
         saved = self.linear.document(agent, identity)
-        if not saved or any(saved.get(name) != value for name, value in fields.items()):
+        if not matches_document(saved, fields):
             raise RemoteError()
         if not document and (saved.get("issue") or {}).get("id") != issue["id"]:
             raise PermissionError("Created document identity conflict.")

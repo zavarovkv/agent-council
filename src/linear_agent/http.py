@@ -182,7 +182,7 @@ class Handler(BaseHTTPRequestHandler):
                 registry = self.server.service.registry()
                 agent = registry.agents[slug]
                 expected = ("Bearer " + agent.executor_key).encode()
-                if not hmac.compare_digest(
+                if len(self.headers.get_all("Authorization") or []) != 1 or not hmac.compare_digest(
                     self.headers.get("Authorization", "").encode(), expected
                 ):
                     self.respond(401, {"error": "unauthorized"})
@@ -196,9 +196,14 @@ class Handler(BaseHTTPRequestHandler):
                     result = self.server.service.child_tasks(slug, payload)
                 elif action == "agents":
                     result = self.server.service.agent_catalog(slug, payload)
-                elif action == "issues":
+                elif action in {"issues", "handoff"}:
                     try:
-                        result = self.server.service.issue_tasks(slug, payload)
+                        operation = (
+                            self.server.service.issue_tasks
+                            if action == "issues"
+                            else self.server.service.handoff
+                        )
+                        result = operation(slug, payload)
                     except (ValueError, PermissionError) as error:
                         self.respond(
                             403 if isinstance(error, PermissionError) else 400,

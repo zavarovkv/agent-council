@@ -71,6 +71,45 @@ class TaskStatusTests(unittest.TestCase):
             self.service.task_status.describe(self.issue())["execution"]["state"], "failed"
         )
 
+    def test_structured_blocker_and_coordinator_resume_keep_status_and_executor(self):
+        self.family()
+        child = self.store.session("dexter", uid(11))
+        event = self.service.handoff(
+            "dexter",
+            {
+                "run": self.run_for("dexter"),
+                "session": child["hermes"],
+                "action": "submit",
+                "key": "missing-source",
+                "kind": "blocked",
+                "summary": "Источник недоступен.",
+                "next_action": "Квай-Гон восстанавливает доступ.",
+            },
+        )
+        self.hermes.finish(self.run_for("dexter"), "Blocker saved")
+        self.tick(3)
+        self.assertEqual(self.issue(11)["state"]["name"], "Blocked")
+        status = self.service.task_status.describe(self.issue(11))
+        self.assertEqual(status["execution"]["state"], "blocked")
+        self.assertEqual(status["execution"]["waiting_on"], "coordinator")
+        self.assertEqual(status["execution"]["reason"], "Источник недоступен.")
+        parent_run = [r for r in self.hermes.requests.values() if r["agent"] == "qui-gon"][-1]
+        self.service.handoff(
+            "qui-gon",
+            {
+                "run": parent_run["run_id"],
+                "session": parent_run["session"],
+                "action": "resume",
+                "event_id": event["event_id"],
+                "key": "source-restored",
+                "message": "Source access restored.",
+            },
+        )
+        self.tick()
+        self.assertEqual(self.issue(11)["state"]["name"], "In Progress")
+        self.assertEqual(self.issue(11)["delegate"]["id"], uid(1001))
+        self.assertEqual(len(self.store.children("qui-gon", uid(10))), 1)
+
     def test_run_completion_does_not_mean_review_or_done(self):
         job = self.start()
         self.hermes.finish(job["run_id"])

@@ -67,6 +67,16 @@ class Store:
                     request TEXT NOT NULL, state TEXT NOT NULL DEFAULT 'pending',
                     result TEXT NOT NULL DEFAULT '', created REAL NOT NULL
                 );
+                CREATE TABLE IF NOT EXISTS handoffs (
+                    id TEXT PRIMARY KEY, origin_job TEXT NOT NULL UNIQUE,
+                    agent TEXT NOT NULL, session TEXT NOT NULL, issue TEXT NOT NULL,
+                    parent_agent TEXT, parent_session TEXT, request_key TEXT NOT NULL,
+                    payload TEXT NOT NULL, digest TEXT NOT NULL, created REAL NOT NULL
+                );
+                CREATE TABLE IF NOT EXISTS handoff_resumes (
+                    event_id TEXT PRIMARY KEY, request_key TEXT NOT NULL,
+                    message TEXT NOT NULL, job_key TEXT NOT NULL UNIQUE
+                );
                 CREATE TABLE IF NOT EXISTS owner_review_issues (
                     issue TEXT PRIMARY KEY, reasons TEXT NOT NULL
                 );
@@ -94,6 +104,12 @@ class Store:
                 )
             if "result_key" not in {row[1] for row in db.execute("PRAGMA table_info(delegations)")}:
                 db.execute("ALTER TABLE delegations ADD COLUMN result_key TEXT NOT NULL DEFAULT ''")
+            if "origin_job" not in {
+                row[1] for row in db.execute("PRAGMA table_info(issue_operations)")
+            }:
+                db.execute(
+                    "ALTER TABLE issue_operations ADD COLUMN origin_job TEXT NOT NULL DEFAULT ''"
+                )
             self._prune(db)
         self.path.chmod(0o600)
 
@@ -115,14 +131,29 @@ class Store:
         )
         db.execute("DELETE FROM oauth_states WHERE expires<?", (self.clock(),))
         db.execute(
-            "DELETE FROM jobs WHERE received<? AND state IN ('done','failed','cancelled')",
+            "DELETE FROM handoffs WHERE created<? "
+            "AND NOT EXISTS(SELECT 1 FROM jobs WHERE state NOT IN ('done','failed','cancelled') "
+            "AND ((jobs.agent=handoffs.agent AND jobs.session=handoffs.session) OR "
+            "(jobs.agent=handoffs.parent_agent AND jobs.session=handoffs.parent_session))) "
+            "AND NOT EXISTS(SELECT 1 FROM delegations WHERE child_agent=handoffs.agent "
+            "AND child_session=handoffs.session AND (state!='done' OR notified=0))",
+            (self.clock() - 30 * 86400,),
+        )
+        db.execute("DELETE FROM handoff_resumes WHERE event_id NOT IN (SELECT id FROM handoffs)")
+        db.execute(
+            "DELETE FROM jobs WHERE received<? AND state IN ('done','failed','cancelled') "
+            "AND key NOT IN (SELECT origin_job FROM handoffs) "
+            "AND key NOT IN (SELECT result_key FROM delegations) "
+            "AND key NOT IN (SELECT job_key FROM handoff_resumes)",
             (self.clock() - 7 * 86400,),
         )
         db.execute(
             "DELETE FROM outbox WHERE created<? AND state='sent'", (self.clock() - 7 * 86400,)
         )
         db.execute(
-            "DELETE FROM delegations WHERE created<? AND state='done' AND notified=1",
+            "DELETE FROM delegations WHERE created<? AND state='done' AND notified=1 "
+            "AND NOT EXISTS(SELECT 1 FROM handoffs WHERE handoffs.agent=delegations.child_agent "
+            "AND handoffs.session=delegations.child_session)",
             (self.clock() - 14 * 86400,),
         )
         db.execute(
@@ -169,9 +200,17 @@ class Store:
             ):
                 raise PermissionError("Issue operation limit reached for this session.")
             db.execute(
-                "INSERT INTO issue_operations(id,agent,session,request,created,retained) "
-                "VALUES(?,?,?,?,?,?)",
-                (identity, session["agent"], session["id"], body, self.clock(), int(retained)),
+                "INSERT INTO issue_operations(id,agent,session,request,created,retained,origin_job) "
+                "VALUES(?,?,?,?,?,?,?)",
+                (
+                    identity,
+                    session["agent"],
+                    session["id"],
+                    body,
+                    self.clock(),
+                    int(retained),
+                    session.get("origin_job", ""),
+                ),
             )
             return dict(
                 db.execute("SELECT * FROM issue_operations WHERE id=?", (identity,)).fetchone()
@@ -345,7 +384,7 @@ class Store:
             )
             if parent:
                 db.execute(
-                    "UPDATE delegations SET child_session=?,state='active' WHERE id=?",
+                    "UPDATE delegations SET child_session=?,state=CASE WHEN state='reserved' THEN 'active' ELSE state END WHERE id=?",
                     (sid, parent["id"]),
                 )
         return self.session(agent, sid)
@@ -427,7 +466,9 @@ class Store:
                     {
                         "id": child["issue"],
                         "agent": child["child_agent"],
-                        "result": child["result"][:8000],
+                        "state": child["state"],
+                        "result": child["result"],
+                        "event_id": self.handoff_id(child["result_key"]),
                     }
                     for child in children
                 ]
@@ -543,17 +584,60 @@ class Store:
         with self.database() as db:
             db.execute("BEGIN IMMEDIATE")
             job = db.execute(
-                "SELECT rowid AS sequence,output FROM jobs WHERE key=? AND agent=? AND session=? AND state IN ('done','failed','cancelled')",
+                "SELECT rowid AS sequence,* FROM jobs WHERE key=? AND agent=? AND session=? AND state IN ('done','failed','cancelled')",
                 (identity, agent, sid),
             ).fetchone()
             if not job:
                 raise ValueError("A completed job from this child session is required.")
+            event = db.execute(
+                "SELECT payload FROM handoffs WHERE origin_job=?", (identity,)
+            ).fetchone()
+            payload = json.loads(event["payload"]) if event else None
+            # A failed run cannot turn an earlier submitted draft into a successful result.
+            state = (
+                "blocked"
+                if job["state"] != "done" or (payload and payload["kind"] == "blocked")
+                else "done"
+            )
+            result = payload["display"] if payload and job["state"] == "done" else job["output"]
+            if len(result) > 700:
+                result = (
+                    "Исполнение не завершено. Частичный результат доступен через linear_handoff get."
+                    if state == "blocked"
+                    else "Результат сохранён. Полные данные доступны через linear_handoff get."
+                )
             # A late publication receipt must not replace a newer completed revision.
             db.execute(
-                "UPDATE delegations SET state='done',result=?,notified=CASE WHEN result_key=? THEN notified ELSE 0 END,result_key=? "
+                "UPDATE delegations SET state=?,result=?,notified=CASE WHEN result_key=? THEN notified ELSE 0 END,result_key=? "
                 "WHERE child_agent=? AND child_session=? AND NOT EXISTS "
-                "(SELECT 1 FROM jobs prior WHERE prior.key=delegations.result_key AND prior.rowid>?)",
-                (job["output"][:16000], identity, identity, agent, sid, job["sequence"]),
+                "(SELECT 1 FROM jobs prior WHERE prior.key=delegations.result_key AND prior.rowid>?) "
+                "AND NOT EXISTS (SELECT 1 FROM jobs newer WHERE newer.agent=delegations.child_agent "
+                "AND newer.session=delegations.child_session AND newer.rowid>? "
+                "AND (newer.run_id!='' OR newer.state NOT IN ('done','failed','cancelled')))",
+                (state, result, identity, identity, agent, sid, job["sequence"], job["sequence"]),
+            )
+
+    def handoff_id(self, job_key):
+        with self.database() as db:
+            row = db.execute("SELECT id FROM handoffs WHERE origin_job=?", (job_key,)).fetchone()
+            return row["id"] if row else None
+
+    def reviewed(self, job_key, issue):
+        with self.database() as db:
+            return any(
+                json.loads(row["request"]).get("action") == "review"
+                and json.loads(row["request"]).get("issue") == issue
+                for row in db.execute(
+                    "SELECT request FROM issue_operations WHERE origin_job=? AND state='done'",
+                    (job_key,),
+                )
+            )
+
+    def child_started(self, agent, sid):
+        with self.database() as db:
+            db.execute(
+                "UPDATE delegations SET state='active' WHERE child_agent=? AND child_session=?",
+                (agent, sid),
             )
 
     def ready_children(self):
@@ -561,7 +645,7 @@ class Store:
             return [
                 dict(row)
                 for row in db.execute(
-                    "SELECT * FROM delegations WHERE state='done' AND notified=0 ORDER BY created,id"
+                    "SELECT * FROM delegations WHERE state IN ('done','blocked') AND notified=0 ORDER BY created,id"
                 )
             ]
 
