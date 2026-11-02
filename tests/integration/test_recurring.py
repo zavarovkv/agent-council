@@ -25,7 +25,10 @@ value={'id':'fixture-report','title':'Fixture','brief':'Offline test','team':'1'
 def remote(_home, payload):
     assert payload['action'] == 'configure'
     return {'definition':payload['definition'],'revision':revision(payload['definition'])}
-first=configure(home,value,native=jobs,remote=remote)
+legacy_start=jobs.create_job(prompt='legacy preparation',schedule='20 4 * * *',name='old-travel-preparation')['id']
+legacy_delivery=jobs.create_job(prompt='legacy delivery',schedule='0 5 * * 1-5',name='old-travel-delivery')['id']
+first=configure(home,value,native=jobs,remote=remote,adopt={'start':legacy_start,'delivery':legacy_delivery})
+assert first['jobs']['start']['id']==legacy_start and first['jobs']['delivery']['id']==legacy_delivery
 second=configure(home,{**value,'delivery_time':'08:30'},native=jobs,remote=remote)
 assert {k:j['id'] for k,j in first['jobs'].items()} == {k:j['id'] for k,j in second['jobs'].items()}
 assert len(jobs.list_jobs(include_disabled=True))==2

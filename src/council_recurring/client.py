@@ -104,7 +104,7 @@ def manifest(home):
     return entries
 
 
-def configure(home, value, *, native=None, remote=call):
+def configure(home, value, *, native=None, remote=call, adopt=None):
     if native is None:
         from cron import jobs as native
     value = definition(value)
@@ -114,6 +114,14 @@ def configure(home, value, *, native=None, remote=call):
         if value["id"] not in entries and len(entries) >= 32:
             raise ValueError("At most 32 team schedules are supported.")
         entry = entries.get(value["id"], {"jobs": {}})
+        if adopt is not None:
+            if (
+                set(adopt) != {"start", "delivery"}
+                or len(set(adopt.values())) != 2
+                or (entry["jobs"] and entry["jobs"] != adopt)
+            ):
+                raise ValueError("Select the two existing job IDs explicitly for migration.")
+            entry["jobs"] = dict(adopt)
         for identity in entry["jobs"].values():
             job = native.get_job(identity)
             if not job or job.get("fire_claim"):

@@ -213,6 +213,16 @@ class RecurringTests(unittest.TestCase):
             {"configured": True, "available": True, "expected": 1, "overdue": 1, "unreported": 0},
         )
 
+    def test_maintenance_allows_health_but_blocks_new_scheduled_work(self):
+        marker = self.home / "runtime/maintenance"
+        marker.parent.mkdir(exist_ok=True)
+        marker.write_text("maintenance")
+        self.assertIn("runs", self.recurring.execute({"action": "list"}))
+        self.recurring.reconcile(self.service.registry())
+        self.assertEqual(self.linear.creates, 0)
+        with self.assertRaises(BlockingIOError):
+            self.recurring.execute({"action": "start", "id": VALUE["id"]})
+
     def test_moscow_cron_converts_day_when_crossing_midnight(self):
         self.assertEqual(start_schedule(VALUE), "20 4 * * 0,1,2,3,4,5,6")
         early = {**VALUE, "start_time": "01:20", "cutoff_time": "01:00", "weekdays": [0]}

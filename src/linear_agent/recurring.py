@@ -104,9 +104,14 @@ class Recurring:
     def execute(self, payload):
         self.grant()
         registry = self.service.registry()
-        if not registry.enabled or (self.service.home / "runtime/maintenance").exists():
-            raise BlockingIOError("Scheduled admission is paused.")
         action = payload.get("action")
+        if action not in {"list", "status"} and not registry.enabled:
+            raise BlockingIOError("Scheduled execution is disabled.")
+        if (
+            action not in {"list", "status", "configure"}
+            and (self.service.home / "runtime/maintenance").exists()
+        ):
+            raise BlockingIOError("Scheduled admission is paused.")
         with self.lock:
             if action == "configure":
                 value = definition(payload["definition"])
@@ -216,7 +221,11 @@ class Recurring:
         return self.run(period["key"])
 
     def reconcile(self, registry):
-        if not (self.service.home / "recurring.json").exists() or not registry.enabled:
+        if (
+            not (self.service.home / "recurring.json").exists()
+            or not registry.enabled
+            or (self.service.home / "runtime/maintenance").exists()
+        ):
             return
         try:
             self.grant()
