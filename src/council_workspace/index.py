@@ -164,7 +164,7 @@ class Navigation:
         return sorted(rows)
 
     @staticmethod
-    def content(notion, drive, stamp):
+    def content(notion, drive, stamp, *, native=False):
         parts = [
             MARKER,
             "",
@@ -178,7 +178,14 @@ class Navigation:
         for rows in (notion, drive):
             if rows is drive:
                 parts.extend(["", "## Google Drive", ""])
-            parts.extend(f"- [{label(name)}]({url}) – {label(kind)}" for name, kind, url in rows)
+            for name, kind, url in rows:
+                if native and rows is notion:
+                    # Notion turns page hyperlinks into mentions and drops their
+                    # custom labels. Preserve the full path outside the mention.
+                    reference = "https://app.notion.com/p/" + page_id(url)
+                    parts.append(f'- {label(name)} – <mention url="{reference}" /> – {label(kind)}')
+                else:
+                    parts.append(f"- [{label(name)}]({url}) – {label(kind)}")
             if not rows:
                 parts.append("Нет вложенных материалов.")
         result = "\n".join(parts)
@@ -273,7 +280,7 @@ class Navigation:
         notion_args = {
             "action": "notion_update" if notion_id else "notion_create",
             "title": TITLE,
-            "content": body,
+            "content": self.content(notion, drive, stamp, native=True),
         }
         if notion_id:
             from .notion import revision
@@ -295,7 +302,7 @@ class Navigation:
             self.refresh()
         except Exception:
             self.state.update(
-                error="Index refresh was not confirmed; previous published navigation is retained. Inspect the configured roots and cloud access.",
+                error="Index refresh was not confirmed. Source materials were not modified. Inspect indexing and cloud access.",
                 failed=time.time(),
             )
         finally:

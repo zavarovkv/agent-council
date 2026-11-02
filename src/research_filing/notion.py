@@ -52,12 +52,14 @@ def document(value):
         declared_id = page_id(wrapped.get("url"))
         value = wrapped["text"]
     content = re.search(r"<content>\s?(.*?)\s?</content>", value, re.S)
-    if content is None:
+    blank = re.search(r"(?:^|\n)<blank-page>[^<]*</blank-page>\s*</page>\s*$", value)
+    if content is None and blank is None:
         raise FilingError("unsupported_notion_document")
     # Page prose (including code examples) is untrusted content, not ancestry.
     # Only the MCP ancestry envelope can establish scope. Properties, like the
     # body, can contain human-authored strings that resemble structural tags.
-    envelope = re.split(r"<properties\b", value[: content.start()], maxsplit=1)[0]
+    body_start = content.start() if content is not None else blank.start()
+    envelope = re.split(r"<properties\b", value[:body_start], maxsplit=1)[0]
     root = re.search(r'<page\b[^>]*\burl="([^"]+)"', envelope)
     ancestry = re.search(r"<ancestor-path>(.*?)</ancestor-path>", envelope, re.S)
     parent = re.search(r'<parent-page\b[^>]*\burl="([^"]+)"', ancestry[1] if ancestry else "")
@@ -69,7 +71,7 @@ def document(value):
     return {
         "id": identifier,
         "parent": page_id(parent[1]) if parent else None,
-        "content": content[1],
+        "content": content[1] if content is not None else "",
     }
 
 
