@@ -285,6 +285,14 @@ separate raw tool-call messages; it does not disable the long-running heartbeat.
 The existing interval and cleanup preference remain unchanged. Apply between
 turns; a running turn retains the display settings it started with.
 
+Set `display.language: ru` for Russian gateway replies and merge the
+[Russian locale overlay](../config/locales/ru.yaml) into the owner's private
+`locales/ru.yaml`. This rewrites clarification/queue acknowledgements without
+changing how messages are routed. `busy_ack_detail: false` keeps tool names and
+iteration counts out of those acknowledgements. Hermes caches translations;
+reload the gateway between tasks after changing the locale. Do not patch the
+bundled Hermes catalogs or add these UI strings to agent skills.
+
 OAuth may expose the selected Notion workspace rather than only the preferred
 CouncilBase page. The owner must accept that scope. A filing instruction is not
 an API permission boundary. If access must be limited to one page, use a separate

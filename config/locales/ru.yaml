@@ -1,0 +1,17 @@
+# Native Hermes locale overlay: copy into HERMES_HOME/locales/ru.yaml.
+# Keep these acknowledgements factual: the clarification may still be queued.
+gateway:
+  busy:
+    redirected_head: "Принял уточнение"
+    redirected_tail: ". Продолжу с учетом изменений."
+    steered_head: "Принял уточнение"
+    steered_tail: ". Учту его в текущей задаче."
+    steered_subagents_head: "Передаю уточнение команде"
+    steered_subagents_tail: ". Продолжаем работу."
+    queued_head: "Сообщение получил"
+    queued_tail: ". Отвечу после завершения текущей задачи."
+    interrupting_head: "Принял новое сообщение"
+    interrupting_tail: ". Переключаюсь на него."
+    subagent_working_head: "Команда еще работает над задачей"
+    compressing_head: "Подготавливаю переписку к продолжению работы"
+    demoted_tail: ". Сообщение в очереди; вернусь к нему после завершения текущей работы."
