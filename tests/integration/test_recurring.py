@@ -32,6 +32,13 @@ assert first['jobs']['start']['id']==legacy_start and first['jobs']['delivery'][
 second=configure(home,{**value,'delivery_time':'08:30'},native=jobs,remote=remote)
 assert {k:j['id'] for k,j in first['jobs'].items()} == {k:j['id'] for k,j in second['jobs'].items()}
 assert len(jobs.list_jobs(include_disabled=True))==2
+configured=configure(home,{**value,'skip_empty':True},native=jobs,remote=remote)
+preserved=configure(home,{**value,'delivery_time':'08:30'},native=jobs,remote=remote)
+assert preserved['definition']['skip_empty'] is True
+assert {k:j['id'] for k,j in first['jobs'].items()} == {k:j['id'] for k,j in preserved['jobs'].items()}
+disabled=configure(home,{**value,'skip_empty':False},native=jobs,remote=remote)
+assert disabled['definition']['skip_empty'] is False
+assert len(jobs.list_jobs(include_disabled=True))==2
 for identity in manifest(home)['fixture-report']['jobs'].values():
     job=jobs.get_job(identity)
     assert job['no_agent'] and job['interpreter']=='/opt/hermes/.venv/bin/python'

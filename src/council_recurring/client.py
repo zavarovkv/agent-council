@@ -114,6 +114,9 @@ def configure(home, value, *, native=None, remote=call, adopt=None):
         if value["id"] not in entries and len(entries) >= 32:
             raise ValueError("At most 32 team schedules are supported.")
         entry = entries.get(value["id"], {"jobs": {}})
+        previous = entry.get("definition", {})
+        if "skip_empty" not in value and "skip_empty" in previous:
+            value["skip_empty"] = previous["skip_empty"]
         if adopt is not None:
             if (
                 set(adopt) != {"start", "delivery"}
@@ -225,6 +228,8 @@ def manage(args, *, home=None):
             )
         }
         value.update({k: grant[k] for k in ("team", "project", "notion_parent")})
+        if "skip_empty" in args:
+            value["skip_empty"] = args["skip_empty"]
         return configure(home, value)
     if action == "list":
         return {"schedules": [describe(e, jobs) for e in manifest(home).values()]}
@@ -271,6 +276,10 @@ def register(ctx):
             "weekdays": {"type": "array", "items": {"type": "integer"}},
             "window_days": {"type": "integer"},
             "telegram_source": {"type": "boolean"},
+            "skip_empty": {
+                "type": "boolean",
+                "description": "When the owner requests it, omit reports and delivery after a completed check finds no significant updates. Failures remain actionable; they are not empty results.",
+            },
         }
     )
     ctx.register_tool(

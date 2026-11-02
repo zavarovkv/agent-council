@@ -24,8 +24,14 @@ FIELDS = {
 
 
 def definition(value):
-    if not isinstance(value, dict) or set(value) != FIELDS:
+    if (
+        not isinstance(value, dict)
+        or not FIELDS <= set(value)
+        or set(value) - FIELDS - {"skip_empty"}
+    ):
         raise ValueError("Use the recurring definition schema.")
+    if "skip_empty" in value and type(value["skip_empty"]) is not bool:
+        raise ValueError("Empty-report suppression must be an explicit boolean.")
     if not re.fullmatch(r"[a-z][a-z0-9-]{2,47}", value["id"]):
         raise ValueError("Use a stable lowercase job name.")
     for key, limit in (("title", 120), ("brief", 8000)):

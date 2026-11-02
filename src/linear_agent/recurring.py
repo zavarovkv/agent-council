@@ -251,6 +251,18 @@ class Recurring:
                         "The native scheduler confirmed report delivery. Read the existing result and delivery status. Accept this low-risk completed task through linear_accept if allowed by acceptance-policy; leave owner-reserved work in review. Do not resend the report.",
                     )
                 if (
+                    run["state"] == "no_updates"
+                    and run["session"]
+                    and run["owner"] == registry.owner
+                    and run["policy"] == registry.revision
+                ):
+                    self.followup(
+                        run,
+                        registry,
+                        "no_report_required",
+                        "The completed check found no significant updates and the schedule omits empty reports. Review the existing research evidence in this task/session and accept ordinary work if allowed by acceptance-policy, using the issue URL and registered outcome as evidence. Do not create a Notion report, restart research, or send a Telegram message. Keep owner-reserved work in review.",
+                    )
+                if (
                     run["session"]
                     or run["state"] in {"cancelled", "blocked"}
                     or run["retry_at"] > self.service.clock()
@@ -326,6 +338,8 @@ class Recurring:
         run = self.run(payload["key"])
         if not run or run["owner"] != registry.owner or run["policy"] != registry.revision:
             raise PermissionError("The occurrence grant was revoked.")
+        if run["state"] in {"no_updates", "delivered", "cancelled"}:
+            return {"recorded": False, "terminal": True}
         category = payload.get("category")
         if category not in {"artifact_unverified", "deadline_exceeded"}:
             raise ValueError("Use a known recurring problem category.")
@@ -360,6 +374,11 @@ class Recurring:
     def brief(value, period):
         start = datetime.fromisoformat(period["window_start"]).astimezone(ZONE)
         end = datetime.fromisoformat(period["window_end"]).astimezone(ZONE)
+        empty = (
+            "\n- Если значимых новостей нет, отчет не создавать и не отправлять. Завершенную проверку отметить в задаче. Сбой проверки не означает отсутствия новостей."
+            if value.get("skip_empty", False)
+            else ""
+        )
         return f"""## Задача
 
 {value["brief"].strip()}
@@ -371,9 +390,9 @@ class Recurring:
 
 ## Результат
 
-- Форматированный отчет в [закрытом разделе Notion](https://www.notion.so/{value["notion_parent"]}).
-- В задаче – ссылка, краткий итог и существенные ограничения. Проверки и источники – в отчете.
-- Доставку выполняет существующее расписание после проверки результата.
+- Один итоговый отчет в [разделе исследований](https://www.notion.so/{value["notion_parent"]}), понятный без технических знаний.
+- Что произошло, почему это важно и что стоит сделать; источники – ссылками. Рабочие записи исполнителей хранить отдельно.
+- Доставку выполняет существующее расписание после проверки результата.{empty}
 """
 
     def execution_context(self, registry, agent, issue, sid):
@@ -389,10 +408,20 @@ class Recurring:
             "window_end": period["window_end"],
             "deadline": run["deadline"],
             "notion_parent": value["notion_parent"],
+            "skip_empty": value.get("skip_empty", False),
             "instructions": (
                 "Use Linear and the shared workflow/handoff skills. Delegate research to Dexter "
                 "when relevant and verify the result. Missing optional Telegram evidence is a "
-                "coverage gap; proceed with public sources. Save the formatted report under "
+                "coverage gap; proceed with public sources. When skip_empty is true and a completed "
+                "source check finds no significant updates, create no Notion page. Review the "
+                "research evidence, submit the task for review with a short plain-language outcome, "
+                "then call recurring_result with outcome=no_updates, summary and verification. "
+                "This suppresses delivery; a failed or incomplete investigation remains a blocker. "
+                "For a substantive report, reuse one canonical page for the whole occurrence. "
+                "Specialists contribute to that page or keep working evidence in the internal "
+                "handoff; they do not each publish a separate report. Write for the owner: what "
+                "happened, why it matters, and any recommended action. Keep tool traces, review "
+                "receipts and rejected candidates out of the reader-facing text. Save the report under "
                 "notion_parent, including this exact occurrence marker and reporting window. "
                 "Obtain Padme review for publication/executive copy. Submit the task for review "
                 "with its verified Notion URL, then call recurring_result with the saved page "
@@ -422,32 +451,68 @@ class Recurring:
         summary = payload.get("summary")
         if not isinstance(summary, str) or not 1 <= len(summary.strip()) <= 700:
             raise ValueError("Use a concise summary of at most 700 characters.")
-        page = payload.get("page", "").replace("-", "")
-        if not re.fullmatch(r"[a-f0-9]{32}", page) or not re.fullmatch(
-            r"[a-f0-9]{64}", payload.get("revision", "")
-        ):
-            raise ValueError("Use the page ID and exact revision from council_workspace readback.")
-        result = {"page": page, "revision": payload["revision"], "summary": summary.strip()}
-        with self.lock:
-            current = self.run(run["key"])
+        outcome = payload.get("outcome", "report")
+        if outcome == "no_updates":
+            if not json.loads(run["body"]).get("skip_empty", False):
+                raise PermissionError("This schedule does not authorize omitting empty reports.")
+            verification = payload.get("verification")
+            if (
+                not isinstance(verification, str)
+                or not 1 <= len(verification.strip()) <= 2000
+                or payload.get("page")
+                or payload.get("revision")
+            ):
+                raise ValueError(
+                    "An empty result needs bounded verification, without a report page."
+                )
+            if any(child["state"] != "done" for child in self.store.children(slug, session["id"])):
+                raise ValueError("Finish and review specialist work before recording no updates.")
+            result = {
+                "outcome": outcome,
+                "summary": summary.strip(),
+                "verification": verification.strip(),
+            }
+        elif outcome == "report":
+            page = payload.get("page", "").replace("-", "")
+            if not re.fullmatch(r"[a-f0-9]{32}", page) or not re.fullmatch(
+                r"[a-f0-9]{64}", payload.get("revision", "")
+            ):
+                raise ValueError(
+                    "Use the page ID and exact revision from council_workspace readback."
+                )
+            result = {"page": page, "revision": payload["revision"], "summary": summary.strip()}
+        else:
+            raise ValueError("Use report or no_updates as the outcome.")
+        with self.lock, self.store.database() as db:
+            # Serialize the outcome with delivery claims, including another
+            # adapter process. A stale delivery tick must not send an empty result.
+            db.execute("BEGIN IMMEDIATE")
+            current = db.execute(
+                "SELECT * FROM recurring_runs WHERE key=?", (run["key"],)
+            ).fetchone()
             if current["result"] and json.loads(current["result"]) != result:
-                with self.store.database() as db:
-                    claimed = db.execute(
-                        "SELECT 1 FROM recurring_deliveries WHERE run=? AND kind='report'",
-                        (run["key"],),
-                    ).fetchone()
+                claimed = db.execute(
+                    "SELECT 1 FROM recurring_deliveries WHERE run=? AND kind='report'",
+                    (run["key"],),
+                ).fetchone()
                 if claimed:
                     raise ValueError("Reconcile the existing report delivery before replacing it.")
-            self.update(
-                run["key"],
-                state="reviewed",
-                result=json.dumps(result, ensure_ascii=False),
-                error="",
-            )
+            if current["state"] != "delivered":
+                db.execute(
+                    "UPDATE recurring_runs SET state=?,result=?,error='',updated=? WHERE key=?",
+                    (
+                        "no_updates" if outcome == "no_updates" else "reviewed",
+                        json.dumps(result, ensure_ascii=False),
+                        self.service.clock(),
+                        run["key"],
+                    ),
+                )
         return {
             "registered": True,
             "key": run["key"],
-            "delivery": "pending_independent_verification",
+            "delivery": "not_required"
+            if outcome == "no_updates"
+            else "pending_independent_verification",
         }
 
     def delivery(self, payload):
@@ -481,6 +546,11 @@ class Recurring:
                             (self.service.clock(), run["key"]),
                         )
                 return {"recorded": True}
+            current = db.execute(
+                "SELECT state FROM recurring_runs WHERE key=?", (run["key"],)
+            ).fetchone()
+            if current["state"] in {"no_updates", "cancelled"}:
+                return {"body": ""}
             body = payload.get("body")
             if not isinstance(body, str) or not 1 <= len(body) <= 1800:
                 raise ValueError("A bounded prepared message is required.")

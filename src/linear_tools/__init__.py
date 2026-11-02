@@ -66,13 +66,15 @@ def register(ctx):
     for name, description, properties, required, path in (
         (
             "recurring_result",
-            "Register a reviewed scheduled report for independent Notion verification and automatic Telegram delivery. Coordinator only, in its scheduled Linear issue after review. Read the saved page with council_workspace first, preserve its exact revision and occurrence marker, then submit a short Russian summary. Does not send a message or mark delivery successful.",
+            "Register the reviewed result of this scheduled issue. Coordinator only, after review. For outcome=report (default), provide the saved Notion page, exact readback revision and a short Russian summary for independent verification and delivery. If the schedule explicitly enables skip_empty and the completed research found no significant updates, use outcome=no_updates with summary and verification of the source checks; omit page/revision. This records an internal outcome with no Notion report or Telegram message. Failed or incomplete research is a blocker, never no_updates. Does not send messages or mark delivery successful.",
             {
+                "outcome": {"type": "string", "enum": ["report", "no_updates"]},
                 "page": {"type": "string"},
                 "revision": {"type": "string"},
                 "summary": {"type": "string", "maxLength": 700},
+                "verification": {"type": "string", "maxLength": 2000},
             },
-            ["page", "revision", "summary"],
+            ["summary"],
             "recurring-result",
         ),
         (
