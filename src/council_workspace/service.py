@@ -75,16 +75,19 @@ class Workspace:
         action = args.get("action")
         if action not in READS | WRITES:
             raise ValueError("Unsupported workspace action.")
+        if action in {"index_status", "index_refresh"}:
+            # Local status/start must remain available during slow cloud reads.
+            # The navigation worker acquires the cloud lock per operation.
+            policy = server_policy(self.home)
+            if client not in policy["clients"]:
+                raise PermissionError("Workspace grant was revoked.")
+            return self.navigation.status() if action == "index_status" else self.navigation.start()
         if not self.lock.acquire(blocking=False):
             raise BlockingIOError("Workspace is busy; retry with the same key.")
         try:
             policy = server_policy(self.home)
             if client not in policy["clients"]:
                 raise PermissionError("Workspace grant was revoked.")
-            if action == "index_status":
-                return self.navigation.status()
-            if action == "index_refresh":
-                return self.navigation.start()
             attachment = None
             if action == "drive_upload":
                 if client != "native-qui-gon":
