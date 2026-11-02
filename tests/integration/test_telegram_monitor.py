@@ -36,6 +36,7 @@ assert '54321' not in output.getvalue()
 print('login_failure_verified')
 """,
             ],
+            cwd="/opt/agent-council",
             capture_output=True,
             text=True,
             check=True,
