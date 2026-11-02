@@ -180,6 +180,13 @@ class NavigationTests(unittest.TestCase):
         self.assertTrue(status["error"])
         self.assertNotIn("private provider detail", json.dumps(status))
 
+    def test_incomplete_provider_listing_never_becomes_a_complete_index(self):
+        files = SimpleNamespace(
+            root="root-folder-1", read=lambda args: {"files": [], "incompleteSearch": True}
+        )
+        with self.assertRaisesRegex(ValueError, "incomplete"):
+            self.navigation.drive_tree(files, set())
+
     def test_titles_are_plain_labels_and_incomplete_pagination_is_rejected(self):
         body = self.navigation.content(
             [("Name](https://evil.test) | thing", "page", "https://notion.so/" + "1" * 32)],

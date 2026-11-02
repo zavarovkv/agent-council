@@ -96,6 +96,8 @@ class Navigation:
                         {"action": "drive_list", "id": identity, "cursor": cursor}
                     )
                 )
+                if result.get("incompleteSearch"):
+                    raise ValueError("Drive returned an incomplete listing.")
                 for item in result.get("files", []):
                     if item["id"] in excluded:
                         continue
@@ -305,7 +307,7 @@ def main():
     from .client import call
 
     reply = json.loads(call({"action": "index_refresh"}))
-    if reply.get("error"):
+    if reply.get("error") and not reply.get("running"):
         raise SystemExit("Workspace index could not start.")
     started = reply.get("started", time.time())
     for _ in range(120):

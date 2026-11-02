@@ -73,7 +73,7 @@ class Files:
                 q=f"'{item['id']}' in parents and trashed=false",
                 pageSize=100,
                 pageToken=args.get("cursor"),
-                fields="nextPageToken,files(" + FIELDS + ")",
+                fields="nextPageToken,incompleteSearch,files(" + FIELDS + ")",
                 supportsAllDrives=True,
                 includeItemsFromAllDrives=True,
             ).execute()
