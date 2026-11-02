@@ -79,7 +79,13 @@ class Calendar:
         action, calendar = args["action"], args.get("calendar", "primary")
         if action == "calendars":
             return (
-                self.api.calendarList().list(maxResults=100, pageToken=args.get("cursor")).execute()
+                self.api.calendarList()
+                .list(
+                    maxResults=100,
+                    pageToken=args.get("cursor"),
+                    fields="nextPageToken,items(id,summary,timeZone,primary,accessRole)",
+                )
+                .execute()
             )
         if action == "get":
             return self.api.events().get(calendarId=calendar, eventId=args["id"]).execute()
@@ -100,6 +106,7 @@ class Calendar:
                 singleEvents=True,
                 orderBy="startTime",
                 pageToken=args.get("cursor"),
+                fields="nextPageToken,timeZone,items(id,etag,status,summary,start,end,htmlLink)",
             )
             .execute()
         )

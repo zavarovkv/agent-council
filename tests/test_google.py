@@ -142,6 +142,22 @@ class GoogleTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.google.execute("linear-lando", {"service": "analytics", "action": "create"})
 
+    def test_ga4_metadata_is_searchable_and_paginated_without_omission(self):
+        self.api.properties().getMetadata().execute.return_value = {
+            "dimensions": [{"apiName": f"page{i}"} for i in range(26)],
+            "metrics": [{"apiName": "activeUsers"}],
+        }
+        service = Analytics(lambda _: self.api)
+        args = {"action": "metadata", "property": "properties/123"}
+        first = service.read(args)
+        second = service.read({**args, "cursor": first["next_cursor"]})
+        self.assertEqual(len(first["dimensions"]) + len(second["dimensions"]), 26)
+        self.assertEqual(second["metrics"], [{"apiName": "activeUsers"}])
+        self.assertIsNone(second["next_cursor"])
+        selected = service.read({**args, "query": "active"})
+        self.assertFalse(selected["dimensions"])
+        self.assertEqual(selected["metrics"], second["metrics"])
+
     def test_mail_read_keeps_unread_and_bounds_nested_mime(self):
         text = base64.urlsafe_b64encode(b"x" * 25000).decode()
         item = {

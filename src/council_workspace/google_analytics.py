@@ -22,7 +22,26 @@ class Analytics:
             raise ValueError("Choose an observed GA4 resource such as properties/123456.")
         api = self.factory("analytics").properties()
         if args["action"] == "metadata":
-            return api.getMetadata(name=identity + "/metadata").execute()
+            cursor = args.get("cursor", "0")
+            if not re.fullmatch(r"[0-9]{1,6}", cursor):
+                raise ValueError("Use the metadata next_cursor returned by the previous page.")
+            metadata = api.getMetadata(name=identity + "/metadata").execute()
+            query = args.get("query", "").casefold()
+            entries = [
+                (kind, item)
+                for kind in ("dimensions", "metrics")
+                for item in metadata.get(kind, [])
+                if query in (item.get("apiName", "") + " " + item.get("uiName", "")).casefold()
+            ]
+            offset = int(cursor)
+            result = {
+                "dimensions": [],
+                "metrics": [],
+                "next_cursor": str(offset + 25) if offset + 25 < len(entries) else None,
+            }
+            for kind, item in entries[offset : offset + 25]:
+                result[kind].append(item)
+            return result
         body = args.get("body")
         if not isinstance(body, dict) or not set(body) <= {
             "dateRanges",
