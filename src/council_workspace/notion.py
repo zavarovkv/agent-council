@@ -53,6 +53,7 @@ class Pages:
             raise ValueError("Invalid page offset.")
         return {
             "id": page["id"],
+            "parent": page.get("parent"),
             "url": "https://www.notion.so/" + page["id"],
             "revision": revision(page["content"]),
             "content": page["content"][offset : offset + 16000],

@@ -405,7 +405,10 @@ def doctor(runtime):
     instructions["service"] = unit_status(runtime, "agent-council-skills.service")
     research = research_status(runtime.settings)
     research["timer"] = unit_status(runtime, "agent-council-research.timer")
+    from .recurring import status as recurring_status
+
     return {
+        "recurring": recurring_status(runtime.settings),
         "status": inspected["State"]["Status"],
         "health": inspected["State"].get("Health", {}).get("Status"),
         "image": inspected["Image"],

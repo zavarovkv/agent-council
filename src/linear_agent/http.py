@@ -158,6 +158,19 @@ class Handler(BaseHTTPRequestHandler):
             if parsed.query:
                 raise ValueError("Query parameters are not accepted.")
             if self.server.internal:
+                if slug == "recurring" and action == "tasks":
+                    grant = self.server.service.recurring.grant()
+                    if not hmac.compare_digest(
+                        self.headers.get("Authorization", "").encode(),
+                        ("Bearer " + grant["key"]).encode(),
+                    ):
+                        self.respond(401, {"error": "unauthorized"})
+                        return
+                    payload = json.loads(self.read_body())
+                    if not isinstance(payload, dict):
+                        raise ValueError("Object required.")
+                    self.respond(200, self.server.service.recurring.execute(payload))
+                    return
                 registry = self.server.service.registry()
                 agent = registry.agents[slug]
                 expected = ("Bearer " + agent.executor_key).encode()
@@ -184,6 +197,8 @@ class Handler(BaseHTTPRequestHandler):
                             {"error": str(error)},
                         )
                         return
+                elif action == "recurring-result":
+                    result = self.server.service.recurring.submit(slug, payload)
                 else:
                     self.respond(404, {"error": "not_found"})
                     return

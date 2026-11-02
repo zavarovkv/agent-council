@@ -48,6 +48,66 @@ class WorkspaceTests(unittest.TestCase):
         self.home = Path(temporary.name).resolve()
         self.path, self.policy = config(self.home)
 
+    def test_attachment_upload_cannot_read_profile_secrets_or_another_clients_cache(self):
+        from council_workspace.attachments import snapshot
+
+        self.policy["clients"]["native-qui-gon"] = {"role": "qui-gon", "key": "9" * 64}
+        self.path.write_text(json.dumps(self.policy))
+        incoming = self.home / "cache/documents/report.pdf"
+        incoming.parent.mkdir(parents=True)
+        incoming.write_bytes(b"%PDF-test" * 10000)
+        original, digest = snapshot(self.home, str(incoming))
+        self.assertEqual(len(original), 90000)
+        self.assertEqual(digest, hashlib.sha256(original).hexdigest())
+        secret = self.home / "google_token.json"
+        secret.write_text("fixture-private")
+        with self.assertRaises(PermissionError):
+            snapshot(self.home, str(secret))
+        alias = incoming.parent / "alias.pdf"
+        alias.symlink_to(secret)
+        with self.assertRaises(PermissionError):
+            snapshot(self.home, str(alias))
+        workspace = Workspace(self.home, drive_factory=Mock())
+        request = {
+            "action": "drive_upload",
+            "path": str(incoming),
+            "title": "report.pdf",
+            "key": "attachment-1",
+        }
+        with self.assertRaises(PermissionError):
+            workspace.execute("linear-padme", request)
+        provider = Mock()
+        provider.prepare_write.return_value = Mock(return_value={"verified": True})
+        with patch("council_workspace.service.Files", return_value=provider):
+            self.assertTrue(workspace.execute("native-qui-gon", request)["verified"])
+            self.assertTrue(workspace.execute("native-qui-gon", request)["verified"])
+            provider.prepare_write.assert_called_once()
+            self.assertEqual(provider.prepare_write.call_args.kwargs["attachment"], original)
+            incoming.write_bytes(b"changed")
+            with self.assertRaisesRegex(ValueError, "different content"):
+                workspace.execute("native-qui-gon", request)
+
+    def test_repeated_attachment_uses_verified_existing_drive_copy(self):
+        api, service = Mock(), Mock()
+        service.files.return_value = api
+        data = b"photo" * 20000
+        files = Files(service, "folder-fixture")
+        parent = {"id": "folder-fixture", "mimeType": "application/vnd.google-apps.folder"}
+        saved = {
+            "id": "file-fixture-1",
+            "size": str(len(data)),
+            "md5Checksum": hashlib.md5(data).hexdigest(),
+        }
+        files.get = Mock(side_effect=[parent, saved])
+        api.list.return_value.execute.return_value = {"files": [saved]}
+        with patch.dict(sys.modules, {"googleapiclient.http": Mock()}):
+            perform = files.prepare_write(
+                {"action": "drive_upload", "title": "photo.jpg", "mime_type": "image/jpeg"},
+                attachment=data,
+            )
+        self.assertTrue(perform()["reused"])
+        api.create.assert_not_called()
+
     def test_only_explicit_team_grants_and_private_settings_are_accepted(self):
         self.assertEqual(len(server_policy(self.home)["clients"]), 4)
         self.policy["clients"]["secretary"] = {"role": "qui-gon", "key": "0" * 64}

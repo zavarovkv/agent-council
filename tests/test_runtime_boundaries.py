@@ -55,9 +55,19 @@ class RuntimeBoundaryTests(unittest.TestCase):
             {
                 "catalog.py": {"council_team.catalog"},
                 "statistics.py": {"council_team.catalog"},
+                "recurring.py": {"council_recurring.contract"},
             },
         )
         self.check_imports("council_team", {})
+        # This shared definition module must remain pure data validation, without
+        # access to the personal gateway, cron implementation or cloud grants.
+        tree = ast.parse((SOURCE / "council_recurring/contract.py").read_text())
+        for node in ast.walk(tree):
+            if isinstance(node, ast.ImportFrom):
+                self.assertIn(node.module.split(".")[0], sys.stdlib_module_names)
+            elif isinstance(node, ast.Import):
+                for alias in node.names:
+                    self.assertIn(alias.name.split(".")[0], sys.stdlib_module_names)
         self.check_imports(
             "linear_tools",
             {

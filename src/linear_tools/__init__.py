@@ -62,6 +62,17 @@ def register(ctx):
     register_workspace(ctx, toolset="council-linear")
     for name, description, properties, required, path in (
         (
+            "recurring_result",
+            "Register a reviewed scheduled report for independent Notion verification and automatic Telegram delivery. Coordinator only, in its scheduled Linear issue after review. Read the saved page with council_workspace first, preserve its exact revision and occurrence marker, then submit a short Russian summary. Does not send a message or mark delivery successful.",
+            {
+                "page": {"type": "string"},
+                "revision": {"type": "string"},
+                "summary": {"type": "string", "maxLength": 700},
+            },
+            ["page", "revision", "summary"],
+            "recurring-result",
+        ),
+        (
             "linear_issues",
             "Manage Linear tasks: context lists team states/projects/members/labels; list searches titles; get reads an issue and comments; create makes ordinary Backlog tasks without delegating them; update changes task fields; comment posts a note; start moves to In Progress; review submits a verified deliverable to In Review after child work finishes; accept lets only root Qui-Gon close verified low-risk internal tasks using get.acceptance.revision, category, result, verification, evidence HTTPS URL and artifact_version. Important/high-priority, owner-reserved, public, strategic, financial, production and security work remains for owner acceptance. Read artifacts before accepting; specialists cannot self-accept. Use start to return to In Progress before revisions. Legacy complete is a review alias, never Done. Qui-Gon manages allowed teams; all specialists can read, create and update tasks throughout their current project or shared parent task tree. project reads project materials, document reads a linked document, save_document creates or updates one using fields.title/content (document UUID only for updates), comments pages complete comments; use cursor and offset/next_offset for long content. Mutations require a stable key, reused on retries. Never claim a completed action without its receipt.",
             {

@@ -29,6 +29,7 @@ LABELS = {
     "instructions": "Не удалось проверить обновление инструкций. Нужна проверка.",
     "disk": "На сервере осталось мало свободного места.",
     "research": "Исследования не сохраняются вовремя. Нужно проверить автоматическое сохранение.",
+    "recurring": "Регулярный отчет не доставлен к сроку, и уведомление о задержке не подтверждено. Квай-Гону нужно проверить задачу в Linear и доставку в Cron.",
 }
 RECOVERIES = {
     "deployment": "Снова могу проверить работу сервера.",
@@ -44,6 +45,7 @@ RECOVERIES = {
     "instructions": "Автообновление инструкций снова в порядке.",
     "disk": "Свободного места на сервере снова достаточно.",
     "research": "Автоматическое сохранение исследований снова в порядке.",
+    "recurring": "Контроль регулярных отчетов снова работает: результат или уведомление о задержке доставлены.",
 }
 INSTRUCTION_ALERTS = {
     "unavailable": "Не удалось проверить инструкции. Нужно проверить файлы на сервере.",
@@ -233,6 +235,11 @@ def issues(report, configuration, *, free_bytes, total_bytes):
     if free_bytes < max(1024**3, total_bytes // 20):
         result["disk"] = "low"
     research = report.get("research", {})
+    recurring = report.get("recurring", {})
+    if recurring.get("configured") and (
+        not recurring.get("available") or recurring.get("unreported", 0)
+    ):
+        result["recurring"] = "deadline_or_receipt_missing"
     if configuration.get("watch_research") and (
         not research.get("available")
         or research.get("oldest_pending_age_seconds", 0) > 1800

@@ -3,13 +3,21 @@
 import json
 import threading
 
+from .attachments import snapshot
 from .drive import Files, service_for
 from .notion import Pages
 from .policy import server_policy
 from .store import Store
 
 READS = {"context", "notion_get", "drive_get", "drive_list", "drive_read"}
-WRITES = {"notion_create", "notion_update", "drive_create", "drive_update", "drive_folder"}
+WRITES = {
+    "notion_create",
+    "notion_update",
+    "drive_create",
+    "drive_update",
+    "drive_folder",
+    "drive_upload",
+}
 
 
 def native_notion(name, arguments):
@@ -51,6 +59,7 @@ class Workspace:
             "key",
             "offset",
             "cursor",
+            "path",
         }:
             raise ValueError("Unsupported workspace arguments.")
         action = args.get("action")
@@ -62,6 +71,16 @@ class Workspace:
             policy = server_policy(self.home)
             if client not in policy["clients"]:
                 raise PermissionError("Workspace grant was revoked.")
+            attachment = None
+            if action == "drive_upload":
+                if client != "native-qui-gon":
+                    raise PermissionError(
+                        "Only the owner's main assistant may upload its inbound attachments."
+                    )
+                if "content" in args or "base64" in args:
+                    raise ValueError("Use path for an original attachment upload.")
+                attachment, digest = snapshot(self.home, args.get("path"))
+                args = {**args, "attachment_sha256": digest}
             if action == "context":
                 return {
                     "notion_root": policy["notion_root"],
@@ -79,7 +98,15 @@ class Workspace:
                 )
 
             if action in WRITES:
-                return self.store.write(client, args, lambda: provider().prepare_write(args))
+                return self.store.write(
+                    client,
+                    args,
+                    lambda: (
+                        provider().prepare_write(args, attachment=attachment)
+                        if attachment is not None
+                        else provider().prepare_write(args)
+                    ),
+                )
             return provider().read(args)
         finally:
             self.lock.release()

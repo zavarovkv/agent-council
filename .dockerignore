@@ -26,3 +26,5 @@
 !assets/agents/
 !assets/agents/**
 assets/agents/source/
+
+!requirements-document-reader.txt

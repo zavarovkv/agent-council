@@ -41,19 +41,13 @@ review them before using different deployment paths.
 
 ## Let the assistant configure the digest
 
-Ask the personal assistant to configure native Hermes cron: research at 07:20
-Moscow, review/file the result under the existing private Notion research section,
-and send the concise report/link at 08:00. Reviewed skills describe the workflow.
-The coordinator uses the native Dexter board and `research_archive`, which verifies
-the saved page and parent index. A useful public-source report can proceed while
-Telegram is unavailable, with that gap stated explicitly.
-
-The delivery job can use native `context_from` to receive the research job's latest
-result, then check the current day, task and actual filing status before returning
-its answer. Native cron owns delivery and retries. A model-written link alone is
-not proof of publication. No separate sender or product-specific JSON handoff is
-needed. The pinned release has no per-job timezone; keep its native scheduler in
-UTC and use `20 4 * * *` / `0 5 * * *` for Moscow. Do not silently shift other jobs.
+Use [recurring team reports](recurring-work.md): `recurring_tasks` configures
+preparation, the reporting window and delivery. Linear owns the issue and Dexter
+subtasks; Notion stores the reviewed report. The native delivery script verifies
+that exact edition and sends either its summary/link or one failure status.
+Do not use the legacy native Dexter board, `research_archive` or `context_from`
+as the new report workflow. A public-source report proceeds with an explicit
+coverage gap when the optional Telegram reader is unavailable.
 
 ## Operations and data
 
