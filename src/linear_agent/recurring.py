@@ -391,7 +391,7 @@ class Recurring:
 ## Результат
 
 - Один итоговый отчет в [разделе исследований](https://www.notion.so/{value["notion_parent"]}), понятный без технических знаний.
-- Что произошло, почему это важно и что стоит сделать; источники – ссылками. Рабочие записи исполнителей хранить отдельно.
+- Конкретные изменения, необходимые детали и прямые ссылки на источники. Без вводной воды, повторов и общих советов; рекомендации – только если они заказаны в задаче. Рабочие записи исполнителей хранить отдельно.
 - Доставку выполняет существующее расписание после проверки результата.{empty}
 """
 
@@ -419,8 +419,11 @@ class Recurring:
                 "This suppresses delivery; a failed or incomplete investigation remains a blocker. "
                 "For a substantive report, reuse one canonical page for the whole occurrence. "
                 "Specialists contribute to that page or keep working evidence in the internal "
-                "handoff; they do not each publish a separate report. Write for the owner: what "
-                "happened, why it matters, and any recommended action. Keep tool traces, review "
+                "handoff; they do not each publish a separate report. Match the requested format. "
+                "For news, start with concrete changes, concise details, dates and direct sources. "
+                "Preserve material qualifications; omit generic introductions, duplicate recaps "
+                "and mandatory business advice. Recommendations require an explicit request "
+                "and specific evidence. Keep tool traces, review "
                 "receipts and rejected candidates out of the reader-facing text. Save the report under "
                 "notion_parent, including this exact occurrence marker and reporting window. "
                 "Obtain Padme review for publication/executive copy. Submit the task for review "
