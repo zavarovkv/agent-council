@@ -207,6 +207,11 @@ class FilingTests(unittest.TestCase):
         }
         notion = Notion(lambda *_args: {"ok": True, "result": json.dumps(wrapped)})
         self.assertEqual(notion.fetch(PAGE), {"id": PAGE, "parent": PARENT, "content": ""})
+        original = wrapped["text"]
+        wrapped["text"] = original.replace(f'{PAGE}">', f'{PAGE}" deleted>', 1)
+        with self.assertRaisesRegex(FilingError, "notion_page_deleted"):
+            notion.fetch(PAGE)
+        wrapped["text"] = original
         wrapped["truncated"] = True
         with self.assertRaisesRegex(FilingError, "unsupported_notion_document"):
             notion.fetch(PAGE)
