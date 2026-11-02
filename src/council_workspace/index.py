@@ -295,7 +295,7 @@ class Navigation:
             self.refresh()
         except Exception:
             self.state.update(
-                error="Index refresh was not confirmed; previous published navigation is retained. Inspect the configured roots and cloud access.",
+                error="Index refresh was not confirmed. Source materials were not modified. Inspect indexing and cloud access.",
                 failed=time.time(),
             )
         finally:
