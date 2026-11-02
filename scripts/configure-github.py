@@ -10,6 +10,7 @@ import re
 import shutil
 import sys
 import tempfile
+import traceback
 import urllib.request
 from pathlib import Path
 
@@ -93,11 +94,17 @@ async def probe_mcp(token, repository):
         result = await server.session.call_tool(
             "get_file_contents", {"owner": owner, "repo": repo, "path": "README.md"}
         )
-        if result.isError:
+        if not successful_read(result):
             raise SetupError("GitHub MCP could not read the verification repository.")
         return sorted(tools)
     finally:
         await server.shutdown()
+
+
+def successful_read(result):
+    # MCP SDK 2 uses snake_case; SDK 1 exposed the wire-format alias.
+    error = getattr(result, "is_error", getattr(result, "isError", None))
+    return error is False and bool(getattr(result, "content", None))
 
 
 def backup(home):
@@ -193,6 +200,12 @@ if __name__ == "__main__":
         sys.exit(1)
     except Exception as exc:
         # SDK/HTTP exception strings may carry request headers. Never print them.
+        frames = traceback.extract_tb(exc.__traceback__)
+        for frame in frames:
+            print(
+                f"Failure location: {Path(frame.filename).name}:{frame.lineno} ({frame.name}).",
+                file=sys.stderr,
+            )
         print(
             f"GitHub setup stopped ({type(exc).__name__}); check token permissions and connectivity.",
             file=sys.stderr,

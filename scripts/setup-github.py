@@ -38,7 +38,8 @@ def command(action, repositories):
     source = Path(__file__).with_name("configure-github.py").read_text()
     remote = [
         "flock",
-        "-n",
+        "-w",
+        "30",
         "/etc/agent-council/operations.lock",
         "docker",
         "exec",
@@ -87,6 +88,9 @@ def main():
     parser.add_argument(
         "--repository", action="append", help="Repository to verify; repeat as needed."
     )
+    parser.add_argument(
+        "--no-browser", action="store_true", help="Use a token already created on GitHub."
+    )
     args = parser.parse_args()
     repositories = args.repository or REPOSITORIES
     action = "verify" if args.verify else "prepare"
@@ -99,7 +103,8 @@ def main():
     print(
         "The form requests code, PR, issue and CI access for 90 days. Create the token, then paste it below."
     )
-    webbrowser.open(token_url())
+    if not args.no_browser:
+        webbrowser.open(token_url())
     token = getpass.getpass("GitHub token (hidden): ").strip()
     if not token:
         raise ValueError("No token entered.")
@@ -113,5 +118,8 @@ if __name__ == "__main__":
     try:
         main()
     except (ValueError, OSError, subprocess.CalledProcessError, KeyboardInterrupt, EOFError) as exc:
-        print(f"GitHub connection stopped ({type(exc).__name__}).", file=sys.stderr)
+        status = (
+            f", exit {exc.returncode}" if isinstance(exc, subprocess.CalledProcessError) else ""
+        )
+        print(f"GitHub connection stopped ({type(exc).__name__}{status}).", file=sys.stderr)
         sys.exit(1)

@@ -1,6 +1,7 @@
 import importlib.util
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -18,6 +19,18 @@ setup = load_script("setup-github")
 
 
 class GitHubSetupTests(unittest.TestCase):
+    def test_mcp_sdk_versions_and_non_success_responses(self):
+        self.assertTrue(
+            configure.successful_read(SimpleNamespace(is_error=False, content=["file"]))
+        )
+        self.assertTrue(configure.successful_read(SimpleNamespace(isError=False, content=["file"])))
+        for response in (
+            SimpleNamespace(is_error=True, content=["denied"]),
+            SimpleNamespace(content=["input required"]),
+            SimpleNamespace(is_error=False, content=[]),
+        ):
+            self.assertFalse(configure.successful_read(response))
+
     def test_other_account_is_rejected_before_repository_reads(self):
         with patch.object(configure, "github_get", return_value={"id": 99}) as request:
             with self.assertRaises(configure.SetupError):
