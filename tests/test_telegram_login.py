@@ -4,7 +4,7 @@ import io
 import sys
 import unittest
 from contextlib import redirect_stdout
-from types import ModuleType
+from types import ModuleType, SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
 from telegram_monitor.login import SetupError, failure_message, sign_in
@@ -55,6 +55,19 @@ class LoginTests(unittest.IsolatedAsyncioTestCase):
         with patch("getpass.getpass", side_effect=["", "not a code", "12345"]):
             await sign_in(self.client, "+10000000000", "hash")
         self.assertEqual(self.client.sign_in.await_count, 1)
+
+    async def test_provider_word_phrase_and_call_codes_keep_the_expected_format(self):
+        for kind, entered, expected in (
+            ("SentCodeTypeSmsWord", " green ", "green"),
+            ("SentCodeTypeSmsPhrase", " green tea ", "green tea"),
+            ("SentCodeTypeFlashCall", "+1 234 567", "+1234567"),
+        ):
+            self.client.reset_mock()
+            prompt = SimpleNamespace(kind=kind, read=AsyncMock(return_value=(entered, "new-hash")))
+            await sign_in(self.client, "+10000000000", "old-hash", code_prompt=prompt)
+            self.client.sign_in.assert_awaited_once_with(
+                "+10000000000", code=expected, phone_code_hash="new-hash"
+            )
 
     async def test_expiration_and_flood_wait_stop_without_resending(self):
         for error in (ERRORS.PhoneCodeExpiredError, ERRORS.FloodWaitError):
