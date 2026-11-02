@@ -183,9 +183,7 @@ class Navigation:
                     # Notion turns page hyperlinks into mentions and drops their
                     # custom labels. Preserve the full path outside the mention.
                     reference = "https://app.notion.com/p/" + page_id(url)
-                    parts.append(
-                        f'- {label(name)} – <mention url="{reference}" /> – {label(kind)}'
-                    )
+                    parts.append(f'- {label(name)} – <mention url="{reference}" /> – {label(kind)}')
                 else:
                     parts.append(f"- [{label(name)}]({url}) – {label(kind)}")
             if not rows:
