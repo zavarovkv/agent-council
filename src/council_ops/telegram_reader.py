@@ -46,7 +46,10 @@ def workspace(runtime):
     if marker.exists() and read_json(marker) != {"schema": 1, "managed_by": "agent-council"}:
         raise OperationError("Preserve unrecognized Telegram monitor ownership.")
     uid, gid = identity(runtime.settings)
-    for path in (root, root / "raw", root / "reports"):
+    # mkdir(parents=True) otherwise leaves monitoring/ owned by the root operator
+    # with mode 0700. The collector's direct bind mount works, but Hermes cannot
+    # traverse that ancestor to read the evidence through its workspace mount.
+    for path in (root.parent, root, root / "raw", root / "reports"):
         if path.resolve() != path:
             raise OperationError("Refusing a symlinked monitor directory.")
         path.mkdir(mode=0o700, parents=True, exist_ok=True)
