@@ -1,3 +1,6 @@
+import copy
+import hashlib
+import hmac
 import json
 import sys
 import tempfile
@@ -44,7 +47,7 @@ class RecurringLinear(FakeLinear):
     def create_issue(self, agent, fields):
         self.creates += 1
         sid = uid(600)
-        remote = session(owner=1000, creator=1000)
+        remote = session(owner=0, creator=1000)
         remote["id"] = sid
         remote["issue"]["id"] = fields["id"]
         self.sessions[sid] = remote
@@ -248,12 +251,91 @@ class RecurringTests(unittest.TestCase):
         self.assertEqual(len(self.store.jobs()), 1)
 
     def test_unregistered_application_session_cannot_gain_owner_rights(self):
-        remote = session(owner=1000, creator=1000)
-        self.linear.sessions[remote["id"]] = remote
+        for owner in (0, 1000):
+            with self.subTest(owner=owner):
+                remote = session(owner=owner, creator=1000)
+                self.linear.sessions[remote["id"]] = remote
+                with self.assertRaises(PermissionError):
+                    self.service.authorize(
+                        self.service.registry(),
+                        self.service.registry().agents["qui-gon"],
+                        remote["id"],
+                    )
+
+    def test_automatic_session_starts_once_and_moves_issue_into_progress(self):
+        self.service.step()
+        self.service.step()
+        job = self.store.jobs()[0]
+        self.assertEqual(job["state"], "running")
+        self.assertEqual(len(self.service.hermes.requests), 1)
+        self.assertEqual(
+            self.linear.issue_details(None, self.run["issue"])["state"]["name"], "In Progress"
+        )
+
+    def test_creatorless_webhook_requires_registered_schedule_and_current_session(self):
+        registry = self.service.registry()
+        self.recurring.reconcile(registry)
+        payload = {
+            "type": "AgentSessionEvent",
+            "action": "created",
+            "organizationId": registry.organization,
+            "oauthClientId": registry.agents["qui-gon"].client_id,
+            "appUserId": uid(1000),
+            "createdAt": NOW.isoformat(),
+            "webhookTimestamp": self.clock * 1000,
+            "agentSession": {
+                "id": uid(600),
+                "issueId": self.run["issue"],
+                "creatorId": None,
+                "organizationId": registry.organization,
+                "appUserId": uid(1000),
+            },
+        }
+
+        def ingest(value):
+            body = json.dumps(value).encode()
+            signature = hmac.new(
+                registry.agents["qui-gon"].webhook_secret.encode(), body, hashlib.sha256
+            ).hexdigest()
+            return self.service.ingest("qui-gon", body, signature)
+
+        # Reconcile has already admitted this exact event; the webhook is a duplicate.
+        with self.store.database() as db:
+            db.execute("DELETE FROM jobs")
+        # The fixture clock must be after the installation admission boundary.
+        config = json.loads((self.home / "agents.json").read_text())
+        config["admission_since"] = self.clock - 1
+        atomic_json(self.home / "agents.json", config)
+        self.assertTrue(ingest(payload))
+        self.assertFalse(ingest(payload))
+        for field, value in (("issueId", uid(999)), ("id", uid(601)), ("creatorId", uid(99))):
+            with self.subTest(field=field):
+                changed = copy.deepcopy(payload)
+                changed["agentSession"][field] = value
+                self.assertFalse(ingest(changed))
+
+    def test_scheduled_session_rejects_changed_identity_and_revoked_grant(self):
+        registry = self.service.registry()
+        self.recurring.reconcile(registry)
+        original = copy.deepcopy(self.linear.sessions[uid(600)])
+        for target, field, value in (
+            ("session", "creator", {"id": uid(99)}),
+            ("session", "appUser", {"id": uid(99)}),
+            ("issue", "creator", {"id": uid(99)}),
+            ("issue", "delegate", {"id": uid(99)}),
+            ("issue", "team", {"id": uid(99)}),
+            ("issue", "id", uid(999)),
+        ):
+            with self.subTest(target=target, field=field):
+                changed = copy.deepcopy(original)
+                (changed["issue"] if target == "issue" else changed)[field] = value
+                self.linear.sessions[uid(600)] = changed
+                with self.assertRaises(PermissionError):
+                    self.service.authorize(registry, registry.agents["qui-gon"], uid(600))
+        self.linear.sessions[uid(600)] = original
+        self.recurring.update(self.run["key"], state="cancelled")
         with self.assertRaises(PermissionError):
-            self.service.authorize(
-                self.service.registry(), self.service.registry().agents["qui-gon"], remote["id"]
-            )
+            self.service.authorize(registry, registry.agents["qui-gon"], uid(600))
 
     def test_registered_session_can_delegate_and_reauth_preserves_stage(self):
         registry = self.service.registry()

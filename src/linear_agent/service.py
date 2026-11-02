@@ -62,7 +62,7 @@ class Service:
                 registry, agent, payload["agentSession"].get("issueId", ""), event.session
             )
             if event.action != "created" or (
-                child is None and not (scheduled and event.actor == installation["app_user"])
+                child is None and not (scheduled and event.actor in {"", installation["app_user"]})
             ):
                 return False
         result = self.store.admit(event, registry.revision)
@@ -132,7 +132,9 @@ class Service:
             scheduled = self.recurring.authorized(registry, agent, issue_id, sid)
             if (
                 not scheduled
-                or owner != installation["app_user"]
+                # Linear leaves creator null for automatically delegated sessions.
+                # Only the pinned schedule and app-owned issue grant this exception.
+                or owner not in {None, installation["app_user"]}
                 or (issue.get("creator") or {}).get("id") != installation["app_user"]
                 or (issue.get("delegate") or {}).get("id") != installation["app_user"]
                 or issue["team"]["id"] != json.loads(scheduled["body"])["team"]
