@@ -16,9 +16,9 @@ A queued receipt does not prove an agent started. Completion in Linear does not
 prove Telegram delivery; this intake does not add a delivery schedule.
 
 Deploy an image with `native-task-routing-v1`, then run
-`/opt/agent-council/provision-native-tasks.py` in the main container as its runtime
-user with the existing `HERMES_HOME`. Use the normal maintenance lock, idle check
-and backup before configuration and restart Hermes after provisioning. The script
+`python3 scripts/manage.py configure-native-tasks` on the host. The operator uses
+the maintenance lock, idle check, backup and copied-profile test before activating
+the configuration and restarting Hermes, with rollback on failure. The provisioner
 creates a separate private bearer grant pinned to the registry owner and team.
 It preserves OAuth configuration and other MCP servers while limiting personal
 Linear MCP tools to `get_*`, `list_*` and `search_*`; team mutations use the app
