@@ -3,6 +3,7 @@
 import json
 import threading
 
+from . import telegram_source
 from .attachments import snapshot
 from .drive import Files, service_for
 from .index import Navigation
@@ -18,6 +19,8 @@ READS = {
     "drive_read",
     "index_status",
     "index_refresh",
+    "telegram_list",
+    "telegram_read",
 }
 WRITES = {
     "notion_create",
@@ -75,12 +78,14 @@ class Workspace:
         action = args.get("action")
         if action not in READS | WRITES:
             raise ValueError("Unsupported workspace action.")
-        if action in {"index_status", "index_refresh"}:
+        if action in {"index_status", "index_refresh", "telegram_list", "telegram_read"}:
             # Local status/start must remain available during slow cloud reads.
             # The navigation worker acquires the cloud lock per operation.
             policy = server_policy(self.home)
             if client not in policy["clients"]:
                 raise PermissionError("Workspace grant was revoked.")
+            if action in {"telegram_list", "telegram_read"}:
+                return telegram_source.read(self.home, args)
             return self.navigation.status() if action == "index_status" else self.navigation.start()
         if not self.lock.acquire(blocking=False):
             raise BlockingIOError("Workspace is busy; retry with the same key.")
@@ -103,6 +108,7 @@ class Workspace:
                     "notion_root": policy["notion_root"],
                     "drive_root": policy["drive_root"],
                     "navigation": self.navigation.status(),
+                    "telegram_source": telegram_source.context(self.home),
                     "notion": "formatted pages",
                     "drive": "read, list, upload and edit files in the shared folder",
                     "text_delivery": "Save formatted text in Notion; put its verified link in Linear. Task transitions and acceptance are governed by the Linear workflow and task tools.",
