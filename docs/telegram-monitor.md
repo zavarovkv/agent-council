@@ -33,6 +33,13 @@ and a safe reason without printing Telegram exception text. Incorrect codes and
 two-step passwords allow up to three attempts in the same session. Expired codes
 require a new setup run; rate limits stop immediately without requesting another
 code. Use the latest code from Telegram, not the my.telegram.org website login.
+Setup displays Telegram's reported delivery method (app, SMS, call or email),
+without printing a phone number, email address, code hash or raw response. If
+Telegram advertises another delivery method, type `resend` at the code prompt
+after the displayed timeout. This calls `auth.resendCode` explicitly, at most
+twice, and uses the returned hash for the next login attempt. It never forces SMS,
+resends automatically, bypasses a provider cooldown or retries a flood limit.
+If Telegram offers no next method, setup says so rather than promising a new code.
 Authorization verifies real membership/access and pins immutable account/source
 IDs. Reassigned usernames fail closed, including during reauthorization.
 

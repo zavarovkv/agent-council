@@ -16,6 +16,9 @@ MESSAGES = {
     "source_changed": "Имя чата теперь относится к другому чату. Настройка остановлена.",
     "code_attempts": "Код не принят после трех попыток. Перезапустите настройку и используйте новый код.",
     "password_attempts": "Пароль не принят после трех попыток. Проверьте пароль двухэтапной проверки.",
+    "resend_limit": "Достигнут лимит двух повторных запросов. Остановите попытки и повторите позже.",
+    "resend_unavailable": "Telegram не разрешил повторную отправку в этом запросе. Проверьте другие устройства этого аккаунта; повторные перезапуски не гарантируют новый код.",
+    "unsupported_code_delivery": "Telegram выбрал способ входа, который этот скрипт пока не поддерживает. Не повторяйте запросы автоматически.",
     "ApiIdInvalidError": "Telegram отклонил API ID или API hash. Проверьте их на my.telegram.org.",
     "PhoneNumberInvalidError": "Telegram не принял номер телефона. Проверьте международный формат.",
     "PhoneNumberBannedError": "Telegram ограничил вход для этого номера.",
@@ -56,7 +59,7 @@ def failure_message(error, stage):
     return f"Подключение не завершено (этап: {STAGES.get(stage, 'настройка')}). {reason}"
 
 
-async def sign_in(client, phone, code_hash):
+async def sign_in(client, phone, code_hash, *, code_prompt=None):
     from telethon.errors import (
         PasswordHashInvalidError,
         PhoneCodeEmptyError,
@@ -65,19 +68,38 @@ async def sign_in(client, phone, code_hash):
     )
 
     for attempt in range(3):
-        code = re.sub(r"\s+", "", getpass.getpass("Код входа из Telegram (ввод скрыт): "))
+        if code_prompt is not None:
+            code, code_hash = await code_prompt.read(client, phone)
+        else:
+            code = getpass.getpass("Код входа из Telegram (ввод скрыт): ")
+        words = code_prompt is not None and code_prompt.kind in {
+            "SentCodeTypeSmsWord",
+            "SentCodeTypeSmsPhrase",
+        }
+        code = code.strip() if words else re.sub(r"\s+", "", code)
+        valid = (
+            bool(code) and len(code) <= 128 and all(ord(char) >= 32 for char in code)
+            if words
+            else re.fullmatch(r"\+?[0-9]{4,16}", code) is not None
+        )
+        if not valid:
+            if attempt == 2:
+                raise SetupError("code_attempts")
+            print(
+                "Формат кода не распознан; в Telegram он не отправлялся. Проверьте ввод.",
+                flush=True,
+            )
+            continue
         try:
-            if not re.fullmatch(r"[0-9]{4,8}", code):
-                raise SetupError("invalid_code_format")
             await client.sign_in(phone, code=code, phone_code_hash=code_hash)
             return
         except SessionPasswordNeededError:
             break
-        except (PhoneCodeEmptyError, PhoneCodeInvalidError, SetupError):
+        except (PhoneCodeEmptyError, PhoneCodeInvalidError):
             if attempt == 2:
                 raise SetupError("code_attempts") from None
             print(
-                "Код не принят. Введите самый новый код еще раз; новый запрос не отправляется.",
+                "Telegram отклонил код. Проверьте код для этого входа. Автоматически новый код не запрашивается.",
                 flush=True,
             )
 

@@ -15,19 +15,28 @@ import asyncio, contextlib, io, os
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 from telethon.errors import PhoneCodeExpiredError
+from telethon.tl.functions.auth import ResendCodeRequest
+from telethon.tl.types import auth
 from telegram_monitor import setup
 
 client = AsyncMock()
-client.send_code_request.return_value = SimpleNamespace(phone_code_hash='private-hash')
+client.send_code_request.return_value = auth.SentCode(
+    auth.SentCodeTypeApp(5), 'private-hash', next_type=auth.CodeTypeSms(), timeout=0
+)
+client.return_value = auth.SentCode(auth.SentCodeTypeSms(5), 'new-private-hash')
 client.sign_in.side_effect = PhoneCodeExpiredError(request='private-request')
 output = io.StringIO()
 with patch.dict(os.environ, {'COUNCIL_TG_READER_SOURCE': 'fixture_source'}), \
      patch('telethon.TelegramClient', return_value=client), \
-     patch('getpass.getpass', side_effect=['123', 'a' * 32, '+10000000000', '54321']), \
+     patch('getpass.getpass', side_effect=['123', 'a' * 32, '+10000000000', 'resend', '54321']), \
      contextlib.redirect_stdout(output):
     assert asyncio.run(setup.main()) == 1
 client.disconnect.assert_awaited_once()
 client.send_code_request.assert_awaited_once()
+client.assert_awaited_once()
+assert isinstance(client.await_args.args[0], ResendCodeRequest)
+assert client.await_args.args[0].phone_code_hash == 'private-hash'
+client.sign_in.assert_awaited_once_with('+10000000000', code='54321', phone_code_hash='new-private-hash')
 assert 'истек' in output.getvalue()
 assert 'вход в аккаунт' in output.getvalue()
 assert 'private' not in output.getvalue()

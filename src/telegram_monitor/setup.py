@@ -8,6 +8,7 @@ import re
 from contextlib import suppress
 from pathlib import Path
 
+from .codes import CodePrompt
 from .config import Settings, source_name
 from .login import SetupError, failure_message, sign_in
 
@@ -59,7 +60,8 @@ async def main():
         stage = "send_code"
         sent = await client.send_code_request(phone)
         stage = "sign_in"
-        await sign_in(client, phone, sent.phone_code_hash)
+        code_prompt = CodePrompt(sent)
+        await sign_in(client, phone, code_prompt.code_hash, code_prompt=code_prompt)
         account = await client.get_me()
         if account.bot:
             raise SetupError("account")
