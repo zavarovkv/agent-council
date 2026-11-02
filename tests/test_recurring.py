@@ -53,6 +53,7 @@ class RecurringLinear(FakeLinear):
         self.sessions[sid] = remote
         self.records[fields["id"]] = {
             **remote["issue"],
+            "description": fields["description"],
             "agentSessions": {
                 "nodes": [
                     {
@@ -271,6 +272,67 @@ class RecurringTests(unittest.TestCase):
         self.assertEqual(
             self.linear.issue_details(None, self.run["issue"])["state"]["name"], "In Progress"
         )
+
+    def test_readable_issue_keeps_delivery_contract_in_executor_context(self):
+        self.service.step()
+        brief = self.linear.records[self.run["issue"]]["description"]
+        self.assertIn(VALUE["brief"], brief)
+        self.assertIn("01.11.2026 07:15", brief)
+        self.assertIn("02.11.2026 07:15", brief)
+        self.assertIn("08:00", brief)
+        self.assertIn("https://www.notion.so/" + VALUE["notion_parent"], brief)
+        self.assertNotIn("recurring_result", brief)
+        request = next(iter(self.service.hermes.requests.values()))
+        context = json.loads(request["text"])["recurring"]
+        self.assertEqual(context["occurrence"], self.run["key"])
+        self.assertEqual(context["deadline"], self.run["deadline"])
+        self.assertEqual(context["window_start"], "2026-11-01T07:15:00+03:00")
+        self.assertEqual(context["window_end"], "2026-11-02T07:15:00+03:00")
+        self.assertEqual(context["notion_parent"], VALUE["notion_parent"])
+        self.assertIn("recurring_result", context["instructions"])
+        self.assertIn("Do not send Telegram", context["instructions"])
+
+    def test_continuation_keeps_original_occurrence_after_schedule_edit(self):
+        registry = self.service.registry()
+        self.service.step()
+        original_job = self.store.jobs()[0]
+        self.store.update_job(original_job["key"], state="done")
+        self.recurring.execute(
+            {
+                "action": "configure",
+                "definition": {
+                    **VALUE,
+                    "cutoff_time": "07:00",
+                    "delivery_time": "09:00",
+                    "notion_parent": "d" * 32,
+                },
+            }
+        )
+        self.recurring.followup(self.recurring.run(self.run["key"]), registry, "test", "Continue")
+        self.service.step()
+        requests = list(self.service.hermes.requests.values())
+        self.assertEqual(len(requests), 2)
+        first, second = (json.loads(r["text"])["recurring"] for r in requests)
+        self.assertEqual(first, second)
+        self.assertEqual(json.loads(requests[1]["text"])["request"], "Continue")
+
+    def test_context_requires_matching_coordinator_session_and_grant(self):
+        registry = self.service.registry()
+        self.recurring.reconcile(registry)
+        for slug, issue, sid in (
+            ("dexter", self.run["issue"], uid(600)),
+            ("qui-gon", uid(999), uid(600)),
+            ("qui-gon", self.run["issue"], uid(601)),
+        ):
+            with self.subTest(slug=slug, issue=issue, sid=sid):
+                self.assertIsNone(
+                    self.recurring.execution_context(registry, registry.agents[slug], issue, sid)
+                )
+        (self.home / "recurring.json").write_text("{}")
+        with self.assertRaises(PermissionError):
+            self.recurring.execution_context(
+                registry, registry.agents["qui-gon"], self.run["issue"], uid(600)
+            )
 
     def test_creatorless_webhook_requires_registered_schedule_and_current_session(self):
         registry = self.service.registry()
