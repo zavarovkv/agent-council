@@ -457,6 +457,8 @@ class OperationTests(unittest.TestCase):
         runtime.require_idle = lambda **kwargs: runtime.events.append(("idle", kwargs))
         result = deploy(runtime, recover_queued=True)
         backup = Path(result["backup"])
+        _, manifest = load_manifest(backup)
+        self.assertIn("linear-adapter", manifest["running_services"])
         for path in (database, backup / "hermes/.council/linear/bridge/linear.sqlite3"):
             with sqlite3.connect(path) as db:
                 self.assertEqual(
@@ -464,6 +466,8 @@ class OperationTests(unittest.TestCase):
                 )
         self.assertIn(("idle", {"allow_stopped_queue": True}), runtime.events)
         self.assertTrue(runtime.running)
+        restore(runtime, backup)
+        self.assertEqual(read_settings(self.fixture.env)["COUNCIL_LINEAR_ENABLED"], "true")
 
     def test_restore_retains_the_previous_live_state(self):
         runtime = FakeRuntime(self.fixture.settings())
