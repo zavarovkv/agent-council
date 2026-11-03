@@ -166,6 +166,160 @@ class RecoveryTests(unittest.TestCase):
     def client(self, request):
         return Linear(self.store, request=request, clock=lambda: self.now)
 
+    def test_real_activity_transport_unblocks_queued_job_and_delivers_once(self):
+        activities = {}
+
+        def request(_url, **kwargs):
+            body = kwargs["body"]
+            if "CouncilActivityCreate" in body["query"]:
+                item = body["variables"]["input"]
+                self.assertNotIn(item["id"], activities)
+                activities[item["id"]] = item
+                return JsonResponse(
+                    {
+                        "data": {
+                            "agentActivityCreate": {
+                                "success": True,
+                                "agentActivity": {"id": item["id"]},
+                            }
+                        }
+                    },
+                    {},
+                )
+            item = activities.get(body["variables"]["id"])
+            if item is None:
+                return JsonResponse(
+                    {
+                        "data": None,
+                        "errors": [
+                            {
+                                "message": "Entity not found: AgentActivity",
+                                "extensions": {"code": "INPUT_ERROR"},
+                            }
+                        ],
+                    },
+                    {},
+                )
+            return JsonResponse(
+                {
+                    "data": {
+                        "agentActivity": {
+                            "agentSession": {"id": item["agentSessionId"]},
+                            "content": item["content"],
+                        }
+                    }
+                },
+                {},
+            )
+
+        client = self.client(request)
+        with patch.object(self.linear, "ensure_activity", side_effect=client.ensure_activity):
+            self.ingest(self.event())
+            self.tick()
+            self.assertEqual(len(self.hermes.requests), 1)
+            self.hermes.finish(self.run_for(), "Verified result")
+            self.tick(3)
+            self.restart()
+            self.tick(2)
+        self.assertFalse(self.store.jobs())
+        self.assertEqual(len(self.hermes.requests), 1)
+        self.assertEqual(
+            [item["content"]["type"] for item in activities.values()], ["thought", "response"]
+        )
+
+    def test_missing_activity_can_be_created_without_triggering_app_cooldown(self):
+        missing = JsonResponse(
+            {
+                "data": None,
+                "errors": [
+                    {
+                        "message": "Entity not found: AgentActivity",
+                        "extensions": {"code": "INPUT_ERROR"},
+                    }
+                ],
+            },
+            {},
+        )
+        record = {"id": uid(100), "session": uid(10), "kind": "thought", "body": "Starting"}
+        created = JsonResponse(
+            {
+                "data": {
+                    "agentActivityCreate": {"success": True, "agentActivity": {"id": record["id"]}}
+                }
+            },
+            {},
+        )
+        existing = JsonResponse(
+            {
+                "data": {
+                    "agentActivity": {
+                        "agentSession": {"id": record["session"]},
+                        "content": {"type": record["kind"], "body": record["body"]},
+                    }
+                }
+            },
+            {},
+        )
+        request = Mock(side_effect=[missing, created, existing])
+        client = self.client(request)
+        agent = self.service.registry().agents["qui-gon"]
+        client.ensure_activity(agent, record)
+        client.ensure_activity(agent, record)
+        self.assertEqual(request.call_count, 3)
+
+    def test_other_graphql_errors_still_defer_and_do_not_create_activity(self):
+        request = Mock(
+            return_value=JsonResponse(
+                {"errors": [{"message": "Other failure", "extensions": {"code": "INPUT_ERROR"}}]},
+                {},
+            )
+        )
+        client = self.client(request)
+        agent = self.service.registry().agents["qui-gon"]
+        record = {"id": uid(100), "session": uid(10), "kind": "thought", "body": "Starting"}
+        with self.assertRaises(RemoteError):
+            client.ensure_activity(agent, record)
+        self.assertEqual(request.call_count, 1)
+
+    def test_lost_create_receipt_is_verified_before_any_retry(self):
+        record = {"id": uid(101), "session": uid(10), "kind": "thought", "body": "Starting"}
+        missing = JsonResponse(
+            {
+                "data": None,
+                "errors": [
+                    {
+                        "message": "Entity not found: AgentActivity",
+                        "extensions": {"code": "INPUT_ERROR"},
+                    }
+                ],
+            },
+            {},
+        )
+        existing = JsonResponse(
+            {
+                "data": {
+                    "agentActivity": {
+                        "agentSession": {"id": record["session"]},
+                        "content": {"type": record["kind"], "body": record["body"]},
+                    }
+                }
+            },
+            {},
+        )
+        request = Mock(side_effect=[missing, RemoteError(503), existing])
+        client = self.client(request)
+        agent = self.service.registry().agents["qui-gon"]
+        with self.assertRaises(RemoteError):
+            client.ensure_activity(agent, record)
+        with self.assertRaises(RemoteError):
+            client.ensure_activity(agent, record)
+        self.assertEqual(request.call_count, 2)
+        self.now += 400
+        client.ensure_activity(agent, record)
+        self.assertEqual(request.call_count, 3)
+        self.assertIn("CouncilActivityCreate", request.call_args_list[1].kwargs["body"]["query"])
+        self.assertIn("CouncilActivity", request.call_args_list[2].kwargs["body"]["query"])
+
     def test_http_and_graphql_rate_limits_share_persistent_cooldown(self):
         for response in (
             RemoteError(429, headers={"retry-after": "3600"}),

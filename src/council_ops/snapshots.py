@@ -184,7 +184,15 @@ def prune_automatic_checkpoints(root, *, keep=2, protected=None):
 
 
 @maintenance
-def snapshot(runtime, *, include_image=False, restart=True, portable=False, automatic=False):
+def snapshot(
+    runtime,
+    *,
+    include_image=False,
+    restart=True,
+    portable=False,
+    automatic=False,
+    allow_stopped_queue=False,
+):
     settings = runtime.settings
     settings.backup_dir.mkdir(mode=0o700, parents=True, exist_ok=True)
     settings.backup_dir.chmod(0o700)
@@ -195,7 +203,10 @@ def snapshot(runtime, *, include_image=False, restart=True, portable=False, auto
         raise OperationError(
             "Stop all owned companion services before copying a stopped deployment."
         )
-    runtime.require_idle()
+    if allow_stopped_queue:
+        runtime.require_idle(allow_stopped_queue=True)
+    else:
+        runtime.require_idle()
     size = 0
     for root in (settings.data_dir, settings.workspace_dir):
         for parent, directories, files in os.walk(root, followlinks=False):

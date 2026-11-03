@@ -205,6 +205,11 @@ def parser():
     )
     deployment.add_argument("--instructions-source", type=Path)
     deployment.add_argument(
+        "--recover-queued",
+        action="store_true",
+        help="Safely preserve queued Linear jobs during recovery; reject any running work",
+    )
+    deployment.add_argument(
         "--instructions-revision", help="Full reviewed private SHA; checkout must already match"
     )
     recovery = commands.add_parser(
@@ -388,6 +393,7 @@ def operate(arguments, settings):
                 runtime,
                 instruction_source=arguments.instructions_source,
                 instruction_revision=arguments.instructions_revision,
+                recover_queued=arguments.recover_queued,
             )
         elif arguments.action == "restore":
             if not arguments.confirm:

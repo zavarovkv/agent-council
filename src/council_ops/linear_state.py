@@ -4,6 +4,7 @@ import functools
 import json
 import os
 import sqlite3
+import time
 from contextlib import closing, contextmanager
 from pathlib import Path
 
@@ -117,6 +118,12 @@ def status(settings):
                 raise ValueError("Invalid integration store")
             jobs = dict(db.execute("SELECT state,count(*) FROM jobs GROUP BY state"))
             outbox = dict(db.execute("SELECT state,count(*) FROM outbox GROUP BY state"))
+            oldest_queued = db.execute(
+                "SELECT MIN(received) FROM jobs WHERE state='queued'"
+            ).fetchone()[0]
+            oldest_unsent = db.execute(
+                "SELECT MIN(created) FROM outbox WHERE state IN ('pending','uncertain')"
+            ).fetchone()[0]
             recovery = {}
             if db.execute(
                 "SELECT 1 FROM sqlite_master WHERE type='table' AND name='recovery'"
@@ -138,6 +145,12 @@ def status(settings):
             "installed_agents": installed,
             "jobs": jobs,
             "outbox": outbox,
+            "oldest_queued_age_seconds": max(0, int(time.time() - oldest_queued))
+            if oldest_queued is not None
+            else 0,
+            "oldest_unsent_age_seconds": max(0, int(time.time() - oldest_unsent))
+            if oldest_unsent is not None
+            else 0,
             "recovery": recovery,
             "admission_paused": (directory / "runtime/maintenance").exists(),
         }
