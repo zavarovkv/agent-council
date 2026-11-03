@@ -84,6 +84,8 @@ names={d['function']['name'] for d in definitions}
 from hermes_constants import get_hermes_home
 main=(get_hermes_home()/'.council/recurring/client.json').exists()
 assert names == ({'council_workspace','material_read','recurring_tasks','council_google'} if main else {'council_workspace','council_google'}), names
+google=next(d['function'] for d in definitions if d['function']['name']=='council_google')
+assert {'archive','spam'} <= set(google['parameters']['properties']['action']['enum'])
 manager.unload()
 print('workspace tool available')
 """,

@@ -2,7 +2,7 @@
 
 import re
 
-from .transport import request_json
+from .transport import RemoteError, request_json
 
 
 class Hermes:
@@ -40,8 +40,13 @@ class Hermes:
         ):
             raise PermissionError("Durable native run admission is required.")
         enabled = {item["name"] for item in tools if item.get("enabled")}
-        if enabled != {"web", "clarify", "council-linear"}:
+        expected = {"web", "clarify", "council-linear"}
+        if enabled - expected:
             raise PermissionError("Executor tools exceed the reviewed Linear policy.")
+        if expected - enabled:
+            # Missing plugins are an executor readiness failure, not revoked
+            # owner authorization. Preserve the queued job for safe recovery.
+            raise RemoteError(503)
 
     def run(self, agent, run_id):
         return self.call(agent, "/v1/runs/" + self.run_id(run_id))

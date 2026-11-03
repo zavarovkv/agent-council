@@ -65,7 +65,9 @@ COPY scripts/provision-workspace.py /opt/agent-council/provision-workspace.py
 COPY scripts/provision-recurring.py /opt/agent-council/provision-recurring.py
 COPY scripts/provision-native-tasks.py /opt/agent-council/provision-native-tasks.py
 RUN chmod -R a+rX,go-w /opt/hermes/plugins/advanced-delegation /opt/agent-council/instructions \
-    && chmod 0444 /opt/agent-council/provision-researcher.py /opt/agent-council/configure-drive.py
+    && chmod 0444 /opt/agent-council/provision-researcher.py /opt/agent-council/provision-research-workflow.py /opt/agent-council/configure-drive.py \
+       /opt/agent-council/provision-workspace-index.py /opt/agent-council/provision-workspace.py \
+       /opt/agent-council/provision-recurring.py /opt/agent-council/provision-native-tasks.py
 
 COPY scripts/initialize-profile.py /opt/agent-council/initialize-profile.py
 COPY scripts/initialize-profile.sh /etc/cont-init.d/03-council-session-store
@@ -100,6 +102,10 @@ COPY src/linear_tools/ /opt/hermes/plugins/council-linear/
 COPY src/research_filing/ /opt/hermes/plugins/council-research/
 RUN chmod -R a+rX,go-w /opt/hermes/plugins/council-secretary /opt/hermes/plugins/council-research /opt/agent-council/secretary_worker
 RUN chmod -R a+rX,go-w /opt/agent-council/linear_agent /opt/hermes/plugins/council-linear
+RUN chmod -R a+rX,go-w /opt/agent-council/council_team /opt/agent-council/council_recurring \
+    /opt/agent-council/telegram_monitor /opt/hermes/council_team /opt/hermes/council_workspace \
+    /opt/hermes/council_skills /opt/hermes/council_owner /opt/hermes/council_recurring \
+    /opt/hermes/council_tasks /opt/hermes/research_filing /opt/hermes/plugins/council-workspace
 
 COPY assets/login/ /opt/agent-council-theme/
 COPY --from=web-assets /styles/node_modules/beauty-css/dist/beauty.min.css /opt/agent-council-theme/dependencies/beauty.min.css
