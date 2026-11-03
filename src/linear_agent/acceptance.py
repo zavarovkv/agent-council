@@ -189,10 +189,7 @@ class Acceptance:
                     "The accepted task was reopened. Do not repeat the old acceptance."
                 )
             return json.loads(operation["result"])
-        try:
-            existing = self.linear.comment(agent, comment_id)
-        except RemoteError:
-            existing = None
+        existing = self.linear.comment(agent, comment_id)
         if existing and (existing["body"] != body or existing["issue"]["id"] != issue["id"]):
             raise PermissionError("Acceptance comment identity conflict.")
         if not existing:

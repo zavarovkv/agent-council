@@ -200,6 +200,7 @@ def issues(report, configuration, *, free_bytes, total_bytes):
         and (
             linear.get("oldest_queued_age_seconds", 0) > 600
             or linear.get("oldest_unsent_age_seconds", 0) > 600
+            or linear.get("oldest_reserved_age_seconds", 0) > 600
         )
     ):
         result["linear_queue"] = "delayed"

@@ -27,6 +27,8 @@ id agentSession{id} user{id} signal content{
 ... on AgentActivityErrorContent{type body}}}}"""
 ISSUE_QUERY = """query CouncilIssue($id:String!){issue(id:$id){
 id title description url team{id} parent{id} delegate{id} creator{id}}}"""
+ISSUE_DETAILS_QUERY = "query CouncilIssueDetails($id:String!){issue(id:$id){documents(first:50){nodes{id title url} pageInfo{hasNextPage endCursor}} attachments(first:50){nodes{id title url} pageInfo{hasNextPage endCursor}} id identifier title description url archivedAt priority dueDate team{id} creator{id} delegate{id} assignee{id} project{id} parent{id} state{id name type} labels{nodes{id name}} children(first:100){nodes{id identifier state{id type}} pageInfo{hasNextPage}} comments(last:51){nodes{id body user{id name}} pageInfo{hasPreviousPage}}}}"
+COMMENT_QUERY = "query CouncilComment($id:String!){comment(id:$id){id body issue{id}}}"
 
 
 class Linear:
@@ -174,20 +176,25 @@ class Linear:
             raise RemoteError(
                 429, retry_at=retry_deadline(getattr(result, "headers", {}), self.clock())
             )
-        # Linear's singular activity lookup reports a missing ID as a GraphQL
-        # input error. This is the expected read-before-create case, not an
-        # integration outage: cooling down here would prevent the create itself.
+        # These singular lookups report missing IDs as GraphQL input errors.
+        # A confirmed absence must not cool down the create which follows it.
         errors = result.get("errors") if isinstance(result, dict) else None
+        absent = {
+            ACTIVITY_QUERY: ("AgentActivity", "agentActivity"),
+            ISSUE_QUERY: ("Issue", "issue"),
+            ISSUE_DETAILS_QUERY: ("Issue", "issue"),
+            COMMENT_QUERY: ("Comment", "comment"),
+        }.get(query)
         if (
-            query == ACTIVITY_QUERY
+            absent
             and isinstance(errors, list)
             and len(errors) == 1
             and isinstance(errors[0], dict)
-            and errors[0].get("message") == "Entity not found: AgentActivity"
+            and errors[0].get("message") == "Entity not found: " + absent[0]
             and isinstance(errors[0].get("extensions"), dict)
             and errors[0]["extensions"].get("code") == "INPUT_ERROR"
         ):
-            return JsonResponse({"agentActivity": None}, getattr(result, "headers", {}))
+            return JsonResponse({absent[1]: None}, getattr(result, "headers", {}))
         if (
             isinstance(result, dict)
             and isinstance(result.get("errors"), list)
@@ -321,7 +328,7 @@ class Linear:
     def issue_details(self, agent, issue):
         return self.query(
             agent,
-            "query CouncilIssueDetails($id:String!){issue(id:$id){documents(first:50){nodes{id title url} pageInfo{hasNextPage endCursor}} attachments(first:50){nodes{id title url} pageInfo{hasNextPage endCursor}} id identifier title description url archivedAt priority dueDate team{id} creator{id} delegate{id} assignee{id} project{id} parent{id} state{id name type} labels{nodes{id name}} children(first:100){nodes{id identifier state{id type}} pageInfo{hasNextPage}} comments(last:51){nodes{id body user{id name}} pageInfo{hasPreviousPage}}}}",
+            ISSUE_DETAILS_QUERY,
             {"id": issue},
         )["issue"]
 
@@ -435,7 +442,7 @@ class Linear:
     def comment(self, agent, identity):
         return self.query(
             agent,
-            "query CouncilComment($id:String!){comment(id:$id){id body issue{id}}}",
+            COMMENT_QUERY,
             {"id": identifier(identity)},
         )["comment"]
 
@@ -449,10 +456,7 @@ class Linear:
             raise RemoteError()
 
     def ensure_child(self, agent, child, *, parent_issue, team, delegate):
-        try:
-            existing = self.issue(agent, child["issue"])
-        except RemoteError:
-            existing = None
+        existing = self.issue(agent, child["issue"])
         if existing:
             if (
                 (existing.get("parent") or {}).get("id") != parent_issue

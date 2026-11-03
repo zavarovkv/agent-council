@@ -17,6 +17,7 @@ from .linear import Linear
 from .recovery import Recovery
 from .store import Store, stable_id
 from .transport import RemoteError
+from .workflow import is_blocked, is_review
 
 logger = logging.getLogger(__name__)
 FINAL = {"done", "failed", "cancelled"}
@@ -259,6 +260,7 @@ class Service:
             except (KeyError, ValueError, TypeError):
                 self._fail(agent, job, "protocol_error")
         self.flush_outbox(registry)
+        self._recover_reserved_children(registry)
         self._notify_children(registry)
         self.task_status.reconcile(registry)
 
@@ -611,6 +613,60 @@ class Service:
                 }
             )
         return {"agents": records, "limitations": LIMITATIONS}
+
+    def _recover_reserved_children(self, registry):
+        if (self.home / "runtime/maintenance").exists():
+            return
+        for child in self.store.reserved_children():
+            key = "delegation:" + child["id"]
+            if not self.recovery.due(key):
+                continue
+            parent = self.store.session(child["parent_agent"], child["parent_session"])
+            job = self.store.job(child["origin_job"])
+            coordinator = registry.agents.get(child["parent_agent"])
+            target = registry.agents.get(child["child_agent"])
+            if (
+                not registry.enabled
+                or not parent
+                or parent["blocked"]
+                or not job
+                or not coordinator
+                or not target
+                or job["agent"] != parent["agent"]
+                or job["session"] != parent["id"]
+                or job["revision"] != registry.revision
+                or job["state"] != "waiting_children"
+                or job["stop"]
+                or target.slug not in coordinator.delegates
+            ):
+                continue
+            try:
+                self.authorize(registry, coordinator, parent["id"])
+                issue = Issues(self).checked_issue(
+                    coordinator, registry, child["parent_issue"] or parent["issue"]
+                )
+                if (
+                    issue["state"]["type"] in {"completed", "canceled", "duplicate"}
+                    or is_review(issue["state"])
+                    or is_blocked(issue["state"])
+                ):
+                    raise PermissionError("Parent task is no longer active.")
+                installation = self.store.installation(target.slug)
+                if not installation or installation["organization"] != registry.organization:
+                    raise PermissionError("Specialist installation changed.")
+                self.linear.ensure_child(
+                    coordinator,
+                    child,
+                    parent_issue=issue["id"],
+                    team=issue["team"]["id"],
+                    delegate=installation["app_user"],
+                )
+                self.recovery.success(key, delay=60)
+            except (RemoteError, PermissionError, ValueError) as error:
+                self.recovery.failure(
+                    key, error if isinstance(error, RemoteError) else RemoteError()
+                )
+                logger.warning("Reserved delegation recovery deferred; task remains intact.")
 
     def _notify_children(self, registry):
         seen = set()

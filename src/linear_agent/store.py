@@ -649,6 +649,15 @@ class Store:
                 )
             ]
 
+    def reserved_children(self):
+        with self.database() as db:
+            return [
+                dict(row)
+                for row in db.execute(
+                    "SELECT * FROM delegations WHERE state='reserved' AND origin_job!='' ORDER BY created,id"
+                )
+            ]
+
     def child_notified(self, identity):
         with self.database() as db:
             db.execute("UPDATE delegations SET notified=1 WHERE id=?", (identity,))

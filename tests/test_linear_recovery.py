@@ -166,6 +166,78 @@ class RecoveryTests(unittest.TestCase):
     def client(self, request):
         return Linear(self.store, request=request, clock=lambda: self.now)
 
+    def test_missing_issue_and_comment_do_not_block_idempotent_creation(self):
+        agent = self.service.registry().agents["qui-gon"]
+        for kind, read in (("Issue", "issue"), ("Issue", "issue_details"), ("Comment", "comment")):
+            with self.subTest(kind=kind, read=read):
+                request = Mock(
+                    return_value=JsonResponse(
+                        {
+                            "data": None,
+                            "errors": [
+                                {
+                                    "message": "Entity not found: " + kind,
+                                    "extensions": {"code": "INPUT_ERROR"},
+                                }
+                            ],
+                        },
+                        {},
+                    )
+                )
+                client = self.client(request)
+                self.assertIsNone(getattr(client, read)(agent, uid(123)))
+                self.assertEqual(request.call_count, 1)
+                installation = self.store.installation(agent.slug)
+                key = "api:" + installation["organization"] + ":" + installation["app_user"]
+                self.assertEqual(client.recovery.get(key)["failures"], 0)
+
+    def test_reserved_child_recovers_from_interrupted_creation_without_duplicates(self):
+        self.ingest(self.event())
+        self.tick()
+        parent = self.store.session("qui-gon", uid(10))
+        payload = {
+            "run": self.run_for(),
+            "session": parent["hermes"],
+            "target": "dexter",
+            "key": "recover-child",
+            "title": "Research",
+            "description": "Verify sources.",
+        }
+        with patch.object(self.linear, "ensure_child", side_effect=RemoteError(503)):
+            with self.assertRaises(RemoteError):
+                self.service.delegate("qui-gon", payload)
+        child = self.store.children("qui-gon", parent["id"])[0]
+        self.hermes.finish(self.run_for(), "Waiting for research")
+        with patch.object(self.linear, "ensure_child", wraps=self.linear.ensure_child) as ensure:
+            self.tick()
+            self.assertIn(child["issue"], self.linear.issue_records)
+            self.restart()
+            self.tick(3)
+            self.assertEqual(
+                len([key for key in self.linear.issue_records if key == child["issue"]]), 1
+            )
+            self.assertGreaterEqual(ensure.call_count, 1)
+
+    def test_reserved_child_is_not_created_after_owner_stop(self):
+        self.ingest(self.event())
+        self.tick()
+        parent = self.store.session("qui-gon", uid(10))
+        payload = {
+            "run": self.run_for(),
+            "session": parent["hermes"],
+            "target": "dexter",
+            "key": "stopped-child",
+            "title": "Research",
+            "description": "Verify sources.",
+        }
+        with patch.object(self.linear, "ensure_child", side_effect=RemoteError(503)):
+            with self.assertRaises(RemoteError):
+                self.service.delegate("qui-gon", payload)
+        child = self.store.children("qui-gon", parent["id"])[0]
+        self.store.cancel("qui-gon", parent["id"])
+        self.service._recover_reserved_children(self.service.registry())
+        self.assertNotIn(child["issue"], self.linear.issue_records)
+
     def test_real_activity_transport_unblocks_queued_job_and_delivers_once(self):
         activities = {}
 

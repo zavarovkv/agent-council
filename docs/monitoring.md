@@ -26,7 +26,7 @@ Every five minutes the monitor checks service readiness/isolation, queue delay,
 safe provider outcome categories, backup verification age, automation and free
 disk space. A backup older than 36 hours or a failed backup unit needs attention.
 Business/public queue thresholds are three/ten minutes. Linear tasks waiting to
-start or unsent Linear activities older than ten minutes
+start, unsent Linear activities or unstarted delegated tasks older than ten minutes
 raise a separate incident even when all containers report healthy. Queued age
 does not include a specialist actively working or waiting for an owner answer.
 Managed instruction drift, rejected releases and disabled/failed updates also
