@@ -456,7 +456,11 @@ class Store:
         # Admission and notification acknowledgment are one transaction, so a
         # restart cannot lose or duplicate the coordinator continuation.
         keys = sorted(
-            child["id"] + (":" + child["result_key"] if child["result_key"] else "")
+            child["id"]
+            + ":"
+            + child["result_key"]
+            + ":"
+            + (self.handoff_id(child["result_key"]) or "")
             for child in children
         )
         key = hashlib.sha256((parent["id"] + ":children:" + ",".join(keys)).encode()).hexdigest()

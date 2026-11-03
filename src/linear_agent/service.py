@@ -277,6 +277,19 @@ class Service:
             self.store.cancel(agent.slug, job["session"])
             self.store.update_job(job["key"], state="done")
             return
+        # A child outcome must reach the coordinator before ordinary queued
+        # follow-ups; otherwise a follow-up queued behind a waiting parent can
+        # prevent that parent from ever receiving its child result.
+        deliveries = [
+            item
+            for item in jobs
+            if item["agent"] == agent.slug
+            and item["session"] == job["session"]
+            and item["action"] == "children"
+            and item["state"] not in FINAL
+        ]
+        if job["state"] == "queued" and job["action"] != "children" and deliveries:
+            return
         prior = [
             item
             for item in jobs
@@ -284,6 +297,12 @@ class Service:
             and item["session"] == job["session"]
             and item["sequence"] < job["sequence"]
             and item["state"] not in FINAL
+            and not (
+                job["action"] == "children"
+                and item["state"] == "queued"
+                and not item["run_id"]
+                and item["action"] != "children"
+            )
         ]
         waiting = next((item for item in prior if item["state"] == "waiting"), None)
         if job["action"] in {"prompted", "native_reply"} and waiting:
@@ -688,7 +707,15 @@ class Service:
                     all(item["state"] in {"done", "blocked"} for item in children)
                     or any(item["state"] == "blocked" and not item["notified"] for item in children)
                 )
-                and not any(job["state"] != "waiting_children" for job in active)
+                and not any(
+                    job["state"] != "waiting_children"
+                    and not (
+                        job["state"] == "queued"
+                        and not job["run_id"]
+                        and job["action"] != "children"
+                    )
+                    for job in active
+                )
             ):
                 try:
                     self.authorize(registry, registry.agents[pair[0]], pair[1])
