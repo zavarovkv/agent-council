@@ -195,7 +195,10 @@ class AutomationStatusTests(unittest.TestCase):
         database = bridge / "linear.sqlite3"
         with sqlite3.connect(database) as db:
             db.executescript(
-                "CREATE TABLE jobs(state TEXT, run_id TEXT); INSERT INTO jobs VALUES('queued','');"
+                "CREATE TABLE jobs(state TEXT,run_id TEXT,agent TEXT,session TEXT);"
+                "CREATE TABLE sessions(agent TEXT,id TEXT,hermes TEXT);"
+                "INSERT INTO jobs VALUES('queued','','qui-gon','id');"
+                "INSERT INTO sessions VALUES('qui-gon','id','linear_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa');"
             )
         runtime = Runtime(self.fixture.settings())
         runtime.inspect = lambda: {"State": {"Running": True}}
@@ -227,6 +230,36 @@ class AutomationStatusTests(unittest.TestCase):
                 db.execute("UPDATE jobs SET state=?,run_id=?", (state, run_id))
             with self.subTest(state=state, run_id=run_id), self.assertRaises(OperationDeferred):
                 runtime.require_idle(allow_stopped_queue=True)
+        with sqlite3.connect(database) as db:
+            db.execute("UPDATE jobs SET state='waiting_children',run_id=?", ("run_" + "b" * 32,))
+        runtime.verify_completed_linear_run = lambda agent, run, session: None
+        runtime.require_idle(allow_stopped_queue=True)
+
+        def still_running(agent, run, session):
+            raise OperationDeferred("still running")
+
+        runtime.verify_completed_linear_run = still_running
+        with self.assertRaises(OperationDeferred):
+            runtime.require_idle(allow_stopped_queue=True)
+
+    def test_waiting_run_requires_same_session_completed_and_no_pending_controls(self):
+        runtime = Runtime(self.fixture.settings())
+        run, session = "run_" + "b" * 32, "linear_" + "a" * 32
+        expected = {"status": "completed", "session_id": session, "pending": False}
+        runtime.compose = lambda *args: json.dumps(expected)
+        runtime.verify_completed_linear_run("qui-gon", run, session)
+        for replacement in (
+            {"status": "running"},
+            {"session_id": "linear_" + "c" * 32},
+            {"pending": True},
+        ):
+            runtime.compose = lambda *args, replacement=replacement: json.dumps(
+                {**expected, **replacement}
+            )
+            with self.subTest(replacement=replacement), self.assertRaises(OperationDeferred):
+                runtime.verify_completed_linear_run("qui-gon", run, session)
+        with self.assertRaises(OperationDeferred):
+            runtime.verify_completed_linear_run("qui-gon", "bad", session)
 
     def test_generation_and_filing_diagnostics_read_only_safe_aggregate_fields(self):
         home = self.fixture.data

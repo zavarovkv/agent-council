@@ -17,7 +17,8 @@ services:
         format: raw
     environment:
       RESTIC_PASSWORD_FILE: /run/secrets/restic_password
-      RESTIC_CACHE_DIR: /cache
+      RESTIC_CACHE_DIR: /restore/cache
+      TMPDIR: /restore
     secrets:
       - restic_password
     volumes:
@@ -34,7 +35,6 @@ services:
           create_host_path: false
     tmpfs:
       - /tmp:rw,nosuid,nodev,size=32m
-      - /cache:rw,nosuid,nodev,size=128m
     logging:
       driver: local
       options:
