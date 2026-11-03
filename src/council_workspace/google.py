@@ -17,7 +17,7 @@ READS = {
 }
 WRITES = {
     "calendar": {"create", "update", "cancel"},
-    "gmail": {"draft", "send", "reply", "send_draft"},
+    "gmail": {"draft", "send", "reply", "send_draft", "archive", "spam"},
     "analytics": set(),
 }
 
@@ -80,6 +80,8 @@ class Google:
             "cancel",
             "reply",
             "send_draft",
+            "archive",
+            "spam",
         } and not args.get("id"):
             raise ValueError("Read and select an existing event, message or draft id.")
         if len(json.dumps(args)) > 64000:

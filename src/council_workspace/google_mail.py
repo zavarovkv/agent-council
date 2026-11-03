@@ -135,6 +135,36 @@ class Mail:
 
     def prepare_write(self, args):
         action = args["action"]
+        if action in {"archive", "spam"}:
+            messages = self.api.messages()
+            current = messages.get(userId="me", id=args["id"], format="metadata").execute()
+            if current.get("id") != args["id"] or not isinstance(current.get("labelIds"), list):
+                raise ValueError("Message state could not be verified before modification.")
+            labels = set(current.get("labelIds", []))
+            if labels & {"DRAFT", "SENT", "TRASH"}:
+                raise ValueError(
+                    "Drafts, sent messages and trash cannot be classified automatically."
+                )
+            body = {"removeLabelIds": ["INBOX"]}
+            if action == "spam":
+                body["addLabelIds"] = ["SPAM"]
+            request = messages.modify(userId="me", id=args["id"], body=body)
+
+            def modify():
+                request.execute(num_retries=0)
+                saved = messages.get(userId="me", id=args["id"], format="metadata").execute()
+                if saved.get("id") != args["id"] or not isinstance(saved.get("labelIds"), list):
+                    raise ValueError(
+                        "Message state was not verified; inspect before another attempt."
+                    )
+                updated = set(saved.get("labelIds", []))
+                if "INBOX" in updated or (action == "spam" and "SPAM" not in updated):
+                    raise ValueError(
+                        "Message state was not verified; inspect before another attempt."
+                    )
+                return {"id": args["id"], "status": action, "verified": True}
+
+            return modify
         if action == "send_draft":
             current = self.api.drafts().get(userId="me", id=args["id"], format="raw").execute()
             if not args.get("revision") or args["revision"] != current["message"]["id"]:
