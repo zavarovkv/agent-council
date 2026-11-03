@@ -205,6 +205,10 @@ def snapshot(
         )
     if allow_stopped_queue:
         runtime.require_idle(allow_stopped_queue=True)
+        # The adapter was running before the recovery pause. Record its intended
+        # pre-cutover state so restoring this checkpoint re-enables Linear.
+        if "linear-adapter" not in running_services:
+            running_services.append("linear-adapter")
     else:
         runtime.require_idle()
     size = 0
