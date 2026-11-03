@@ -5,8 +5,7 @@ After=network-online.target docker.service
 Requires=docker.service
 ConditionPathExists=/etc/agent-council/backup.env
 ConditionPathExists=/etc/agent-council/backup-password
-StartLimitIntervalSec=2h
-StartLimitBurst=4
+StartLimitIntervalSec=0
 
 [Service]
 Type=oneshot
@@ -21,3 +20,4 @@ PrivateTmp=true
 TimeoutStartSec=2h
 Restart=on-failure
 RestartSec=15m
+RestartPreventExitStatus=1

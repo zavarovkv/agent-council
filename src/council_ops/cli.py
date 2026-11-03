@@ -428,6 +428,11 @@ def operate(arguments, settings):
 def entrypoint():
     try:
         main()
+    except OperationDeferred as error:
+        # EX_TEMPFAIL tells the backup unit to retry without treating active
+        # work as a permanent backup failure.
+        print(str(error), file=sys.stderr)
+        sys.exit(75)
     except (OperationError, OSError, ValueError, KeyError) as error:
         if isinstance(error, OperationError):
             print(str(error), file=sys.stderr)

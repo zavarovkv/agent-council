@@ -5,13 +5,13 @@ import os
 import sqlite3
 import tempfile
 import unittest
-from contextlib import redirect_stdout
+from contextlib import redirect_stderr, redirect_stdout
 from types import SimpleNamespace
 from unittest.mock import patch
 
 from test_operations import Fixture
 
-from council_ops.cli import main, pause_instruction_updates
+from council_ops.cli import entrypoint, main, pause_instruction_updates
 from council_ops.config import OperationDeferred, OperationError
 from council_ops.doctor import (
     backup_status,
@@ -143,6 +143,20 @@ class AutomationStatusTests(unittest.TestCase):
         ):
             with self.assertRaises(OperationError):
                 main(["flush-research"])
+
+    def test_cli_distinguishes_retryable_busy_work_from_a_real_failure(self):
+        for error, expected in (
+            (OperationDeferred("active work"), 75),
+            (OperationError("invalid state"), 1),
+        ):
+            with (
+                self.subTest(error=type(error).__name__),
+                patch("council_ops.cli.main", side_effect=error),
+                redirect_stderr(io.StringIO()),
+                self.assertRaises(SystemExit) as exit_code,
+            ):
+                entrypoint()
+            self.assertEqual(exit_code.exception.code, expected)
 
     def test_active_work_defers_but_stale_or_invalid_readiness_still_fails(self):
         runtime = Runtime(self.fixture.settings())
