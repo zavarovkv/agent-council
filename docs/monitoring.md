@@ -25,8 +25,12 @@ The owner must have started this bot's direct chat so Telegram permits delivery.
 Every five minutes the monitor checks service readiness/isolation, queue delay,
 safe provider outcome categories, backup verification age, automation and free
 disk space. A backup older than 36 hours or a failed backup unit needs attention.
-Business/public queue thresholds are three/ten minutes. Managed instruction
-drift, rejected releases and disabled/failed updates also raise an incident.
+Business/public queue thresholds are three/ten minutes. Linear tasks waiting to
+start or unsent Linear activities older than ten minutes
+raise a separate incident even when all containers report healthy. Queued age
+does not include a specialist actively working or waiting for an owner answer.
+Managed instruction drift, rejected releases and disabled/failed updates also
+raise an incident.
 When research filing is configured, its timer and pending age are checked too;
 a filing waiting more than 30 minutes needs attention.
 

@@ -1,6 +1,7 @@
 import fcntl
 import json
 import os
+import sqlite3
 import sys
 import tempfile
 import unittest
@@ -11,6 +12,7 @@ from unittest.mock import Mock, patch
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from council_ops.config import OperationError
+from council_ops.linear_state import status as linear_status
 from council_ops.monitoring import configure, literal_value, notify, poll
 
 
@@ -132,6 +134,55 @@ class MonitoringTests(unittest.TestCase):
         self.check()
         self.assertEqual(self.sender.call_count, 1)
         self.assertIn("Linear", self.sender.call_args.args[2])
+
+    def test_healthy_linear_services_do_not_hide_stalled_work_or_unsent_output(self):
+        self.report["linear"] = {
+            "configured": True,
+            "available": True,
+            "enabled": True,
+            "registered_agents": 1,
+            "installed_agents": 1,
+            "services": {"executor": {"status": "running", "health": "healthy"}},
+            "oldest_queued_age_seconds": 601,
+            "oldest_unsent_age_seconds": 0,
+        }
+        self.check()
+        self.check()
+        self.assertEqual(self.sender.call_count, 1)
+        self.assertIn("очередь", self.sender.call_args.args[2])
+        self.report["linear"]["oldest_queued_age_seconds"] = 0
+        self.report["linear"]["oldest_unsent_age_seconds"] = 601
+        self.check()
+        self.assertEqual(self.sender.call_count, 1)
+        self.report["linear"]["oldest_unsent_age_seconds"] = 0
+        self.check()
+        self.assertEqual(self.sender.call_count, 2)
+        self.assertIn("снова работает", self.sender.call_args.args[2])
+
+    def test_linear_queue_age_is_read_from_store_without_mutating_it(self):
+        bridge = self.settings.data_dir / ".council/linear/bridge"
+        bridge.mkdir(parents=True)
+        (bridge / "agents.json").write_text("{}")
+        database = bridge / "linear.sqlite3"
+        with sqlite3.connect(database) as db:
+            db.executescript(
+                "CREATE TABLE jobs (state TEXT, received REAL);"
+                "CREATE TABLE outbox (state TEXT, created REAL);"
+                "CREATE TABLE installations (organization TEXT);"
+                "INSERT INTO jobs VALUES ('queued', 100), ('waiting', 1);"
+                "INSERT INTO outbox VALUES ('uncertain', 200), ('sent', 1);"
+                "INSERT INTO installations VALUES ('org');"
+            )
+        registry = SimpleNamespace(enabled=True, agents={"qui-gon": None}, organization="org")
+        with (
+            patch("linear_agent.config.Registry.load", return_value=registry),
+            patch("council_ops.linear_state.time.time", return_value=1000),
+        ):
+            report = linear_status(self.settings)
+        self.assertEqual(report["oldest_queued_age_seconds"], 900)
+        self.assertEqual(report["oldest_unsent_age_seconds"], 800)
+        with sqlite3.connect(database) as db:
+            self.assertEqual(db.execute("SELECT COUNT(*) FROM jobs").fetchone()[0], 2)
 
     def test_maintenance_lock_skips_checks_without_clearing_active_incidents(self):
         self.report["health"] = "unhealthy"

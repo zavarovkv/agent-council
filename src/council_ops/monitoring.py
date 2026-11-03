@@ -21,6 +21,7 @@ LABELS = {
     "gateway": "Сейчас я недоступен. Нужно проверить основной сервис.",
     "secretary": "Не могу отвечать в чатах. Нужно проверить сервис ответов.",
     "linear": "Агенты пока не могут выполнять задачи в Linear. Нужно проверить подключение.",
+    "linear_queue": "Задачи в Linear не продвигаются или ответы не доставляются. Нужно проверить очередь.",
     "business_queue": "Ответы в твоих личных чатах задерживаются. Нужна проверка.",
     "public_queue": "Ответы пользователям бота задерживаются. Нужна проверка.",
     "guest_queue": "Ответы на вызовы бота в переписках задерживаются. Нужна проверка.",
@@ -38,6 +39,7 @@ RECOVERIES = {
     "gateway": "Я снова на связи.",
     "secretary": "Сервис ответов снова работает.",
     "linear": "Подключение агентов к Linear снова в порядке.",
+    "linear_queue": "Очередь задач и ответов Linear снова работает.",
     "business_queue": "Очередь ответов в твоих личных чатах снова в порядке.",
     "public_queue": "Очередь ответов пользователям бота снова в порядке.",
     "guest_queue": "Очередь вызовов бота в переписках снова в порядке.",
@@ -191,6 +193,16 @@ def issues(report, configuration, *, free_bytes, total_bytes):
         )
     ):
         result["linear"] = "not_ready"
+    if (
+        linear.get("configured")
+        and linear.get("available")
+        and linear.get("enabled")
+        and (
+            linear.get("oldest_queued_age_seconds", 0) > 600
+            or linear.get("oldest_unsent_age_seconds", 0) > 600
+        )
+    ):
+        result["linear_queue"] = "delayed"
     if secretary.get("enabled"):
         if not secretary.get("policy_valid") or secretary.get("worker_health") != "healthy":
             result["secretary"] = "not_ready"
