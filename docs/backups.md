@@ -166,5 +166,13 @@ check origin authorization and verify a real Telegram/model round trip before
 reopening traffic. Retain the original snapshot and independent password until
 a separate replacement-host exercise succeeds.
 
+## Retry after active work
+
+The scheduled backup waits until active conversations and Linear runs finish.
+A busy runtime or another owned operation returns temporary failure and systemd
+retries every 15 minutes, without exhausting a retry limit. Configuration and
+other operational errors remain failures for monitoring and require attention;
+the age of the last verified recovery remains the measure of backup freshness.
+
 See [Cloudflare R2 setup](https://developers.cloudflare.com/r2/get-started/s3/) and
 [restic repository preparation](https://restic.readthedocs.io/en/stable/030_preparing_a_new_repo.html).
