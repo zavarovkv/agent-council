@@ -58,6 +58,12 @@ is the event ID for details and the event ID plus `:checkpoint` for a failed-run
 checkpoint; `content_digest` is SHA-256 of the complete selected content. The
 original event `digest` does not change. Neither view proves task acceptance.
 
+Child delivery takes precedence over ordinary queued follow-ups in the same
+session. The follow-up stays queued until that delivery finishes; an active run or
+owner stop is never preempted. Delivery identity includes the immutable handoff
+event, so a newly recorded result is not mistaken for an earlier notification of
+the same execution. A repeated notification of the same event remains idempotent.
+
 After resolving a blocked dependency, use
 `linear_handoff(action="resume", event_id=..., key=..., message=...)`. Only the
 actual coordinator can resume its latest blocked child outcome. The message is

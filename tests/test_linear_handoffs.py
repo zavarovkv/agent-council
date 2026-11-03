@@ -1,5 +1,6 @@
 """Behavioral transport regressions: complete evidence, lineage, retries and blockers."""
 
+import hashlib
 import json
 import unittest
 from unittest.mock import patch
@@ -74,6 +75,98 @@ class HandoffTests(unittest.TestCase):
                 "event_id": event_id,
                 **fields,
             },
+        )
+
+    def test_blocker_is_delivered_before_a_queued_scheduled_followup(self):
+        self.start_tree()
+        parent = self.store.session("qui-gon", fixture.uid(10))
+        with self.store.database() as db:
+            db.execute(
+                "INSERT INTO jobs(key,agent,session,action,activity,actor,text,created,received,stop,revision,updated) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)",
+                (
+                    "f" * 64,
+                    "qui-gon",
+                    parent["id"],
+                    "scheduled_followup",
+                    "",
+                    parent["owner"],
+                    "scheduled followup fixture",
+                    self.now,
+                    self.now,
+                    0,
+                    self.config["revision"],
+                    self.now,
+                ),
+            )
+        receipt = self.submit(kind="blocked", next_action="Restore access")
+        self.settle_child()
+        parent_runs = [r for r in self.hermes.requests.values() if r["agent"] == "qui-gon"]
+        self.assertEqual(len(parent_runs), 2)
+        self.assertIn(receipt["event_id"], parent_runs[-1]["text"])
+        self.assertNotIn("scheduled followup fixture", parent_runs[-1]["text"])
+        self.hermes.finish(parent_runs[-1]["run_id"], "Blocker understood")
+        self.tick(4)
+        parent_runs = [r for r in self.hermes.requests.values() if r["agent"] == "qui-gon"]
+        self.assertEqual(len(parent_runs), 3)
+        self.assertIn("scheduled followup fixture", parent_runs[-1]["text"])
+
+    def test_new_handoff_revision_has_a_distinct_delivery_identity(self):
+        self.start_tree()
+        parent = self.store.session("qui-gon", fixture.uid(10))
+        child = self.store.children("qui-gon", parent["id"])[0]
+        child.update(state="blocked", result="A blocker", result_key="d" * 64)
+        with patch.object(self.store, "handoff_id", return_value=None):
+            self.store.notify_parent(parent, [child], self.config["revision"])
+        with patch.object(self.store, "handoff_id", return_value="new-event"):
+            self.store.notify_parent(parent, [child], self.config["revision"])
+        with self.store.database() as db:
+            keys = db.execute(
+                "SELECT key FROM jobs WHERE agent='qui-gon' AND session=? AND action='children'",
+                (parent["id"],),
+            ).fetchall()
+        self.assertEqual(len(keys), 2)
+        self.assertNotEqual(keys[0][0], keys[1][0])
+
+    def test_unstarted_legacy_delivery_is_recovered_once_with_real_handoff(self):
+        self.start_tree()
+        parent = self.store.session("qui-gon", fixture.uid(10))
+        receipt = self.submit(kind="blocked", next_action="Restore access")
+        with patch.object(self.service, "_notify_children"):
+            self.settle_child()
+        child = self.store.children("qui-gon", parent["id"])[0]
+        old_key = hashlib.sha256(
+            (parent["id"] + ":children:" + child["id"] + ":" + child["result_key"]).encode()
+        ).hexdigest()
+        with self.store.database() as db:
+            db.execute(
+                "INSERT INTO jobs(key,agent,session,action,activity,actor,text,created,received,stop,revision,updated,state) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                (
+                    old_key,
+                    "qui-gon",
+                    parent["id"],
+                    "children",
+                    "",
+                    parent["owner"],
+                    "",
+                    self.now,
+                    self.now,
+                    0,
+                    self.config["revision"],
+                    self.now,
+                    "done",
+                ),
+            )
+            db.execute("UPDATE delegations SET notified=1 WHERE id=?", (child["id"],))
+        self.store.recover_unstarted_delivery()
+        self.assertEqual(self.store.children("qui-gon", parent["id"])[0]["notified"], 0)
+        self.tick(4)
+        parent_runs = [r for r in self.hermes.requests.values() if r["agent"] == "qui-gon"]
+        self.assertEqual(len(parent_runs), 2)
+        self.assertIn(receipt["event_id"], parent_runs[-1]["text"])
+        self.store.recover_unstarted_delivery()
+        self.tick(2)
+        self.assertEqual(
+            len([r for r in self.hermes.requests.values() if r["agent"] == "qui-gon"]), 2
         )
 
     def test_full_result_is_paged_without_public_or_parent_prompt_transcript(self):
