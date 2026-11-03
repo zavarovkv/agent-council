@@ -275,7 +275,7 @@ def build(runtime):
 
 
 @maintenance
-def deploy(runtime, *, instruction_source=None, instruction_revision=None):
+def deploy(runtime, *, instruction_source=None, instruction_revision=None, recover_queued=False):
     files = None
     capabilities = []
     if instruction_source is not None or instruction_revision is not None:
@@ -319,7 +319,28 @@ def deploy(runtime, *, instruction_source=None, instruction_revision=None):
     require_capability(runtime, runtime.settings.data_dir, image=image)
     if files is not None:
         verify_capabilities(runtime, capabilities, image=image)
-    backup = snapshot(runtime, restart=False, automatic=True)
+    adapter_stopped = False
+    if recover_queued:
+        adapters = [item for item in runtime.linear_companions() if item[0] == "linear-adapter"]
+        if len(adapters) != 1 or not adapters[0][2]:
+            raise OperationError("Queued recovery requires one running Linear adapter.")
+        try:
+            runtime.compose("stop", "--timeout", "30", "linear-adapter")
+        except Exception:
+            # The command may fail after Docker stopped the container.
+            runtime.compose("start", "linear-adapter")
+            raise
+        adapter_stopped = True
+    try:
+        backup = (
+            snapshot(runtime, restart=False, automatic=True, allow_stopped_queue=True)
+            if recover_queued
+            else snapshot(runtime, restart=False, automatic=True)
+        )
+    except Exception:
+        if adapter_stopped:
+            runtime.compose("start", "linear-adapter")
+        raise
     switched = False
     try:
         smoke(runtime, backup)  # Prove the previous image is usable before attempting an upgrade.

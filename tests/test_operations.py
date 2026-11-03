@@ -427,6 +427,44 @@ class OperationTests(unittest.TestCase):
         self.assertEqual(self.fixture.env.read_bytes(), original)
         self.assertEqual((self.fixture.data / "history.txt").read_text(), "original history")
 
+    def test_queued_recovery_restarts_adapter_when_checkpoint_is_deferred(self):
+        runtime = FakeRuntime(self.fixture.settings())
+        runtime.linear_companions = lambda: [("linear-adapter", "adapter", True)]
+        runtime.compose = lambda *args: runtime.events.append(args)
+        with patch("council_ops.lifecycle.snapshot", side_effect=OperationError("busy")):
+            with self.assertRaisesRegex(OperationError, "busy"):
+                deploy(runtime, recover_queued=True)
+        self.assertIn(("stop", "--timeout", "30", "linear-adapter"), runtime.events)
+        self.assertIn(("start", "linear-adapter"), runtime.events)
+        self.assertTrue(runtime.running)
+
+    def test_queued_recovery_retains_queued_job_in_checkpoint_and_live_state(self):
+        import sqlite3
+
+        self.fixture.values["HERMES_UID"] = str(os.getuid())
+        self.fixture.values["HERMES_GID"] = str(os.getgid())
+        self.fixture.save()
+        bridge = self.fixture.data / ".council/linear/bridge"
+        bridge.mkdir(parents=True)
+        database = bridge / "linear.sqlite3"
+        with sqlite3.connect(database) as db:
+            db.executescript(
+                "CREATE TABLE jobs(state TEXT,run_id TEXT); INSERT INTO jobs VALUES('queued','');"
+            )
+        runtime = FakeRuntime(self.fixture.settings())
+        runtime.linear_companions = lambda: [("linear-adapter", "adapter", True)]
+        runtime.compose = lambda *args: runtime.events.append(args)
+        runtime.require_idle = lambda **kwargs: runtime.events.append(("idle", kwargs))
+        result = deploy(runtime, recover_queued=True)
+        backup = Path(result["backup"])
+        for path in (database, backup / "hermes/.council/linear/bridge/linear.sqlite3"):
+            with sqlite3.connect(path) as db:
+                self.assertEqual(
+                    db.execute("SELECT state,run_id FROM jobs").fetchall(), [("queued", "")]
+                )
+        self.assertIn(("idle", {"allow_stopped_queue": True}), runtime.events)
+        self.assertTrue(runtime.running)
+
     def test_restore_retains_the_previous_live_state(self):
         runtime = FakeRuntime(self.fixture.settings())
         backup = snapshot(runtime)

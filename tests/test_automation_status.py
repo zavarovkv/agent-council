@@ -2,6 +2,7 @@ import fcntl
 import io
 import json
 import os
+import sqlite3
 import tempfile
 import unittest
 from contextlib import redirect_stdout
@@ -187,6 +188,45 @@ class AutomationStatusTests(unittest.TestCase):
                 runtime.require_idle()
         queue.update("fixture", status="done")
         runtime.require_idle()
+
+    def test_queued_recovery_requires_paused_admission_stopped_adapter_and_no_started_runs(self):
+        bridge = self.fixture.data / ".council/linear/bridge"
+        bridge.mkdir(parents=True)
+        database = bridge / "linear.sqlite3"
+        with sqlite3.connect(database) as db:
+            db.executescript(
+                "CREATE TABLE jobs(state TEXT, run_id TEXT); INSERT INTO jobs VALUES('queued','');"
+            )
+        runtime = Runtime(self.fixture.settings())
+        runtime.inspect = lambda: {"State": {"Running": True}}
+        runtime.container = lambda: "fixture"
+        runtime.run = lambda *args, **kwargs: ""
+        runtime.compose = lambda *args: (
+            json.dumps({"fresh": True, "agents": 0, "work": False})
+            if "read_runtime_status" in args[-1]
+            else "0"
+        )
+        runtime.linear_companions = lambda: [("linear-adapter", "fixture", False)]
+        with self.assertRaises(OperationDeferred):
+            runtime.require_idle()
+        with self.assertRaises(OperationError):
+            runtime.require_idle(allow_stopped_queue=True)
+        runtime._linear_maintenance_depth = 1
+        runtime.require_idle(allow_stopped_queue=True)
+        runtime.linear_companions = lambda: [("linear-adapter", "fixture", True)]
+        with self.assertRaises(OperationError):
+            runtime.require_idle(allow_stopped_queue=True)
+        runtime.linear_companions = lambda: [("linear-adapter", "fixture", False)]
+        for state, run_id in (
+            ("running", "run_fixture"),
+            ("waiting", "run_fixture"),
+            ("queued", "run_fixture"),
+            ("starting", ""),
+        ):
+            with sqlite3.connect(database) as db:
+                db.execute("UPDATE jobs SET state=?,run_id=?", (state, run_id))
+            with self.subTest(state=state, run_id=run_id), self.assertRaises(OperationDeferred):
+                runtime.require_idle(allow_stopped_queue=True)
 
     def test_generation_and_filing_diagnostics_read_only_safe_aggregate_fields(self):
         home = self.fixture.data

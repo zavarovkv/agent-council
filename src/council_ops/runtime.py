@@ -55,7 +55,7 @@ class Runtime:
         source = self.run(["git", "show", revision + ":compose.yaml"])
         atomic_write(active, (source + "\n").encode())
 
-    def require_idle(self):
+    def require_idle(self, *, allow_stopped_queue=False):
         if not self.inspect()["State"]["Running"]:
             return
         source = (
@@ -115,9 +115,18 @@ class Runtime:
 
             if path.resolve() != path:
                 raise OperationError("Refusing a symlinked Linear store.")
+            if allow_stopped_queue:
+                if not getattr(self, "_linear_maintenance_depth", 0):
+                    raise OperationError("Queued recovery requires paused Linear admission.")
+                adapter = [item for item in self.linear_companions() if item[0] == "linear-adapter"]
+                if len(adapter) != 1 or adapter[0][2]:
+                    raise OperationError(
+                        "Queued recovery requires the Linear adapter to be stopped."
+                    )
             with closing(sqlite3.connect(path.as_uri() + "?mode=ro", uri=True)) as db:
                 count = db.execute(
                     "SELECT count(*) FROM jobs WHERE state NOT IN ('done','failed','cancelled')"
+                    + (" AND (state!='queued' OR run_id!='')" if allow_stopped_queue else "")
                 ).fetchone()[0]
             if count:
                 raise OperationDeferred(
