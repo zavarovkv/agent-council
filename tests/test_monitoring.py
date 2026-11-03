@@ -155,6 +155,10 @@ class MonitoringTests(unittest.TestCase):
         self.check()
         self.assertEqual(self.sender.call_count, 1)
         self.report["linear"]["oldest_unsent_age_seconds"] = 0
+        self.report["linear"]["oldest_reserved_age_seconds"] = 601
+        self.check()
+        self.assertEqual(self.sender.call_count, 1)
+        self.report["linear"]["oldest_reserved_age_seconds"] = 0
         self.check()
         self.assertEqual(self.sender.call_count, 2)
         self.assertIn("снова работает", self.sender.call_args.args[2])
@@ -168,9 +172,11 @@ class MonitoringTests(unittest.TestCase):
             db.executescript(
                 "CREATE TABLE jobs (state TEXT, received REAL);"
                 "CREATE TABLE outbox (state TEXT, created REAL);"
+                "CREATE TABLE delegations (state TEXT, created REAL);"
                 "CREATE TABLE installations (organization TEXT);"
                 "INSERT INTO jobs VALUES ('queued', 100), ('waiting', 1);"
                 "INSERT INTO outbox VALUES ('uncertain', 200), ('sent', 1);"
+                "INSERT INTO delegations VALUES ('reserved', 300), ('done', 1);"
                 "INSERT INTO installations VALUES ('org');"
             )
         registry = SimpleNamespace(enabled=True, agents={"qui-gon": None}, organization="org")
@@ -181,6 +187,7 @@ class MonitoringTests(unittest.TestCase):
             report = linear_status(self.settings)
         self.assertEqual(report["oldest_queued_age_seconds"], 900)
         self.assertEqual(report["oldest_unsent_age_seconds"], 800)
+        self.assertEqual(report["oldest_reserved_age_seconds"], 700)
         with sqlite3.connect(database) as db:
             self.assertEqual(db.execute("SELECT COUNT(*) FROM jobs").fetchone()[0], 2)
 

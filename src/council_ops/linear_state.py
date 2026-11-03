@@ -124,6 +124,9 @@ def status(settings):
             oldest_unsent = db.execute(
                 "SELECT MIN(created) FROM outbox WHERE state IN ('pending','uncertain')"
             ).fetchone()[0]
+            oldest_reserved = db.execute(
+                "SELECT MIN(created) FROM delegations WHERE state='reserved'"
+            ).fetchone()[0]
             recovery = {}
             if db.execute(
                 "SELECT 1 FROM sqlite_master WHERE type='table' AND name='recovery'"
@@ -150,6 +153,9 @@ def status(settings):
             else 0,
             "oldest_unsent_age_seconds": max(0, int(time.time() - oldest_unsent))
             if oldest_unsent is not None
+            else 0,
+            "oldest_reserved_age_seconds": max(0, int(time.time() - oldest_reserved))
+            if oldest_reserved is not None
             else 0,
             "recovery": recovery,
             "admission_paused": (directory / "runtime/maintenance").exists(),

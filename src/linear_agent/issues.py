@@ -329,10 +329,7 @@ class Issues:
             return json.loads(operation["result"])
         identity = operation["id"]
         if action == "create":
-            try:
-                existing = self.linear.issue_details(agent, identity)
-            except RemoteError:
-                existing = None
+            existing = self.linear.issue_details(agent, identity)
             if not existing:
                 self.linear.create_issue(agent, {"id": identity, "teamId": team, **fields})
                 existing = self.linear.issue_details(agent, identity)
@@ -347,10 +344,7 @@ class Issues:
         else:
             if body is not None:
                 comment_id = stable_id(identity + ":comment")
-                try:
-                    existing = self.linear.comment(agent, comment_id)
-                except RemoteError:
-                    existing = None
+                existing = self.linear.comment(agent, comment_id)
                 if existing and (
                     existing["body"] != body or existing["issue"]["id"] != issue["id"]
                 ):
