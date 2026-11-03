@@ -38,11 +38,11 @@ class Hermes:
             or idempotency.get("supported") is not True
             or idempotency.get("durable") is not True
         ):
-            raise PermissionError("Durable native run admission is required.")
+            raise ValueError("Durable native run admission is required.")
         enabled = {item["name"] for item in tools if item.get("enabled")}
         expected = {"web", "clarify", "council-linear"}
         if enabled - expected:
-            raise PermissionError("Executor tools exceed the reviewed Linear policy.")
+            raise ValueError("Executor tools exceed the reviewed Linear policy.")
         if expected - enabled:
             # Missing plugins are an executor readiness failure, not revoked
             # owner authorization. Preserve the queued job for safe recovery.

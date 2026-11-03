@@ -180,6 +180,9 @@ class RecoveryTests(unittest.TestCase):
         agent = self.service.registry().agents["qui-gon"]
         with self.assertRaises(RemoteError):
             Hermes(request=Mock(side_effect=[capabilities, inventory])).ready(agent)
+        excess = {"data": inventory["data"] + [{"name": "terminal", "enabled": True}]}
+        with self.assertRaises(ValueError):
+            Hermes(request=Mock(side_effect=[capabilities, excess])).ready(agent)
         self.ingest(self.event())
         with patch.object(self.hermes, "ready", side_effect=RemoteError(503)):
             self.tick()
