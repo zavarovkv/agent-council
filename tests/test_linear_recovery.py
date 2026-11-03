@@ -166,6 +166,67 @@ class RecoveryTests(unittest.TestCase):
     def client(self, request):
         return Linear(self.store, request=request, clock=lambda: self.now)
 
+    def test_real_activity_transport_unblocks_queued_job_and_delivers_once(self):
+        activities = {}
+
+        def request(_url, **kwargs):
+            body = kwargs["body"]
+            if "CouncilActivityCreate" in body["query"]:
+                item = body["variables"]["input"]
+                self.assertNotIn(item["id"], activities)
+                activities[item["id"]] = item
+                return JsonResponse(
+                    {
+                        "data": {
+                            "agentActivityCreate": {
+                                "success": True,
+                                "agentActivity": {"id": item["id"]},
+                            }
+                        }
+                    },
+                    {},
+                )
+            item = activities.get(body["variables"]["id"])
+            if item is None:
+                return JsonResponse(
+                    {
+                        "data": None,
+                        "errors": [
+                            {
+                                "message": "Entity not found: AgentActivity",
+                                "extensions": {"code": "INPUT_ERROR"},
+                            }
+                        ],
+                    },
+                    {},
+                )
+            return JsonResponse(
+                {
+                    "data": {
+                        "agentActivity": {
+                            "agentSession": {"id": item["agentSessionId"]},
+                            "content": item["content"],
+                        }
+                    }
+                },
+                {},
+            )
+
+        client = self.client(request)
+        with patch.object(self.linear, "ensure_activity", side_effect=client.ensure_activity):
+            self.ingest(self.event())
+            self.tick()
+            self.assertEqual(len(self.hermes.requests), 1)
+            self.hermes.finish(self.run_for(), "Verified result")
+            self.tick(3)
+            self.restart()
+            self.tick(2)
+        self.assertFalse(self.store.jobs())
+        self.assertEqual(len(self.hermes.requests), 1)
+        self.assertEqual(
+            [item["content"]["type"] for item in activities.values()], ["thought", "response"]
+        )
+
     def test_missing_activity_can_be_created_without_triggering_app_cooldown(self):
         missing = JsonResponse(
             {
