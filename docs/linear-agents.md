@@ -103,6 +103,24 @@ Coding, terminal execution, private analytics and publishing are out of scope.
 The coordinator supplies a bounded brief and reviews results. Sequential work
 passes reviewed research to marketing; independent deliverables can run in parallel.
 
+## Integration reliability contract
+
+For each external operation distinguish four outcomes: confirmed success,
+confirmed absence, transient unavailability, and rejected or revoked access.
+Only a confirmed absence permits a create; an ambiguous read never does. Linear
+returns `INPUT_ERROR` / `Entity not found: AgentActivity` for a missing singular
+activity lookup: recognize that exact response only for this lookup. Other input
+errors and failures remain errors. A successful create whose receipt is lost is
+reconciled by reading the same activity ID before attempting another create.
+
+Changes to provider responses, retries, or publication must include offline
+contract tests using representative provider response shapes: absent object,
+successful create, lost receipt, existing object, rate limit, denied access and
+unknown error. Test the real transport/adapter path, not only a fake Linear client.
+Do not treat a saved queue item as proof that a message was delivered or a task
+started. Monitor queue age, retries and backup freshness independently; a healthy
+container alone is not evidence of progress.
+
 ## Install
 
 To add Падме to an existing three-agent installation, deploy a release with

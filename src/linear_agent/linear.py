@@ -174,6 +174,20 @@ class Linear:
             raise RemoteError(
                 429, retry_at=retry_deadline(getattr(result, "headers", {}), self.clock())
             )
+        # Linear's singular activity lookup reports a missing ID as a GraphQL
+        # input error. This is the expected read-before-create case, not an
+        # integration outage: cooling down here would prevent the create itself.
+        errors = result.get("errors") if isinstance(result, dict) else None
+        if (
+            query == ACTIVITY_QUERY
+            and isinstance(errors, list)
+            and len(errors) == 1
+            and isinstance(errors[0], dict)
+            and errors[0].get("message") == "Entity not found: AgentActivity"
+            and isinstance(errors[0].get("extensions"), dict)
+            and errors[0]["extensions"].get("code") == "INPUT_ERROR"
+        ):
+            return JsonResponse({"agentActivity": None}, getattr(result, "headers", {}))
         if (
             isinstance(result, dict)
             and isinstance(result.get("errors"), list)
@@ -265,10 +279,9 @@ class Linear:
         return url
 
     def ensure_activity(self, agent, record):
-        try:
-            existing = self.activity(agent, record["id"])
-        except RemoteError:
-            existing = None
+        # Create only after a confirmed absence, never after an unavailable or
+        # ambiguous read. Reusing the same ID then makes retries idempotent.
+        existing = self.activity(agent, record["id"])
         if existing:
             if existing["agentSession"]["id"] != record["session"] or existing["content"] != {
                 "type": record["kind"],
