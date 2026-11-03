@@ -47,6 +47,10 @@ jobs:
         with:
           node-version: "24"
           cache: npm
+      - name: Exercise restrictive source checkout permissions
+        run: |
+          chmod -R go-rwx src/council_workspace src/council_skills src/council_owner src/council_recurring src/council_tasks src/council_team src/research_filing src/workspace_plugin src/telegram_monitor
+          chmod go-rwx scripts/provision-researcher.py scripts/provision-research-workflow.py scripts/configure-drive.py scripts/provision-workspace-index.py scripts/provision-workspace.py scripts/provision-recurring.py scripts/provision-native-tasks.py
       - name: Verify the real pinned OIDC adapter offline
         run: make test-integration
       - name: Verify encrypted backups and real profile recovery offline

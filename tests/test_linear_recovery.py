@@ -10,6 +10,7 @@ from unittest.mock import Mock, patch
 import test_linear_agent as fixtures
 from test_linear_agent import uid
 
+from linear_agent.hermes import Hermes
 from linear_agent.linear import Linear
 from linear_agent.service import Service
 from linear_agent.store import Store
@@ -165,6 +166,29 @@ class RecoveryTests(unittest.TestCase):
 
     def client(self, request):
         return Linear(self.store, request=request, clock=lambda: self.now)
+
+    def test_missing_executor_toolset_defers_job_without_revoking_task(self):
+        capabilities = {
+            "features": {
+                "run_submission": True,
+                "runs_idempotency": {"supported": True, "durable": True},
+            }
+        }
+        inventory = {
+            "data": [{"name": "web", "enabled": True}, {"name": "clarify", "enabled": True}]
+        }
+        agent = self.service.registry().agents["qui-gon"]
+        with self.assertRaises(RemoteError):
+            Hermes(request=Mock(side_effect=[capabilities, inventory])).ready(agent)
+        excess = {"data": inventory["data"] + [{"name": "terminal", "enabled": True}]}
+        with self.assertRaises(ValueError):
+            Hermes(request=Mock(side_effect=[capabilities, excess])).ready(agent)
+        self.ingest(self.event())
+        with patch.object(self.hermes, "ready", side_effect=RemoteError(503)):
+            self.tick()
+        self.assertEqual(self.store.jobs()[0]["state"], "queued")
+        self.assertFalse(self.store.session("qui-gon", uid(10))["blocked"])
+        self.assertFalse(self.hermes.requests)
 
     def test_missing_issue_and_comment_do_not_block_idempotent_creation(self):
         agent = self.service.registry().agents["qui-gon"]
