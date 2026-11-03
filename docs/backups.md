@@ -104,6 +104,9 @@ checks repository structure, downloads the new snapshot and opens copied session
 databases in its recorded image without network access. Only then does retention
 keep **7 daily, 4 weekly and 6 monthly** snapshots. Restic deduplicates and compresses
 data. Allow disk space for a local checkpoint and verification copy.
+Restic uses a private, automatically removed disk-backed staging directory for
+temporary packs and its cache; it does not depend on a small memory-backed tmpfs
+to process a large repository. A full disk fails the backup without pruning.
 
 The most recent 7 verified local checkpoints remain. Manual, unverified and
 foreign backups are never pruned. Failed runs exit nonzero and retain the local

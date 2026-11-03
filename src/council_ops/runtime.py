@@ -124,14 +124,49 @@ class Runtime:
                         "Queued recovery requires the Linear adapter to be stopped."
                     )
             with closing(sqlite3.connect(path.as_uri() + "?mode=ro", uri=True)) as db:
-                count = db.execute(
-                    "SELECT count(*) FROM jobs WHERE state NOT IN ('done','failed','cancelled')"
-                    + (" AND (state!='queued' OR run_id!='')" if allow_stopped_queue else "")
-                ).fetchone()[0]
-            if count:
+                rows = db.execute(
+                    "SELECT j.state,j.run_id,j.agent,s.hermes FROM jobs j LEFT JOIN sessions s "
+                    "ON s.agent=j.agent AND s.id=j.session WHERE j.state NOT IN ('done','failed','cancelled')"
+                ).fetchall()
+            for state, run_id, agent, session in rows:
+                if allow_stopped_queue and state == "queued" and not run_id:
+                    continue
+                if allow_stopped_queue and state == "waiting_children":
+                    self.verify_completed_linear_run(agent, run_id, session)
+                    continue
                 raise OperationDeferred(
                     "Linear tasks are active; finish or stop them before maintenance."
                 )
+
+    def verify_completed_linear_run(self, agent, run_id, session):
+        from linear_agent.config import SLUGS
+
+        if (
+            agent not in SLUGS
+            or not re.fullmatch(r"run_[a-f0-9]{32}", run_id or "")
+            or not re.fullmatch(r"linear_[a-f0-9]{32}", session or "")
+        ):
+            raise OperationDeferred("Cannot verify a waiting Linear run; maintenance deferred.")
+        source = (
+            "import json,os,sys,urllib.request; "
+            "req=urllib.request.Request('http://127.0.0.1:8642/v1/runs/'+sys.argv[1],"
+            "headers={'Authorization':'Bearer '+os.environ['API_SERVER_KEY']}); "
+            "r=json.load(urllib.request.urlopen(req,timeout=15)); "
+            "print(json.dumps({'status':r.get('status'),'session_id':r.get('session_id'),"
+            "'pending':bool(r.get('pending_controls'))}))"
+        )
+        try:
+            value = json.loads(
+                self.compose(
+                    "exec", "-T", SLUGS[agent], "/opt/hermes/.venv/bin/python", "-c", source, run_id
+                )
+            )
+        except (OperationError, ValueError, TypeError, KeyError):
+            raise OperationDeferred(
+                "Cannot verify a waiting Linear run; maintenance deferred."
+            ) from None
+        if value != {"status": "completed", "session_id": session, "pending": False}:
+            raise OperationDeferred("A Linear run is still active; maintenance deferred.")
 
     def run(self, arguments, *, timeout=180, interactive=False, environment=None):
         try:

@@ -123,9 +123,11 @@ container alone is not evidence of progress.
 
 If a broken adapter leaves only not-yet-started jobs queued, an operator may use
 `scripts/manage.py deploy --recover-queued` to preserve them through cutover.
-It pauses admission, stops the adapter and rechecks that every unfinished job is
-queued with no run ID, while retaining all normal checks for active Hermes and
-secretary work. A running, waiting, publishing or starting job defers the release.
+It pauses admission, stops the adapter and checks that each unfinished job is
+either queued without a run ID or waiting for children after its executor confirms
+the matching run completed with no pending controls. All normal checks for active
+Hermes and secretary work remain. A running, waiting for an answer, publishing or
+starting job defers the release.
 The standard consistent checkpoint and copied-profile verification still apply;
 if preflight fails, the previous adapter is restarted. This mode does not cancel,
 rewrite or accept queued tasks. It is not a general bypass for active work.

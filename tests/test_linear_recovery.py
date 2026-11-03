@@ -191,6 +191,54 @@ class RecoveryTests(unittest.TestCase):
                 key = "api:" + installation["organization"] + ":" + installation["app_user"]
                 self.assertEqual(client.recovery.get(key)["failures"], 0)
 
+    def test_real_child_adapter_creates_only_after_confirmed_absence(self):
+        child = {"issue": uid(333), "title": "Research", "description": "Verify"}
+        parent, team, delegate = uid(1), uid(2), uid(3)
+        missing = JsonResponse(
+            {
+                "data": None,
+                "errors": [
+                    {"message": "Entity not found: Issue", "extensions": {"code": "INPUT_ERROR"}}
+                ],
+            },
+            {},
+        )
+        created = {
+            "id": child["issue"],
+            "title": child["title"],
+            "url": "https://linear.app/fixture",
+        }
+        existing = {
+            **created,
+            "parent": {"id": parent},
+            "team": {"id": team},
+            "delegate": {"id": delegate},
+        }
+        request = Mock(
+            side_effect=[
+                missing,
+                JsonResponse({"data": {"issueCreate": {"success": True, "issue": created}}}, {}),
+                JsonResponse({"data": {"issue": existing}}, {}),
+            ]
+        )
+        client = self.client(request)
+        agent = self.service.registry().agents["qui-gon"]
+        self.assertEqual(
+            client.ensure_child(agent, child, parent_issue=parent, team=team, delegate=delegate),
+            created,
+        )
+        self.assertEqual(
+            client.ensure_child(agent, child, parent_issue=parent, team=team, delegate=delegate),
+            existing,
+        )
+        self.assertEqual(request.call_count, 3)
+        request = Mock(side_effect=RemoteError(503))
+        with self.assertRaises(RemoteError):
+            self.client(request).ensure_child(
+                agent, child, parent_issue=parent, team=team, delegate=delegate
+            )
+        self.assertEqual(request.call_count, 1)
+
     def test_reserved_child_recovers_from_interrupted_creation_without_duplicates(self):
         self.ingest(self.event())
         self.tick()
