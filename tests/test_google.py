@@ -97,6 +97,56 @@ class GoogleTests(unittest.TestCase):
             self.google.execute("native-qui-gon", args)
         self.assertEqual(self.api.users().messages().send().execute.call_count, 1)
 
+    def test_archive_and_spam_are_individual_verified_and_never_replayed(self):
+        messages = self.api.users().messages()
+        for action, expected, final in (
+            ("archive", {"removeLabelIds": ["INBOX"]}, ["UNREAD"]),
+            ("spam", {"removeLabelIds": ["INBOX"], "addLabelIds": ["SPAM"]}, ["SPAM"]),
+        ):
+            with self.subTest(action=action):
+                messages.reset_mock()
+                messages.get().execute.side_effect = [
+                    {"id": "message-1", "labelIds": ["INBOX", "UNREAD"]},
+                    {"id": "message-1", "labelIds": final},
+                ]
+                args = {"service": "gmail", "action": action, "id": "message-1", "key": action}
+                result = self.google.execute("native-qui-gon", args)
+                self.assertTrue(result["verified"])
+                messages.modify.assert_called_once_with(userId="me", id="message-1", body=expected)
+                self.assertEqual(self.google.execute("native-qui-gon", args), result)
+                self.assertEqual(messages.modify().execute.call_count, 1)
+
+    def test_mail_classification_rejects_sensitive_folders_and_uncertain_writes(self):
+        messages = self.api.users().messages()
+        args = {"service": "gmail", "action": "spam", "id": "m", "key": "spam-key"}
+        for label in ("DRAFT", "SENT", "TRASH"):
+            messages.get().execute.return_value = {"id": "m", "labelIds": [label]}
+            with self.subTest(label=label), self.assertRaises(ValueError):
+                self.google.execute("native-qui-gon", args)
+        messages.modify.assert_not_called()
+        messages.get().execute.return_value = {"id": "m", "labelIds": ["INBOX"]}
+        messages.modify().execute.side_effect = TimeoutError
+        with self.assertRaises(TimeoutError):
+            self.google.execute("native-qui-gon", args)
+        with self.assertRaisesRegex(ValueError, "uncertain"):
+            self.google.execute("native-qui-gon", args)
+        self.assertEqual(messages.modify().execute.call_count, 1)
+        with self.assertRaises(PermissionError):
+            self.google.execute("linear-lando", args)
+
+    def test_archive_does_not_claim_success_without_confirmed_labels(self):
+        messages = self.api.users().messages()
+        messages.get().execute.side_effect = [
+            {"id": "m", "labelIds": ["INBOX"]},
+            {"id": "m", "labelIds": ["INBOX"]},
+        ]
+        args = {"service": "gmail", "action": "archive", "id": "m", "key": "archive-unverified"}
+        with self.assertRaisesRegex(ValueError, "not verified"):
+            self.google.execute("native-qui-gon", args)
+        with self.assertRaisesRegex(ValueError, "uncertain"):
+            self.google.execute("native-qui-gon", args)
+        self.assertEqual(messages.modify().execute.call_count, 1)
+
     def test_calendar_rejects_ambiguous_times_and_checks_provider_etag(self):
         for change in (
             {"start": "2026-11-03T10:00:00"},

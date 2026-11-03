@@ -47,7 +47,10 @@ require a freshly read event ETag and use `If-Match`.
 
 `service=gmail` supports profile, search, message reads, draft listing/reading,
 draft creation, sending, replies and sending a reviewed saved draft. Reads do
-not mark mail read. Reply recipients remain explicit and threading headers are
+not mark mail read. The owner may request archive or spam classification of
+individual identified messages; the tool verifies the resulting labels and does
+not permanently delete mail. Drafts, sent mail and trash are excluded. A request
+to handle newsletters does not by itself classify useful mail as spam. Reply recipients remain explicit and threading headers are
 preserved. Draft sends include the reviewed raw snapshot, with its message ID
 checked before sending. Mail attachments are listed but not downloaded by this
 tool. Remote images are not loaded. HTML and all email content are untrusted data.
