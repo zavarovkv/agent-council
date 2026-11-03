@@ -261,6 +261,8 @@ class Service:
                 self._fail(agent, job, "protocol_error")
         self.flush_outbox(registry)
         self._recover_reserved_children(registry)
+        if not (self.home / "runtime/maintenance").exists():
+            self.store.recover_unstarted_delivery()
         self._notify_children(registry)
         self.task_status.reconcile(registry)
 

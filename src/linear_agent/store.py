@@ -653,6 +653,40 @@ class Store:
                 )
             ]
 
+    def recover_unstarted_delivery(self):
+        """Reopen only a provably unstarted legacy delivery of a newer handoff."""
+        with self.database() as db:
+            db.execute("BEGIN IMMEDIATE")
+            rows = db.execute(
+                "SELECT d.id,d.parent_agent,d.parent_session,d.result_key,h.id AS event_id "
+                "FROM delegations d JOIN handoffs h ON h.origin_job=d.result_key "
+                "JOIN sessions s ON s.agent=d.parent_agent AND s.id=d.parent_session "
+                "WHERE d.state IN ('done','blocked') AND d.notified=1 AND s.blocked=0"
+            ).fetchall()
+            for row in rows:
+                if db.execute(
+                    "SELECT 1 FROM jobs WHERE agent=? AND session=? AND stop=1",
+                    (row["parent_agent"], row["parent_session"]),
+                ).fetchone():
+                    continue
+                prefix = row["parent_session"] + ":children:" + row["id"] + ":" + row["result_key"]
+                old_key = hashlib.sha256(prefix.encode()).hexdigest()
+                new_key = hashlib.sha256((prefix + ":" + row["event_id"]).encode()).hexdigest()
+                old = db.execute(
+                    "SELECT state,run_id,action FROM jobs WHERE key=?", (old_key,)
+                ).fetchone()
+                if (
+                    old
+                    and old["state"] == "done"
+                    and not old["run_id"]
+                    and old["action"] == "children"
+                    and not db.execute("SELECT 1 FROM jobs WHERE key=?", (new_key,)).fetchone()
+                ):
+                    db.execute(
+                        "UPDATE delegations SET notified=0 WHERE id=? AND result_key=? AND notified=1",
+                        (row["id"], row["result_key"]),
+                    )
+
     def reserved_children(self):
         with self.database() as db:
             return [
