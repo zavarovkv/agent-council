@@ -551,9 +551,24 @@ class RecurringTests(unittest.TestCase):
         self.assertEqual(self.recurring.run(self.run["key"])["state"], "reviewed")
 
     def test_confirmed_report_is_delivered_once_and_receipt_settles(self):
-        self.ready()
+        summary = (
+            "- **Первый:** Тариф 5% с 10 ноября, только для новых заказов.\n\n"
+            "- **Второй:** Исправление заявлено, полное восстановление не подтверждено."
+        )
+        payload = self.submit_payload(skip_empty=False)
+        payload.pop("verification")
+        self.recurring.submit(
+            "qui-gon",
+            {
+                **payload,
+                "outcome": "report",
+                "page": "b" * 32,
+                "revision": "e" * 64,
+                "summary": summary,
+            },
+        )
         first = self.render()
-        self.assertIn("https://www.notion.so/", first)
+        self.assertEqual(first, summary + "\n\n[Подробнее](https://www.notion.so/" + "b" * 32 + ")")
         previous = self.executions.current
         self.executions.current = "b" * 32
         self.assertEqual(self.render(), "")
