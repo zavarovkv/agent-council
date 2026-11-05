@@ -10,6 +10,8 @@ from http.cookies import SimpleCookie
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlsplit
 
+from council_team.communication import TextLimitError
+
 from .config import private_json
 from .transport import RemoteError
 
@@ -204,6 +206,8 @@ class Handler(BaseHTTPRequestHandler):
                             else self.server.service.handoff
                         )
                         result = operation(slug, payload)
+                    except TextLimitError:
+                        raise
                     except (ValueError, PermissionError) as error:
                         self.respond(
                             403 if isinstance(error, PermissionError) else 400,
@@ -224,6 +228,13 @@ class Handler(BaseHTTPRequestHandler):
                 self.respond(200, {"accepted": accepted})
             else:
                 self.respond(404, {"error": "not_found"})
+        except TextLimitError as error:
+            self.respond(
+                400,
+                {"error": str(error), "code": "text_too_long"}
+                if self.server.internal
+                else {"error": "invalid_request"},
+            )
         except PermissionError:
             self.respond(403, {"error": "not_authorized"})
         except BlockingIOError:

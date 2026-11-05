@@ -4,6 +4,8 @@ import json
 import re
 from datetime import date
 
+from council_team.communication import check_brief, check_comment
+
 from .acceptance import Acceptance, policy
 from .config import identifier
 from .document_content import matches_document
@@ -324,7 +326,14 @@ class Issues:
             "fields": fields,
             "body": body,
         }
-        operation = self.store.issue_operation(session, key, request)
+
+        def validate_new():
+            if action in {"create", "update"}:
+                check_brief(fields.get("description"))
+            if action == "comment":
+                check_comment(body)
+
+        operation = self.store.issue_operation(session, key, request, validate_new=validate_new)
         if operation["state"] == "done":
             return json.loads(operation["result"])
         identity = operation["id"]

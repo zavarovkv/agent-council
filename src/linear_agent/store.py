@@ -181,7 +181,7 @@ class Store:
                 )
             return combined
 
-    def issue_operation(self, session, key, request, *, retained=False):
+    def issue_operation(self, session, key, request, *, retained=False, validate_new=None):
         identity = stable_id(session["agent"] + ":" + session["id"] + ":issue:" + key)
         body = json.dumps(request, sort_keys=True, ensure_ascii=False)
         with self.database() as db:
@@ -191,6 +191,8 @@ class Store:
                 if row["request"] != body:
                     raise ValueError("Request key already belongs to a different issue operation.")
                 return dict(row)
+            if validate_new is not None:
+                validate_new()
             if (
                 db.execute(
                     "SELECT count(*) FROM issue_operations WHERE agent=? AND session=?",
@@ -529,7 +531,16 @@ class Store:
             return dict(rows[0])
 
     def reserve_child(
-        self, parent, target, key, title, description, *, issue=None, parent_issue=None
+        self,
+        parent,
+        target,
+        key,
+        title,
+        description,
+        *,
+        issue=None,
+        parent_issue=None,
+        validate_new=None,
     ):
         parent_issue = parent_issue or parent["issue"]
         identity = stable_id(parent["agent"] + ":" + parent["id"] + ":" + key)
@@ -546,6 +557,8 @@ class Store:
                 if (row["parent_issue"] or parent["issue"]) != parent_issue:
                     raise ValueError("Delegation parent conflict.")
                 return dict(row)
+            if validate_new is not None:
+                validate_new()
             if (
                 parent["depth"]
                 or db.execute(

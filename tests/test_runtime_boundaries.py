@@ -54,8 +54,12 @@ class RuntimeBoundaryTests(unittest.TestCase):
             "linear_agent",
             {
                 "catalog.py": {"council_team.catalog"},
+                "http.py": {"council_team.communication"},
+                "intake.py": {"council_team.communication"},
+                "issues.py": {"council_team.communication"},
                 "statistics.py": {"council_team.catalog"},
                 "recurring.py": {"council_recurring.contract"},
+                "service.py": {"council_team.communication"},
             },
         )
         self.check_imports("council_team", {})
@@ -75,6 +79,7 @@ class RuntimeBoundaryTests(unittest.TestCase):
                     "gateway.session_context",
                     "council_workspace.client",
                     "council_workspace.google_client",
+                    "council_team.communication",
                 },
                 "skills.py": {"council_skills"},
             },

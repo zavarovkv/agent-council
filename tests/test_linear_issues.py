@@ -5,6 +5,7 @@ import copy
 import json
 import threading
 import unittest
+from unittest.mock import patch
 
 import test_linear_agent as fixtures
 from test_linear_agent import FakeLinear, uid
@@ -56,19 +57,148 @@ class IssueManagementTests(unittest.TestCase):
     def test_lost_create_response_and_adapter_restart_reconcile_the_same_issue(self):
         context = self.start()
         create = self.linear.create_issue
+        fields = {"title": "Future", "description": "я" * 1500}
 
         def lost(*args):
             create(*args)
             raise RemoteError()
 
         self.linear.create_issue = lost
-        with self.assertRaises(RemoteError):
-            self.call(context, "create", key="lost", fields={"title": "Future"})
+        with patch("linear_agent.issues.check_brief"), self.assertRaises(RemoteError):
+            self.call(context, "create", key="lost", fields=fields)
         self.linear.create_issue = create
         self.service = Service(self.home, store=self.store, linear=self.linear, hermes=self.hermes)
-        result = self.call(context, "create", key="lost", fields={"title": "Future"})
+        result = self.call(context, "create", key="lost", fields=fields)
         self.assertEqual(len(self.linear.issue_records), 1)
         self.assertEqual(result["state"]["type"], "backlog")
+        self.assertEqual(
+            self.linear.issue_records[result["id"]]["description"], fields["description"]
+        )
+
+    def test_legacy_long_issue_operations_replay_but_changed_payloads_conflict(self):
+        context = self.start()
+        for action in ("create", "update", "comment"):
+            with self.subTest(action=action):
+                payload = (
+                    {"body": "я" * 900}
+                    if action == "comment"
+                    else {"fields": {"title": "Brief", "description": "я" * 1500}}
+                )
+                with (
+                    patch("linear_agent.issues.check_brief"),
+                    patch("linear_agent.issues.check_comment"),
+                ):
+                    receipt = self.call(context, action, key=action, **payload)
+                before = len(self.linear.issue_writes), len(self.linear.comments)
+                self.assertEqual(self.call(context, action, key=action, **payload), receipt)
+                changed = copy.deepcopy(payload)
+                if action == "comment":
+                    changed["body"] += "changed"
+                else:
+                    changed["fields"]["description"] += "changed"
+                with self.assertRaisesRegex(ValueError, "Request key"):
+                    self.call(context, action, key=action, **changed)
+                self.assertEqual((len(self.linear.issue_writes), len(self.linear.comments)), before)
+
+    def test_description_limit_precedes_writes_and_allows_same_key_correction(self):
+        context = self.start()
+        for action in ("create", "update"):
+            with self.subTest(action=action):
+                before = len(self.linear.issue_writes)
+                records = copy.deepcopy(self.linear.issue_records)
+                with self.store.database() as db:
+                    operations = db.execute("SELECT count(*) FROM issue_operations").fetchone()[0]
+                fields = {"title": "Brief", "description": "я" * 1201}
+                with self.assertRaisesRegex(ValueError, "1200"):
+                    self.call(context, action, key=action, fields=fields)
+                self.assertEqual(len(self.linear.issue_writes), before)
+                self.assertEqual(self.linear.issue_records, records)
+                with self.store.database() as db:
+                    self.assertEqual(
+                        db.execute("SELECT count(*) FROM issue_operations").fetchone()[0],
+                        operations,
+                    )
+
+                fields["description"] = "я" * 1200
+                result = self.call(context, action, key=action, fields=fields)
+                self.assertEqual(self.call(context, action, key=action, fields=fields), result)
+                self.assertEqual(
+                    self.linear.issue_details(None, result["id"])["description"],
+                    fields["description"],
+                )
+
+    def test_long_comment_is_not_published_or_reserved_and_can_be_rephrased(self):
+        context = self.start()
+        with self.store.database() as db:
+            operations = db.execute("SELECT count(*) FROM issue_operations").fetchone()[0]
+        with self.assertRaisesRegex(ValueError, "700"):
+            self.call(context, "comment", key="short-note", body="я" * 701)
+        self.assertFalse(self.linear.comments)
+        with self.store.database() as db:
+            self.assertEqual(
+                db.execute("SELECT count(*) FROM issue_operations").fetchone()[0], operations
+            )
+        body = "я" * 700
+        result = self.call(context, "comment", key="short-note", body=body)
+        self.assertEqual(self.call(context, "comment", key="short-note", body=body), result)
+        self.assertEqual(len(self.linear.comments), 1)
+        self.assertEqual(next(iter(self.linear.comments.values()))["body"], body)
+
+    def test_long_delegation_does_not_reserve_a_child_and_can_be_corrected(self):
+        context = self.start()
+        payload = {
+            **context,
+            "target": "dexter",
+            "key": "research",
+            "title": "Research",
+            "description": "я" * 1201,
+        }
+        with self.assertRaisesRegex(ValueError, "1200"):
+            self.service.delegate("qui-gon", payload)
+        self.assertFalse(self.store.children("qui-gon", uid(10)))
+        self.assertFalse(self.linear.issue_records)
+        self.assertEqual(set(self.linear.sessions), {uid(10)})
+
+        payload["description"] = "я" * 1200
+        result = self.service.delegate("qui-gon", payload)
+        self.assertEqual(self.service.delegate("qui-gon", payload), result)
+        children = self.store.children("qui-gon", uid(10))
+        self.assertEqual(len(children), 1)
+        self.assertEqual(children[0]["description"], payload["description"])
+        self.assertEqual(len(self.linear.issue_records), 1)
+
+    def test_uncertain_legacy_long_delegation_reconciles_only_the_same_payload(self):
+        context = self.start()
+        payload = {
+            **context,
+            "target": "dexter",
+            "key": "legacy-research",
+            "title": "Research",
+            "description": "я" * 1500,
+        }
+        self.linear.uncertain_child = True
+        with patch("linear_agent.service.check_brief"), self.assertRaises(RemoteError):
+            self.service.delegate("qui-gon", payload)
+        child = self.store.children("qui-gon", uid(10))[0]
+        result = self.service.delegate("qui-gon", payload)
+        self.assertEqual(result["issue_id"], child["issue"])
+        self.assertEqual(self.service.delegate("qui-gon", payload), result)
+        with self.assertRaisesRegex(ValueError, "conflict"):
+            self.service.delegate("qui-gon", {**payload, "description": "я" * 1501})
+        self.assertEqual(len(self.store.children("qui-gon", uid(10))), 1)
+        self.assertEqual(len(self.linear.issue_records), 1)
+
+    def test_historical_long_description_stays_readable_and_allows_unrelated_updates(self):
+        context = self.start()
+        original = "я" * 12001
+        self.linear.sessions[uid(10)]["issue"]["description"] = original
+        first = self.call(context, "get")
+        second = self.call(context, "get", offset=first["next_offset"])
+        self.assertEqual(first["description"] + second["description"], original)
+        self.assertIsNone(second["next_offset"])
+        self.call(context, "update", key="priority", fields={"priority": 1})
+        self.assertEqual(self.linear.sessions[uid(10)]["issue"]["description"], original)
+        self.assertEqual(self.linear.sessions[uid(10)]["issue"]["priority"], 1)
 
     def test_begins_delegated_issue_but_not_a_comment_only_mention_or_terminal_issue(self):
         context = self.start()

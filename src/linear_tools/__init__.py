@@ -5,6 +5,13 @@ import os
 import urllib.error
 import urllib.request
 
+from council_team.communication import (
+    BRIEF_GUIDANCE,
+    BRIEF_LIMIT,
+    COMMENT_GUIDANCE,
+    COMMENT_LIMIT,
+)
+
 
 def call(path, args):
     from gateway.session_context import get_session_env
@@ -150,7 +157,11 @@ def register(ctx):
                     "type": "object",
                     "properties": {
                         "title": {"type": "string", "maxLength": 200},
-                        "description": {"type": "string", "maxLength": 12000},
+                        "description": {
+                            "type": "string",
+                            "maxLength": BRIEF_LIMIT,
+                            "description": BRIEF_GUIDANCE,
+                        },
                         "content": {"type": "string", "maxLength": 12000},
                         "priority": {"type": "integer", "minimum": 0, "maximum": 4},
                         "stateId": {"type": "string"},
@@ -162,7 +173,11 @@ def register(ctx):
                     },
                     "additionalProperties": False,
                 },
-                "body": {"type": "string", "maxLength": 10000},
+                "body": {
+                    "type": "string",
+                    "maxLength": COMMENT_LIMIT,
+                    "description": COMMENT_GUIDANCE,
+                },
                 "result": {
                     "type": "string",
                     "maxLength": 500,
@@ -184,7 +199,11 @@ def register(ctx):
                 "target": {"type": "string", "enum": ["dexter", "marketing", "padme"]},
                 "key": {"type": "string", "maxLength": 80},
                 "title": {"type": "string", "maxLength": 200},
-                "description": {"type": "string", "maxLength": 12000},
+                "description": {
+                    "type": "string",
+                    "maxLength": BRIEF_LIMIT,
+                    "description": BRIEF_GUIDANCE,
+                },
                 "parent_issue": {
                     "type": "string",
                     "description": "Active issue UUID or identifier in an allowed team; defaults to current issue.",
