@@ -124,7 +124,7 @@ def render(home, identifier, phase, *, native, executions, remote=call, workspac
         page = verified_page(workspace, home, result, period, value["notion_parent"])
         if page:
             kind = "report"
-            body = result["summary"] + "\n\n" + page["url"]
+            body = f"{result['summary']}\n\n[Подробнее]({page['url']})"
             if now.timestamp() > period["deadline"] + 300:
                 body = "Отчет готов с задержкой.\n\n" + body
         else:
