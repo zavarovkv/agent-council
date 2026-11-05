@@ -9,6 +9,7 @@ import sys
 import tempfile
 import threading
 import unittest
+import urllib.error
 from pathlib import Path
 from types import ModuleType, SimpleNamespace
 from unittest.mock import Mock, patch
@@ -18,10 +19,79 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 import linear_tools
 from council_ops.config import OperationError
 from council_ops.linear_state import has_handoffs, require_capability
+from council_tasks import call as native_tasks_call
+from council_tasks import register as register_native_tasks
+from council_team.communication import TextLimitError
 from linear_agent.http import Server
 
 
 class HandoffToolTests(unittest.TestCase):
+    def test_native_handler_explains_typed_server_rejection(self):
+        registered = []
+        register_native_tasks(
+            SimpleNamespace(register_tool=lambda **fields: registered.append(fields))
+        )
+        with patch(
+            "council_tasks.call",
+            side_effect=TextLimitError("Shorten the brief to 1200 characters."),
+        ):
+            result = json.loads(
+                registered[0]["handler"]({"action": "create", "description": "я" * 1201})
+            )
+        self.assertEqual(result["code"], "text_too_long")
+        self.assertIn("1200", result["error"])
+        self.assertIn("Shorten", result["error"])
+
+    def test_native_transport_preserves_only_bounded_typed_length_errors(self):
+        guidance = {"code": "text_too_long", "error": "Shorten the brief to 1200 characters."}
+        original = {"action": "create", "key": "legacy-retry", "description": "я" * 1500}
+        for status, body, expected in (
+            (400, json.dumps(guidance).encode(), TextLimitError),
+            (400, b'{"error":"private diagnostic"}', urllib.error.HTTPError),
+            (503, json.dumps(guidance).encode(), urllib.error.HTTPError),
+            (400, json.dumps({**guidance, "error": "x" * 4096}).encode(), urllib.error.HTTPError),
+        ):
+            with self.subTest(status=status, body_size=len(body)):
+                opener = Mock()
+                opener.open.side_effect = urllib.error.HTTPError(
+                    "http://linear-adapter:9122/coordinator/tasks",
+                    status,
+                    "Rejected",
+                    {},
+                    io.BytesIO(body),
+                )
+                with (
+                    patch("council_tasks.settings", return_value={"key": "fixture-key"}),
+                    patch("urllib.request.build_opener", return_value=opener),
+                    self.assertRaises(expected) as raised,
+                ):
+                    native_tasks_call(original, home="/unused")
+                self.assertEqual(json.loads(opener.open.call_args.args[0].data), original)
+                if expected is TextLimitError:
+                    self.assertEqual(str(raised.exception), guidance["error"])
+
+    def test_visible_text_schemas_preserve_document_and_owner_input_capacity(self):
+        registered = {}
+        context = SimpleNamespace(
+            register_tool=lambda **fields: registered.update({fields["name"]: fields})
+        )
+        with (
+            patch("council_workspace.client.register"),
+            patch("council_workspace.google_client.register"),
+        ):
+            linear_tools.register(context)
+        register_native_tasks(context)
+        properties = {
+            name: tool["schema"]["parameters"]["properties"] for name, tool in registered.items()
+        }
+        issue = properties["linear_issues"]
+        self.assertEqual(issue["fields"]["properties"]["description"]["maxLength"], 1200)
+        self.assertEqual(issue["body"]["maxLength"], 700)
+        self.assertEqual(issue["fields"]["properties"]["content"]["maxLength"], 12000)
+        self.assertEqual(properties["linear_delegate"]["description"]["maxLength"], 1200)
+        self.assertEqual(properties["council_tasks"]["description"]["maxLength"], 1200)
+        self.assertEqual(properties["council_tasks"]["text"]["maxLength"], 8000)
+
     def test_tool_schema_and_handler_exclude_model_supplied_identity(self):
         registered = {}
 
@@ -128,6 +198,26 @@ class HandoffHTTPTests(unittest.TestCase):
             status, value = self.request(server, "/dexter/handoff", "Bearer test-key")
             self.assertEqual(status, expected)
             self.assertEqual(value, {"error": str(error)})
+
+    def test_native_and_delegation_length_errors_are_actionable_but_other_errors_are_private(self):
+        server, operation = self.serve(True)
+        server.service.delegate = operation
+        server.service.intake = SimpleNamespace(
+            grant=lambda: {"key": "test-key"},
+            execute=lambda payload: operation("qui-gon", payload),
+        )
+        for path in ("/dexter/delegate", "/coordinator/tasks"):
+            with self.subTest(path=path):
+                operation.side_effect = TextLimitError("Shorten the brief to 1200 characters.")
+                status, value = self.request(server, path, "Bearer test-key")
+                self.assertEqual(status, 400)
+                self.assertEqual(
+                    value,
+                    {"error": str(operation.side_effect), "code": "text_too_long"},
+                )
+                operation.side_effect = ValueError("Private diagnostic")
+                status, value = self.request(server, path, "Bearer test-key")
+                self.assertEqual((status, value), (400, {"error": "invalid_request"}))
 
     def test_duplicate_authorization_is_rejected_before_handoff(self):
         server, handoff = self.serve(True)

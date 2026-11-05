@@ -200,6 +200,14 @@ class DocumentWriteTests(unittest.TestCase):
     def save(self, key="document", **kwargs):
         return self.call(self.context, "save_document", key=key, fields=self.fields, **kwargs)
 
+    def test_full_document_content_keeps_its_separate_limit(self):
+        self.fields["content"] = "я" * 12000
+        result = self.save()
+        saved = self.call(self.context, "document", document=result["id"])
+        self.assertEqual(saved["content"], self.fields["content"])
+        self.assertIsNone(saved["next_offset"])
+        self.assertEqual(len(self.writes), 1)
+
     def test_failed_lookup_is_not_absence_and_retry_can_create_once(self):
         for status in (0, 404, 429, 500):
             with self.subTest(status=status):

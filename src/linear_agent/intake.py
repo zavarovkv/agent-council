@@ -5,6 +5,8 @@ import json
 import re
 import threading
 
+from council_team.communication import check_brief
+
 from .config import identifier, private_json
 from .events import Event
 from .store import stable_id
@@ -127,6 +129,8 @@ class Intake:
                     raise PermissionError(
                         "Existing task key differs; inspect it before proceeding."
                     )
+                if not previous:
+                    check_brief(payload["description"])
                 db.execute(
                     "INSERT OR IGNORE INTO owner_tasks(key,issue,body,owner,policy,created) VALUES(?,?,?,?,?,?)",
                     (

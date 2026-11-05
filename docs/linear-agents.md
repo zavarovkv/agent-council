@@ -61,6 +61,15 @@ teams remain inaccessible. Use `project` for project resources, `document` and
 discussions. These grants do not automatically start unrelated work. No additional
 OAuth grant is needed: the existing app already has read/write scope.
 
+Agent-written issue descriptions are limited to 1,200 characters across native
+`council_tasks create`, `linear_delegate` and `linear_issues create/update`.
+Standalone comments are limited to 700 characters. Oversized text is rejected
+before creating a task, reserving a child or recording a write key; shorten it and
+retry with the same key. Link the full specification or evidence in an authorized
+document instead of splitting it across comments. Previously admitted requests
+retain their exact-payload retry contract. Existing long descriptions, document
+content and owner messages remain readable; no text is silently cut.
+
 Delegated issues enter the team's active work state when execution begins;
 a comment-only mention does not move an unrelated issue. With `linear-owner-review-v1`,
 `review` submits a verified result to In Review; the legacy `complete` action is

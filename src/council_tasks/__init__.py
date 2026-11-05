@@ -2,8 +2,11 @@
 
 import json
 import re
+import urllib.error
 import urllib.request
 from pathlib import Path
+
+from council_team.communication import BRIEF_GUIDANCE, BRIEF_LIMIT, TextLimitError
 
 
 def settings(home):
@@ -45,8 +48,25 @@ def call(args, *, home=None):
         method="POST",
     )
     opener = urllib.request.build_opener(urllib.request.ProxyHandler({}), NoRedirect())
-    with opener.open(request, timeout=30) as response:
-        body = response.read(65537)
+    try:
+        with opener.open(request, timeout=30) as response:
+            body = response.read(65537)
+    except urllib.error.HTTPError as error:
+        value = None
+        if error.code == 400:
+            try:
+                rejected = error.read(4097)
+                if len(rejected) <= 4096:
+                    value = json.loads(rejected)
+            except (ValueError, OSError):
+                pass
+        if (
+            isinstance(value, dict)
+            and value.get("code") == "text_too_long"
+            and isinstance(value.get("error"), str)
+        ):
+            raise TextLimitError(value["error"]) from None
+        raise
     if len(body) > 65536:
         raise ValueError("Oversized native task response.")
     return json.loads(body)
@@ -65,6 +85,8 @@ def register(ctx):
     def handler(args, **_kwargs):
         try:
             return json.dumps(call(args), ensure_ascii=False)
+        except TextLimitError as error:
+            return json.dumps({"error": str(error), "code": "text_too_long"}, ensure_ascii=False)
         except Exception:
             return json.dumps(
                 {
@@ -86,7 +108,11 @@ def register(ctx):
                     "action": {"type": "string", "enum": ["create", "get", "list", "reply"]},
                     "key": {"type": "string", "maxLength": 80},
                     "title": {"type": "string", "maxLength": 200},
-                    "description": {"type": "string", "maxLength": 12000},
+                    "description": {
+                        "type": "string",
+                        "maxLength": BRIEF_LIMIT,
+                        "description": BRIEF_GUIDANCE,
+                    },
                     "message_key": {"type": "string", "maxLength": 80},
                     "text": {"type": "string", "maxLength": 8000},
                 },

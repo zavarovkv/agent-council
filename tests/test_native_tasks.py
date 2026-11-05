@@ -101,6 +101,35 @@ class NativeTasksTests(unittest.TestCase):
         with self.assertRaises(PermissionError):
             self.service.authorize(registry, registry.agents["qui-gon"], uid(601))
 
+    def test_long_brief_is_rejected_before_admission_and_same_key_can_be_corrected(self):
+        request = {**self.request, "description": "я" * 1201}
+        with self.assertRaisesRegex(ValueError, "1200"):
+            self.intake.execute(request)
+        self.assertIsNone(self.intake.row(request["key"]))
+        self.assertEqual(self.linear.creates, 0)
+        self.assertFalse(self.store.jobs())
+        self.assertFalse(self.service.hermes.requests)
+
+        request["description"] = "я" * 1200
+        result = self.intake.execute(request)
+        self.assertEqual(self.intake.execute(request), result)
+        self.service.step()
+        self.assertEqual(self.linear.creates, 1)
+        self.assertEqual(self.linear.created_fields["description"], request["description"])
+
+    def test_existing_legacy_long_brief_replays_without_readmitting_or_rewriting(self):
+        request = {**self.request, "description": "я" * 1500}
+        with patch("linear_agent.intake.check_brief"):
+            receipt = self.intake.execute(request)
+        self.assertEqual(self.intake.execute(request), receipt)
+        self.service.step()
+        self.assertEqual(self.intake.execute(request)["issue"], receipt["issue"])
+        self.assertEqual(self.linear.creates, 1)
+        self.assertEqual(len(self.service.hermes.requests), 1)
+        with self.assertRaises(PermissionError):
+            self.intake.execute({**request, "description": request["description"] + "changed"})
+        self.assertEqual(self.linear.created_fields["description"], request["description"])
+
     def test_scope_and_owner_changes_revoke_native_admission(self):
         first = self.intake.execute(self.request)
         registry = self.service.registry()
@@ -233,7 +262,7 @@ class NativeTasksTests(unittest.TestCase):
             "action": "reply",
             "key": self.request["key"],
             "message_key": "answer-1",
-            "text": "Accommodation only.",
+            "text": "Detail. " * 1000,
         }
         self.assertTrue(self.intake.execute(reply)["accepted"])
         self.service.step()

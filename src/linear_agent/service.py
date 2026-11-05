@@ -7,6 +7,8 @@ import threading
 import time
 from pathlib import Path
 
+from council_team.communication import check_brief
+
 from .catalog import LIMITATIONS, ROLES
 from .config import Registry, identifier
 from .events import parse_event, verified_payload
@@ -569,6 +571,7 @@ class Service:
             payload["title"].strip(),
             payload["description"].strip(),
             parent_issue=parent_issue["id"],
+            validate_new=lambda: check_brief(payload["description"]),
         )
         issue = self.linear.ensure_child(
             agent,
