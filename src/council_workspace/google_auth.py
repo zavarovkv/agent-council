@@ -13,12 +13,14 @@ SCOPES = {
         "https://www.googleapis.com/auth/calendar.freebusy",
     ],
     "gmail": ["https://www.googleapis.com/auth/gmail.modify"],
+    "gmail_delete": ["https://mail.google.com/"],
     "analytics": ["https://www.googleapis.com/auth/analytics.readonly"],
 }
 APIS = {
     "drive": ("drive", "v3"),
     "calendar": ("calendar", "v3"),
     "gmail": ("gmail", "v1"),
+    "gmail_delete": ("gmail", "v1"),
     "analytics": ("analyticsdata", "v1beta"),
     "analyticsadmin": ("analyticsadmin", "v1beta"),
 }
@@ -59,6 +61,8 @@ def service_for(home, name):
             raise PermissionError("A private existing Google grant is required.")
         credentials = Credentials.from_authorized_user_file(str(path))
         if not credentials.has_scopes(required):
+            if name == "gmail_delete":
+                raise PermissionError("Authorize permanent Gmail deletion separately first.")
             raise PermissionError("Authorize the requested Google service first.")
         if not credentials.valid:
             credentials.refresh(Request())

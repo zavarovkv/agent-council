@@ -147,6 +147,86 @@ class GoogleTests(unittest.TestCase):
             self.google.execute("native-qui-gon", args)
         self.assertEqual(messages.modify().execute.call_count, 1)
 
+    def test_spam_can_be_listed_without_including_other_folders(self):
+        messages = self.api.users().messages()
+        messages.list().execute.return_value = {"messages": [{"id": "spam-1"}]}
+        messages.list.reset_mock()
+        self.assertEqual(
+            self.google.execute("native-qui-gon", {"service": "gmail", "action": "spam_list"}),
+            {"messages": [{"id": "spam-1"}]},
+        )
+        messages.list.assert_called_once_with(
+            userId="me", labelIds=["SPAM"], includeSpamTrash=True, maxResults=50, pageToken=None
+        )
+
+    def test_trash_is_verified_and_does_not_need_permanent_deletion_scope(self):
+        messages = self.api.users().messages()
+        messages.get().execute.side_effect = [
+            {"id": "m", "labelIds": ["SPAM"]},
+            {"id": "m", "labelIds": ["TRASH"]},
+        ]
+        args = {"service": "gmail", "action": "trash", "id": "m", "key": "trash-1"}
+        result = self.google.execute("native-qui-gon", args)
+        self.assertEqual(
+            result, {"id": "m", "status": "trash", "verified": True, "verification": "readback"}
+        )
+        self.factory.assert_called_with(self.home, "gmail")
+        self.assertEqual(self.google.execute("native-qui-gon", args), result)
+        self.assertEqual(messages.trash().execute.call_count, 1)
+        messages.delete.assert_not_called()
+
+    def test_delete_requires_spam_or_trash_and_separate_scope_and_is_not_replayed(self):
+        messages = self.api.users().messages()
+        args = {"service": "gmail", "action": "delete", "id": "m", "key": "delete-1"}
+        messages.get().execute.return_value = {"id": "m", "labelIds": ["INBOX"]}
+        with self.assertRaisesRegex(ValueError, "only for messages in spam or trash"):
+            self.google.execute("native-qui-gon", args)
+        messages.delete.assert_not_called()
+        messages.get().execute.return_value = {"id": "m", "labelIds": ["SPAM"]}
+        result = self.google.execute("native-qui-gon", args)
+        self.factory.assert_called_with(self.home, "gmail_delete")
+        self.assertEqual(
+            result,
+            {
+                "id": "m",
+                "status": "delete",
+                "verified": True,
+                "verification": "provider_acknowledgement",
+            },
+        )
+        self.assertEqual(self.google.execute("native-qui-gon", args), result)
+        self.assertEqual(messages.delete().execute.call_count, 1)
+
+    def test_uncertain_deletion_is_never_automatically_replayed(self):
+        messages = self.api.users().messages()
+        messages.get().execute.return_value = {"id": "m", "labelIds": ["TRASH"]}
+        messages.delete().execute.side_effect = TimeoutError
+        args = {"service": "gmail", "action": "delete", "id": "m", "key": "delete-timeout"}
+        with self.assertRaises(TimeoutError):
+            self.google.execute("native-qui-gon", args)
+        with self.assertRaisesRegex(ValueError, "uncertain"):
+            self.google.execute("native-qui-gon", args)
+        self.assertEqual(messages.delete().execute.call_count, 1)
+        with self.assertRaises(PermissionError):
+            self.google.execute("linear-lando", args)
+
+    def test_missing_delete_consent_does_not_reserve_the_write(self):
+        args = {"service": "gmail", "action": "delete", "id": "m", "key": "delete-consent"}
+        self.factory.side_effect = [PermissionError("Authorize permanent Gmail deletion"), self.api]
+        with self.assertRaisesRegex(PermissionError, "Authorize"):
+            self.google.execute("native-qui-gon", args)
+        self.api.users().messages().get().execute.return_value = {"id": "m", "labelIds": ["SPAM"]}
+        self.assertTrue(self.google.execute("native-qui-gon", args)["verified"])
+
+    def test_gmail_status_reports_permanent_deletion_separately(self):
+        private_write(
+            self.home / "google_token.json",
+            {"scopes": ["https://www.googleapis.com/auth/gmail.modify"]},
+        )
+        result = self.google.execute("native-qui-gon", {"service": "gmail", "action": "status"})
+        self.assertTrue(result["authorized"])
+        self.assertFalse(result["permanent_delete_authorized"])
+
     def test_calendar_rejects_ambiguous_times_and_checks_provider_etag(self):
         for change in (
             {"start": "2026-11-03T10:00:00"},

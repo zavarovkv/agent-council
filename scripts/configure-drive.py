@@ -90,7 +90,7 @@ def requested_scopes(services):
     from council_workspace.google_auth import SCOPES as available
 
     if not services or not set(services) <= set(available):
-        raise SetupError("Choose drive, calendar, gmail and/or analytics.")
+        raise SetupError("Choose drive, calendar, gmail, gmail_delete and/or analytics.")
     return sorted({scope for name in {"drive", *services} for scope in available[name]})
 
 
@@ -127,7 +127,7 @@ def check_services(home, credentials, services, expected_email=None):
                 calendar = build("calendar", "v3", credentials=credentials, cache_discovery=False)
                 calendar.calendarList().list(maxResults=1).execute()
                 ready[name] = {"ready": True}
-            elif name == "gmail":
+            elif name in {"gmail", "gmail_delete"}:
                 gmail = build("gmail", "v1", credentials=credentials, cache_discovery=False)
                 profile = gmail.users().getProfile(userId="me").execute()
                 if profile["emailAddress"].casefold() != email.casefold():
@@ -245,7 +245,9 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("action", choices=("import-client", "authorize", "verify"))
     parser.add_argument(
-        "--services", default="drive", help="Comma-separated drive,calendar,gmail,analytics"
+        "--services",
+        default="drive",
+        help="Comma-separated drive,calendar,gmail,gmail_delete,analytics",
     )
     args = parser.parse_args()
     if os.geteuid() == 0:

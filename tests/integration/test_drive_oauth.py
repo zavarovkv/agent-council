@@ -32,6 +32,9 @@ class DriveOAuthIntegrationTests(unittest.TestCase):
                 for s in scopes
             )
         )
+        delete_scopes = drive.requested_scopes(["gmail_delete"])
+        self.assertIn("https://mail.google.com/", delete_scopes)
+        self.assertIn("https://www.googleapis.com/auth/drive", delete_scopes)
 
     def test_failed_expansion_keeps_previous_grant_and_wrong_account_is_rejected(self):
         with tempfile.TemporaryDirectory() as directory:

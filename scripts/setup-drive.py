@@ -67,7 +67,9 @@ def callback_address(networks):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
-        "--services", default="drive", help="Comma-separated drive,calendar,gmail,analytics"
+        "--services",
+        default="drive",
+        help="Comma-separated drive,calendar,gmail,gmail_delete,analytics",
     )
     parser.add_argument(
         "--client-json", type=Path, help="Downloaded Desktop OAuth JSON; never copied to Git."
@@ -80,7 +82,13 @@ def main():
         "--import-only", action="store_true", help="Save the client without starting consent."
     )
     args = parser.parse_args()
-    if not set(args.services.split(",")) <= {"drive", "calendar", "gmail", "analytics"}:
+    if not set(args.services.split(",")) <= {
+        "drive",
+        "calendar",
+        "gmail",
+        "gmail_delete",
+        "analytics",
+    }:
         parser.error("Unknown Google service")
     if args.import_only and not args.client_json:
         parser.error("--import-only requires --client-json")

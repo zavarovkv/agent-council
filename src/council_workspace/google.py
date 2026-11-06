@@ -12,12 +12,12 @@ from .store import Store
 
 READS = {
     "calendar": {"calendars", "list", "get", "availability"},
-    "gmail": {"profile", "search", "get", "drafts", "draft_get"},
+    "gmail": {"profile", "search", "spam_list", "get", "drafts", "draft_get"},
     "analytics": {"properties", "metadata", "report"},
 }
 WRITES = {
     "calendar": {"create", "update", "cancel"},
-    "gmail": {"draft", "send", "reply", "send_draft", "archive", "spam"},
+    "gmail": {"draft", "send", "reply", "send_draft", "archive", "spam", "trash", "delete"},
     "analytics": set(),
 }
 
@@ -57,11 +57,16 @@ class Google:
         if action == "status":
             try:
                 token = private_json(self.home / "google_token.json")
-                return {
+                result = {
                     "service": name,
                     "authorized": set(SCOPES[name]) <= set(token.get("scopes", [])),
                     "live_verified": False,
                 }
+                if name == "gmail":
+                    result["permanent_delete_authorized"] = set(SCOPES["gmail_delete"]) <= set(
+                        token.get("scopes", [])
+                    )
+                return result
             except (OSError, PermissionError, ValueError):
                 return {"service": name, "authorized": False, "live_verified": False}
         if action not in READS[name] | WRITES[name]:
@@ -82,6 +87,8 @@ class Google:
             "send_draft",
             "archive",
             "spam",
+            "trash",
+            "delete",
         } and not args.get("id"):
             raise ValueError("Read and select an existing event, message or draft id.")
         if len(json.dumps(args)) > 64000:
@@ -93,7 +100,8 @@ class Google:
             def provider():
                 if name == "analytics":
                     return Analytics(lambda api: self.factory(self.home, api))
-                return (Calendar if name == "calendar" else Mail)(self.factory(self.home, name))
+                api = "gmail_delete" if name == "gmail" and action == "delete" else name
+                return (Calendar if name == "calendar" else Mail)(self.factory(self.home, api))
 
             if action in WRITES[name]:
                 return self.store.write(client, args, lambda: provider().prepare_write(args))

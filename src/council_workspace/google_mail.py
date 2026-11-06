@@ -120,6 +120,18 @@ class Mail:
                 )
                 .execute()
             )
+        if action == "spam_list":
+            return (
+                self.api.messages()
+                .list(
+                    userId="me",
+                    labelIds=["SPAM"],
+                    includeSpamTrash=True,
+                    maxResults=50,
+                    pageToken=args.get("cursor"),
+                )
+                .execute()
+            )
         if action == "drafts":
             return (
                 self.api.drafts()
@@ -135,6 +147,44 @@ class Mail:
 
     def prepare_write(self, args):
         action = args["action"]
+        if action in {"trash", "delete"}:
+            messages = self.api.messages()
+            current = messages.get(userId="me", id=args["id"], format="metadata").execute()
+            if current.get("id") != args["id"] or not isinstance(current.get("labelIds"), list):
+                raise ValueError("Message state could not be verified before deletion.")
+            labels = set(current["labelIds"])
+            if "DRAFT" in labels:
+                raise ValueError("Use the draft workflow for drafts.")
+            if action == "delete" and not labels.intersection({"SPAM", "TRASH"}):
+                raise ValueError(
+                    "Permanent deletion is available only for messages in spam or trash."
+                )
+            request = (
+                messages.trash(userId="me", id=args["id"])
+                if action == "trash"
+                else messages.delete(userId="me", id=args["id"])
+            )
+
+            def delete_or_trash():
+                request.execute(num_retries=0)
+                if action == "trash":
+                    saved = messages.get(userId="me", id=args["id"], format="metadata").execute()
+                    if (
+                        saved.get("id") != args["id"]
+                        or not isinstance(saved.get("labelIds"), list)
+                        or "TRASH" not in saved["labelIds"]
+                    ):
+                        raise ValueError(
+                            "Trash state was not verified; inspect before another attempt."
+                        )
+                return {
+                    "id": args["id"],
+                    "status": action,
+                    "verified": True,
+                    "verification": "readback" if action == "trash" else "provider_acknowledgement",
+                }
+
+            return delete_or_trash
         if action in {"archive", "spam"}:
             messages = self.api.messages()
             current = messages.get(userId="me", id=args["id"], format="metadata").execute()

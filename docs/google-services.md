@@ -26,9 +26,21 @@ APIs before consent; otherwise the existing grant remains unchanged.
 
 Scopes: existing `drive`; `calendar.events`, `calendar.calendarlist.readonly`,
 `calendar.freebusy`; `gmail.modify`; `analytics.readonly`. Gmail's modify scope
-includes compose/send capability, but the integration exposes only bounded reads,
-draft creation and explicitly requested sending. It exposes no mailbox deletion,
-forwarding configuration, calendar ACL changes or Analytics administration.
+also permits moving messages to trash. Permanent deletion is optional and
+requires the separate, broader `https://mail.google.com/` permission. Enable it
+only after the owner requests this capability:
+
+```bash
+python3 scripts/setup-drive.py --services drive,gmail,gmail_delete
+python3 scripts/setup-drive.py --services drive,gmail,gmail_delete --verify
+```
+
+The separate consent flow preserves the previously granted services and account.
+If consent is denied or incomplete, the existing grant remains intact. The
+broader scope grants Google-level access to the whole mailbox, including permanent
+deletion; Council restricts its delete command to messages currently in spam or
+trash. The integration does not expose forwarding configuration, calendar ACL
+changes or Analytics administration.
 
 Google Cloud **Testing** audience can expire refresh grants after seven days.
 Select the appropriate publishing status for the existing private application.
@@ -48,8 +60,13 @@ require a freshly read event ETag and use `If-Match`.
 `service=gmail` supports profile, search, message reads, draft listing/reading,
 draft creation, sending, replies and sending a reviewed saved draft. Reads do
 not mark mail read. The owner may request archive or spam classification of
-individual identified messages; the tool verifies the resulting labels and does
-not permanently delete mail. Drafts, sent mail and trash are excluded. A request
+individual identified messages; the tool verifies the resulting labels. Drafts,
+sent mail and trash are excluded from classification. The owner may also request
+individual messages be moved to trash, or permanently deleted from spam or trash.
+`spam_list` reads spam in bounded pages. To empty spam, repeatedly list its first
+page, delete each selected message with its own stable key and stop on uncertain
+outcomes; verify the folder is empty. Permanent deletion is irreversible. Gmail
+may also empty spam automatically after 30 days. A request
 to handle newsletters does not by itself classify useful mail as spam. Reply recipients remain explicit and threading headers are
 preserved. Draft sends include the reviewed raw snapshot, with its message ID
 checked before sending. Mail attachments are listed but not downloaded by this
@@ -70,7 +87,8 @@ the owner's tools; the existing owner routing and private-information rules appl
 All writes require stable keys and use durable receipts. Repeating a completed
 request returns its receipt; a conflicting key or uncertain outcome is refused.
 Inspect the event/message before any new write after an uncertain response.
-Provider calls do not automatically retry sends. Calendar create also uses a
+Provider calls do not automatically retry sends or deletions. A successful delete
+receipt records the provider's acknowledgement, not a separate readback. Calendar create also uses a
 deterministic event ID. Saved mail and created/updated events are read back before
 success; cancellation uses the successful provider response. Invitation/email
 acceptance by Google is not proof that a recipient has read it.
