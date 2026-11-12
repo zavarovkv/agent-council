@@ -13,7 +13,7 @@ RUN mkdir -p /vendor \
     && tar -xzf /tmp/hermes-plugins.tar.gz -C /vendor --strip-components=1 \
        hermes-official-plugins-e404b6816b20237a82f6fbe2749b5a576cf75dba/advanced-delegation
 
-FROM nousresearch/hermes-agent:v0.22.5@sha256:9c5561579f3ffdf333401797094ac3a743738d6c25d40f4331c7bf77b694238d AS telegram-reader
+FROM nousresearch/hermes-agent:v0.23.0@sha256:adb7890916de63245523492be8f68f9d2095fecbec4e2a6dab7960381f0fc002 AS telegram-reader
 COPY requirements-telegram-reader-build.txt requirements-telegram-reader.txt /tmp/
 RUN /opt/hermes/.venv/bin/python -m venv /opt/telegram-reader \
     && /opt/telegram-reader/bin/python -m pip install --no-cache-dir --require-hashes -r /tmp/requirements-telegram-reader-build.txt \
@@ -25,7 +25,7 @@ COPY requirements-document-reader.txt /tmp/
 RUN /opt/hermes/.venv/bin/python -m venv /tmp/document-build \
     && /tmp/document-build/bin/python -m pip install --no-cache-dir --require-hashes --only-binary=:all: --no-deps --target /opt/document-libs -r /tmp/requirements-document-reader.txt
 
-FROM nousresearch/hermes-agent:v0.22.5@sha256:9c5561579f3ffdf333401797094ac3a743738d6c25d40f4331c7bf77b694238d AS voice-builder
+FROM nousresearch/hermes-agent:v0.23.0@sha256:adb7890916de63245523492be8f68f9d2095fecbec4e2a6dab7960381f0fc002 AS voice-builder
 # CPU-only upstream CLI; no Python dependency changes or runtime downloads.
 ADD --checksum=sha256:ff1a9053feb509ff9d7729703355541ae9690073a6b1c40eb692c962e0dc1720 https://codeload.github.com/ggml-org/whisper.cpp/tar.gz/refs/tags/v1.9.5 /tmp/whisper.tar.gz
 RUN mkdir /whisper && tar -xzf /tmp/whisper.tar.gz -C /whisper --strip-components=1 \
@@ -37,7 +37,7 @@ RUN mkdir /whisper && tar -xzf /tmp/whisper.tar.gz -C /whisper --strip-component
 ADD --checksum=sha256:ae85e4a935d7a567bd102fe55afc16bb595bdb618e11b2fc7591bc08120411bb https://huggingface.co/ggerganov/whisper.cpp/resolve/5359861c739e955e79d9a303bcbc70fb988958b1/ggml-small-q5_1.bin /voice-models/small-q5_1.bin
 ADD --checksum=sha256:2aa269b785eeb53a82983a20501ddf7c1d9c48e33ab63a41391ac6c9f7fb6987 https://huggingface.co/ggml-org/whisper-vad/resolve/9ffd54a1e1ee413ddf265af9913beaf518d1639b/ggml-silero-v6.2.0.bin /voice-models/silero-v6.2.0.bin
 
-FROM nousresearch/hermes-agent:v0.22.5@sha256:9c5561579f3ffdf333401797094ac3a743738d6c25d40f4331c7bf77b694238d
+FROM nousresearch/hermes-agent:v0.23.0@sha256:adb7890916de63245523492be8f68f9d2095fecbec4e2a6dab7960381f0fc002
 COPY --from=document-reader /opt/document-libs/ /opt/document-libs/
 COPY --from=voice-builder /whisper/build/bin/whisper-cli /opt/voice/whisper-cli
 COPY --from=voice-builder /whisper/LICENSE /opt/voice/LICENSE
